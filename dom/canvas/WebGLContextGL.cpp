@@ -1214,88 +1214,6 @@ WebGLContext::PixelStorei(GLenum pname, GLint param)
     ErrorInvalidEnumInfo("pixelStorei: parameter", pname);
 }
 
-bool
-WebGLContext::DoReadPixelsAndConvert(GLint x, GLint y, GLsizei width, GLsizei height,
-                                     GLenum destFormat, GLenum destType, void* destBytes,
-                                     GLenum auxReadFormat, GLenum auxReadType)
-{
-    GLenum readFormat = destFormat;
-    GLenum readType = destType;
-
-    if (gl->WorkAroundDriverBugs() &&
-        gl->IsANGLE() &&
-        readType == LOCAL_GL_FLOAT &&
-        auxReadFormat == destFormat &&
-        auxReadType == LOCAL_GL_HALF_FLOAT)
-    {
-        readType = auxReadType;
-
-        const auto readBytesPerPixel = webgl::BytesPerPixel({readFormat, readType});
-        const auto destBytesPerPixel = webgl::BytesPerPixel({destFormat, destType});
-
-        CheckedUint32 readOffset;
-        CheckedUint32 readStride;
-        const CheckedUint32 readSize = GetPackSize(width, height, readBytesPerPixel,
-                                                   &readOffset, &readStride);
-
-        CheckedUint32 destOffset;
-        CheckedUint32 destStride;
-        const CheckedUint32 destSize = GetPackSize(width, height, destBytesPerPixel,
-                                                   &destOffset, &destStride);
-        if (!readSize.isValid() || !destSize.isValid()) {
-            ErrorOutOfMemory("readPixels: Overflow calculating sizes for conversion.");
-            return false;
-        }
-
-        UniqueBuffer readBuffer = malloc(readSize.value());
-        if (!readBuffer) {
-            ErrorOutOfMemory("readPixels: Failed to alloc temp buffer for conversion.");
-            return false;
-        }
-
-        gl::GLContext::LocalErrorScope errorScope(*gl);
-
-        gl->fReadPixels(x, y, width, height, readFormat, readType, readBuffer.get());
-
-        const GLenum error = errorScope.GetError();
-        if (error == LOCAL_GL_OUT_OF_MEMORY) {
-            ErrorOutOfMemory("readPixels: Driver ran out of memory.");
-            return false;
-        }
-
-        if (error) {
-            MOZ_RELEASE_ASSERT(false, "GFX: Unexpected driver error.");
-            return false;
-        }
-
-        size_t channelsPerRow = std::min(readStride.value() / sizeof(uint16_t),
-                                         destStride.value() / sizeof(float));
-
-        const uint8_t* srcRow = (uint8_t*)(readBuffer.get()) + readOffset.value();
-        uint8_t* dstRow = (uint8_t*)(destBytes) + destOffset.value();
-
-        for (size_t j = 0; j < (size_t)height; j++) {
-            auto src = (const uint16_t*)srcRow;
-            auto dst = (float*)dstRow;
-
-            const auto srcEnd = src + channelsPerRow;
-            while (src != srcEnd) {
-                *dst = unpackFromFloat16(*src);
-                ++src;
-                ++dst;
-            }
-
-            srcRow += readStride.value();
-            dstRow += destStride.value();
-        }
-
-        return true;
-    }
-
-    gl->fReadPixels(x, y, width, height, destFormat, destType, destBytes);
-    return true;
-}
-
 static bool
 IsFormatAndTypeUnpackable(GLenum format, GLenum type, bool isWebGL2)
 {
@@ -1643,9 +1561,7 @@ WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum
     Intersect(srcHeight, y, height, &readY, &writeY, &rwHeight);
 
     if (rwWidth == uint32_t(width) && rwHeight == uint32_t(height)) {
-        // Warning: Possibly shared memory.  See bug 1225033.
-        DoReadPixelsAndConvert(x, y, width, height, format, type, data, auxReadFormat,
-                               auxReadType);
+        gl->fReadPixels(x, y, width, height, format, type, data);
         return;
     }
 
@@ -1703,8 +1619,7 @@ WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum
         gl->fPixelStorei(LOCAL_GL_PACK_SKIP_PIXELS, mPixelStore_PackSkipPixels + writeX);
         gl->fPixelStorei(LOCAL_GL_PACK_SKIP_ROWS, mPixelStore_PackSkipRows + writeY);
 
-        DoReadPixelsAndConvert(readX, readY, rwWidth, rwHeight, format, type, data,
-                               auxReadFormat, auxReadType);
+        gl->fReadPixels(readX, readY, rwWidth, rwHeight, format, type, data);
 
         gl->fPixelStorei(LOCAL_GL_PACK_ROW_LENGTH, mPixelStore_PackRowLength);
         gl->fPixelStorei(LOCAL_GL_PACK_SKIP_PIXELS, mPixelStore_PackSkipPixels);
@@ -1715,8 +1630,7 @@ WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum
         uint8_t* row = (uint8_t*)data + startOffset.value() + writeX * bytesPerPixel;
         row += writeY * rowStride.value();
         for (uint32_t j = 0; j < rwHeight; j++) {
-            DoReadPixelsAndConvert(readX, readY+j, rwWidth, 1, format, type, row,
-                                   auxReadFormat, auxReadType);
+            gl->fReadPixels(readX, readY+j, rwWidth, 1, format, type, row);
             row += rowStride.value();
         }
     }
