@@ -697,7 +697,8 @@ WebGLContext::CreateAndInitGL(bool forceEnabled,
                               std::vector<FailureReason>* const out_failReasons)
 {
     const gl::SurfaceCaps baseCaps = BaseCaps(mOptions, this);
-    gl::CreateContextFlags flags = gl::CreateContextFlags::NO_VALIDATION;
+    gl::CreateContextFlags flags = gl::CreateContextFlags::NO_VALIDATION |
+                                   gl::CreateContextFlags::PREFER_ES3;
     bool tryNativeGL = true;
     bool tryANGLE = false;
 
@@ -705,9 +706,7 @@ WebGLContext::CreateAndInitGL(bool forceEnabled,
         flags |= gl::CreateContextFlags::FORCE_ENABLE_HARDWARE;
     }
 
-    if (IsWebGL2()) {
-        flags |= gl::CreateContextFlags::PREFER_ES3;
-    } else {
+    if (!IsWebGL2()) {
         flags |= gl::CreateContextFlags::REQUIRE_COMPAT_PROFILE;
     }
 

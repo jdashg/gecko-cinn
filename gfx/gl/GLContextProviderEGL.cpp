@@ -485,12 +485,12 @@ GLContextEGL::DestroySurface(EGLSurface aSurface)
 
 already_AddRefed<GLContextEGL>
 GLContextEGL::CreateGLContext(CreateContextFlags flags,
-                const SurfaceCaps& caps,
-                GLContextEGL* shareContext,
-                bool isOffscreen,
-                EGLConfig config,
-                EGLSurface surface,
-                nsACString* const out_failureId)
+                              const SurfaceCaps& caps,
+                              GLContextEGL* shareContext,
+                              bool isOffscreen,
+                              EGLConfig config,
+                              EGLSurface surface,
+                              nsACString* const out_failureId)
 {
     if (sEGLLibrary.fBindAPI(LOCAL_EGL_OPENGL_ES_API) == LOCAL_EGL_FALSE) {
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_ES");
@@ -498,35 +498,37 @@ GLContextEGL::CreateGLContext(CreateContextFlags flags,
         return nullptr;
     }
 
-    EGLContext eglShareContext = shareContext ? shareContext->mContext
-                                              : EGL_NO_CONTEXT;
+    MOZ_ASSERT(!shareContext);
+    shareContext = nullptr;
 
-    nsTArray<EGLint> contextAttribs;
+    const auto fnCreateContext = [config](EGLint majVer) {
+        nsTArray<EGLint> contextAttribs;
 
-    contextAttribs.AppendElement(LOCAL_EGL_CONTEXT_CLIENT_VERSION);
-    if (flags & CreateContextFlags::PREFER_ES3)
-        contextAttribs.AppendElement(3);
-    else
-        contextAttribs.AppendElement(2);
+        contextAttribs.AppendElement(LOCAL_EGL_CONTEXT_CLIENT_VERSION);
+        contextAttribs.AppendElement(majVer);
 
-    if (sEGLLibrary.HasRobustness()) {
-//    contextAttribs.AppendElement(LOCAL_EGL_CONTEXT_ROBUST_ACCESS_EXT);
-//    contextAttribs.AppendElement(LOCAL_EGL_TRUE);
+        if (sEGLLibrary.HasRobustness()) {
+            //contextAttribs.AppendElement(LOCAL_EGL_CONTEXT_ROBUST_ACCESS_EXT);
+            //contextAttribs.AppendElement(LOCAL_EGL_TRUE);
+        }
+
+        for (size_t i = 0; i < MOZ_ARRAY_LENGTH(gTerminationAttribs); i++) {
+          contextAttribs.AppendElement(gTerminationAttribs[i]);
+        }
+
+        return sEGLLibrary.fCreateContext(EGL_DISPLAY(), config, nullptr,
+                                          contextAttribs.Elements());
+    };
+
+    EGLContext context = nullptr;
+    if (flags & CreateContextFlags::PREFER_ES3) {
+        context = fnCreateContext(3);
     }
 
-    for (size_t i = 0; i < MOZ_ARRAY_LENGTH(gTerminationAttribs); i++) {
-      contextAttribs.AppendElement(gTerminationAttribs[i]);
+    if (!context) {
+        context = fnCreateContext(2);
     }
 
-    EGLContext context = sEGLLibrary.fCreateContext(EGL_DISPLAY(),
-                                                    config,
-                                                    eglShareContext,
-                                                    contextAttribs.Elements());
-    if (!context && shareContext) {
-        shareContext = nullptr;
-        context = sEGLLibrary.fCreateContext(EGL_DISPLAY(), config, EGL_NO_CONTEXT,
-                                             contextAttribs.Elements());
-    }
     if (!context) {
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_CREATE");
         NS_WARNING("Failed to create EGLContext!");
