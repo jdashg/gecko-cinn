@@ -38,16 +38,16 @@ protected:
     const EGLSurface mPBuffer;
 public:
     const HANDLE mShareHandle;
-protected:
-    RefPtr<IDXGIKeyedMutex> mKeyedMutex;
+    const RefPtr<IDXGIKeyedMutex> mKeyedMutex;
 
+protected:
     SharedSurface_ANGLEShareHandle(GLContext* gl,
                                    GLLibraryEGL* egl,
                                    const gfx::IntSize& size,
                                    bool hasAlpha,
                                    EGLSurface pbuffer,
                                    HANDLE shareHandle,
-                                   const RefPtr<IDXGIKeyedMutex>& keyedMutex);
+                                   IDXGIKeyedMutex* keyedMutex);
 
     EGLDisplay Display();
 
@@ -55,7 +55,7 @@ public:
     virtual ~SharedSurface_ANGLEShareHandle();
 
     virtual void LockProdImpl() override;
-    virtual void UnlockProdImpl() override;
+    virtual void UnlockProdImpl() override { }
 
     virtual void ProducerAcquireImpl() override;
     virtual void ProducerReleaseImpl() override;
@@ -66,8 +66,6 @@ public:
 
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
 };
-
-
 
 class SurfaceFactory_ANGLEShareHandle
     : public SurfaceFactory

@@ -65,12 +65,22 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
         egl->fDestroySurface(egl->Display(), pbuffer);
         return nullptr;
     }
-    void* opaqueKeyedMutex = nullptr;
-    egl->fQuerySurfacePointerANGLE(display,
-                                   pbuffer,
-                                   LOCAL_EGL_DXGI_KEYED_MUTEX_ANGLE,
-                                   &opaqueKeyedMutex);
-    RefPtr<IDXGIKeyedMutex> keyedMutex = static_cast<IDXGIKeyedMutex*>(opaqueKeyedMutex);
+
+    auto* const boundSurf = gl->GetLockedSurface();
+    if (boundSurf) {
+        boundSurf->UnlockProd();
+    }
+
+    GLContextEGL::Cast(gl)->SetEGLSurfaceOverride(pbuffer);
+
+    RefPtr<IDXGIKeyedMutex> keyedMutex;
+    // Re-fetch KeyedMutex after MakeCurrent, since it may have been changed by ANGLE.
+    mEGL->fQuerySurfacePointerANGLE(display, pbuffer, LOCAL_EGL_DXGI_KEYED_MUTEX_ANGLE,
+                                    keyedMutex.StartAssignment());
+
+    if (boundSurf) {
+        boundSurf->LockProd();
+    }
 
     typedef SharedSurface_ANGLEShareHandle ptrT;
     UniquePtr<ptrT> ret( new ptrT(gl, egl, size, hasAlpha, pbuffer, shareHandle,
@@ -90,7 +100,7 @@ SharedSurface_ANGLEShareHandle::SharedSurface_ANGLEShareHandle(GLContext* gl,
                                                                bool hasAlpha,
                                                                EGLSurface pbuffer,
                                                                HANDLE shareHandle,
-                                                               const RefPtr<IDXGIKeyedMutex>& keyedMutex)
+                                                               IDXGIKeyedMutex* keyedMutex)
     : SharedSurface(SharedSurfaceType::EGLSurfaceANGLE,
                     AttachmentType::Screen,
                     gl,
@@ -114,11 +124,6 @@ void
 SharedSurface_ANGLEShareHandle::LockProdImpl()
 {
     GLContextEGL::Cast(mGL)->SetEGLSurfaceOverride(mPBuffer);
-}
-
-void
-SharedSurface_ANGLEShareHandle::UnlockProdImpl()
-{
 }
 
 void
@@ -155,6 +160,7 @@ SharedSurface_ANGLEShareHandle::ProducerReadAcquireImpl()
 void
 SharedSurface_ANGLEShareHandle::ProducerReadReleaseImpl()
 {
+    // No need to flush, since we haven't issued any draw commands here. Just release.
     if (mKeyedMutex) {
         mKeyedMutex->ReleaseSync(0);
         return;
