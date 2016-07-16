@@ -346,10 +346,10 @@ gfxWindowsPlatform::gfxWindowsPlatform()
   mUseClearTypeForDownloadableFonts = UNINITIALIZED_VALUE;
   mUseClearTypeAlways = UNINITIALIZED_VALUE;
 
-  /* 
-   * Initialize COM 
-   */ 
-  CoInitialize(nullptr); 
+  /*
+   * Initialize COM
+   */
+  CoInitialize(nullptr);
 
   RegisterStrongMemoryReporter(new GfxD2DVramReporter());
   RegisterStrongMemoryReporter(new GPUAdapterReporter());
@@ -367,9 +367,9 @@ gfxWindowsPlatform::~gfxWindowsPlatform()
 
   mAdapter = nullptr;
 
-  /* 
-   * Uninitialize COM 
-   */ 
+  /*
+   * Uninitialize COM
+   */
   CoUninitialize();
 }
 
@@ -1087,7 +1087,7 @@ gfxWindowsPlatform::UseClearTypeAlways()
     return mUseClearTypeAlways;
 }
 
-void 
+void
 gfxWindowsPlatform::GetDLLVersion(char16ptr_t aDLLPath, nsAString& aVersion)
 {
     DWORD versInfoSize, vers[4] = {0};
@@ -1095,18 +1095,18 @@ gfxWindowsPlatform::GetDLLVersion(char16ptr_t aDLLPath, nsAString& aVersion)
     aVersion.AssignLiteral(MOZ_UTF16("0.0.0.0"));
     versInfoSize = GetFileVersionInfoSizeW(aDLLPath, nullptr);
     AutoTArray<BYTE,512> versionInfo;
-    
+
     if (versInfoSize == 0 ||
         !versionInfo.AppendElements(uint32_t(versInfoSize)))
     {
         return;
     }
 
-    if (!GetFileVersionInfoW(aDLLPath, 0, versInfoSize, 
+    if (!GetFileVersionInfoW(aDLLPath, 0, versInfoSize,
            LPBYTE(versionInfo.Elements())))
     {
         return;
-    } 
+    }
 
     UINT len = 0;
     VS_FIXEDFILEINFO *fileInfo = nullptr;
@@ -1118,7 +1118,7 @@ gfxWindowsPlatform::GetDLLVersion(char16ptr_t aDLLPath, nsAString& aVersion)
         return;
     }
 
-    DWORD fileVersMS = fileInfo->dwFileVersionMS; 
+    DWORD fileVersMS = fileInfo->dwFileVersionMS;
     DWORD fileVersLS = fileInfo->dwFileVersionLS;
 
     vers[0] = HIWORD(fileVersMS);
@@ -1131,7 +1131,7 @@ gfxWindowsPlatform::GetDLLVersion(char16ptr_t aDLLPath, nsAString& aVersion)
     aVersion.Assign(NS_ConvertUTF8toUTF16(buf));
 }
 
-void 
+void
 gfxWindowsPlatform::GetCleartypeParams(nsTArray<ClearTypeParameterInfo>& aParams)
 {
     HKEY  hKey, subKey;
@@ -1203,7 +1203,7 @@ gfxWindowsPlatform::GetCleartypeParams(nsTArray<ClearTypeParameterInfo>& aParams
                 foundData = true;
                 ctinfo.clearTypeLevel = value;
             }
-      
+
             size = sizeof(value);
             subrv = RegQueryValueExW(subKey, L"EnhancedContrastLevel",
                                      nullptr, &type, (LPBYTE)&value, &size);
@@ -1243,7 +1243,7 @@ gfxWindowsPlatform::FontsPrefsChanged(const char *aPref)
         clearTextFontCaches = false;
     }
 
-    if (clearTextFontCaches) {    
+    if (clearTextFontCaches) {
         gfxFontCache *fc = gfxFontCache::GetCache();
         if (fc) {
             fc->Flush();
