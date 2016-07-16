@@ -43,6 +43,10 @@ GLLibraryLoader::LookupSymbol(PRLibrary* lib,
 {
     PRFuncPtr res = 0;
 
+    if (strcmp(sym, "glGenRenderbuffers") == 0) {
+        printf_stderr("glGenRenderbuffers");
+    }
+
     // try finding it in the library directly, if we have one
     if (lib) {
         res = PR_FindFunctionSymbol(lib, sym);

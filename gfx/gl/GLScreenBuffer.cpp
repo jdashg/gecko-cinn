@@ -131,7 +131,7 @@ GLScreenBuffer::CreateFactory(GLContext* gl,
         }
 #endif
     }
-
+	factory->Test();
     return factory;
 }
 
@@ -477,7 +477,9 @@ void
 GLScreenBuffer::Morph(UniquePtr<SurfaceFactory> newFactory)
 {
     MOZ_ASSERT(newFactory);
+	newFactory->Test();
     mFactory = Move(newFactory);
+	mFactory->Test();
 }
 
 bool
@@ -554,6 +556,7 @@ GLScreenBuffer::Attach(SharedSurface* surf, const gfx::IntSize& size)
 bool
 GLScreenBuffer::Swap(const gfx::IntSize& size)
 {
+	mFactory->Test();
     RefPtr<SharedSurfaceTextureClient> newBack = mFactory->NewTexClient(size);
     if (!newBack)
         return false;

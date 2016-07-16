@@ -2067,13 +2067,18 @@ bool
 gfxWindowsPlatform::AttemptD3D11DeviceCreationHelper(
   IDXGIAdapter1* aAdapter, RefPtr<ID3D11Device>& aOutDevice, HRESULT& aResOut)
 {
+  uint32_t flags = 0;
+  flags |= D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+  flags |= D3D11_CREATE_DEVICE_DEBUG;
+
+  // Use D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS
+  // to prevent bug 1092260. IE 11 also uses this flag.
+  flags |= D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS;
+
   MOZ_SEH_TRY {
     aResOut =
       sD3D11CreateDeviceFn(
-        aAdapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-        // Use D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS
-        // to prevent bug 1092260. IE 11 also uses this flag.
-        D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS,
+        aAdapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags,
         mFeatureLevels.Elements(), mFeatureLevels.Length(),
         D3D11_SDK_VERSION, getter_AddRefs(aOutDevice), nullptr, nullptr);
   } MOZ_SEH_EXCEPT (EXCEPTION_EXECUTE_HANDLER) {

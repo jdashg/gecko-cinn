@@ -305,8 +305,8 @@ SurfaceFactory::~SurfaceFactory()
 {
     while (!mRecycleTotalPool.empty()) {
         RefPtr<layers::SharedSurfaceTextureClient> tex = *mRecycleTotalPool.begin();
+		tex->CancelWaitForRecycle();
         StopRecycling(tex);
-        tex->CancelWaitForRecycle();
     }
 
     MOZ_RELEASE_ASSERT(mRecycleTotalPool.empty(),"GFX: Surface recycle pool not empty.");
@@ -330,7 +330,7 @@ SurfaceFactory::NewTexClient(const gfx::IntSize& size)
 
         StopRecycling(cur);
     }
-
+	Test();
     UniquePtr<SharedSurface> surf = Move(CreateShared(size));
     if (!surf)
         return nullptr;

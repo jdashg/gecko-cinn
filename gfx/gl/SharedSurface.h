@@ -294,6 +294,8 @@ public:
         return mReadCaps;
     }
 
+	virtual void Test() const { }
+
 protected:
     virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) = 0;
 
