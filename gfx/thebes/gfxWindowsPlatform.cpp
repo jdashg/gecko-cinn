@@ -1856,18 +1856,18 @@ bool DoesD3D11TextureSharingWorkInternal(ID3D11Device *device, DXGI_FORMAT forma
   // Copy to the cpu texture so that we can readback
   deviceContext->CopyResource(cpuTexture, sharedTexture);
 
+  sharedMutex->ReleaseSync(0);
+
   D3D11_MAPPED_SUBRESOURCE mapped;
-  int resultColor = 0;
+  uint32_t resultColor = 0;
   if (SUCCEEDED(deviceContext->Map(cpuTexture, 0, D3D11_MAP_READ, 0, &mapped))) {
     // read the texture
-    resultColor = *(int*)mapped.pData;
+    resultColor = *(uint32_t*)mapped.pData;
     deviceContext->Unmap(cpuTexture, 0);
   } else {
     gfxCriticalError() << "DoesD3D11TextureSharingWork_MapFailed";
     return false;
   }
-
-  sharedMutex->ReleaseSync(0);
 
   // check that the color we put in is the color we get out
   if (resultColor != color[0]) {
