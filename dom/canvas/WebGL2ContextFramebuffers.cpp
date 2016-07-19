@@ -13,68 +13,14 @@
 
 namespace mozilla {
 
-static bool
-GetFBInfoForBlit(const WebGLFramebuffer* fb, const char* const fbInfo,
-                 GLsizei* const out_samples,
-                 const webgl::FormatInfo** const out_colorFormat,
-                 const webgl::FormatInfo** const out_depthFormat,
-                 const webgl::FormatInfo** const out_stencilFormat)
-{
-    *out_samples = 0;
-    *out_colorFormat = nullptr;
-    *out_depthFormat = nullptr;
-    *out_stencilFormat = nullptr;
-
-    if (fb->ColorAttachment(0).IsDefined()) {
-        const auto& attachment = fb->ColorAttachment(0);
-        *out_samples = attachment.Samples();
-        *out_colorFormat = attachment.Format()->format;
-    }
-
-    if (fb->DepthStencilAttachment().IsDefined()) {
-        const auto& attachment = fb->DepthStencilAttachment();
-        *out_samples = attachment.Samples();
-
-        *out_depthFormat = attachment.Format()->format;
-        *out_stencilFormat = *out_depthFormat;
-    } else {
-        if (fb->DepthAttachment().IsDefined()) {
-            const auto& attachment = fb->DepthAttachment();
-            *out_samples = attachment.Samples();
-            *out_depthFormat = attachment.Format()->format;
-        }
-
-        if (fb->StencilAttachment().IsDefined()) {
-            const auto& attachment = fb->StencilAttachment();
-            *out_samples = attachment.Samples();
-            *out_stencilFormat = attachment.Format()->format;
-        }
-    }
-    return true;
-}
-
 static void
-GetBackbufferFormats(const WebGLContextOptions& options,
-                     const webgl::FormatInfo** const out_color,
-                     const webgl::FormatInfo** const out_depth,
-                     const webgl::FormatInfo** const out_stencil)
+GetAttachmentInfo(const WebGLFBAttachPoint* cur,
+                  const WebGLFBAttachPoint** const out_defined,
+                  const webgl::FormatInfo** const out_format)
 {
-    const auto effFormat = options.alpha ? webgl::EffectiveFormat::RGBA8
-                                          : webgl::EffectiveFormat::RGB8;
-    *out_color = webgl::GetFormat(effFormat);
-
-    *out_depth = nullptr;
-    *out_stencil = nullptr;
-    if (options.depth && options.stencil) {
-        *out_depth = webgl::GetFormat(webgl::EffectiveFormat::DEPTH24_STENCIL8);
-        *out_stencil = *out_depth;
-    } else {
-        if (options.depth) {
-            *out_depth = webgl::GetFormat(webgl::EffectiveFormat::DEPTH_COMPONENT16);
-        }
-        if (options.stencil) {
-            *out_stencil = webgl::GetFormat(webgl::EffectiveFormat::STENCIL_INDEX8);
-        }
+    if (cur->IsDefined()) {
+        *out_defined = cur;
+        *out_format = cur->Format()->format;
     }
 }
 
@@ -103,161 +49,28 @@ WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY
         return;
     }
 
-    const GLbitfield depthAndStencilBits = LOCAL_GL_DEPTH_BUFFER_BIT |
-                                           LOCAL_GL_STENCIL_BUFFER_BIT;
-    if (mask & depthAndStencilBits &&
-        filter != LOCAL_GL_NEAREST)
+    ////
+
+    const auto& readFB = mBoundReadFramebuffer;
+    if (readFB &&
+        !readFB->ValidateAndInitAttachments("blitFramebuffer's READ_FRAMEBUFFER"))
     {
-        ErrorInvalidOperation("blitFramebuffer: DEPTH_BUFFER_BIT and"
-                              " STENCIL_BUFFER_BIT can only be used with"
-                              " NEAREST filtering.");
         return;
     }
 
-    if (mBoundReadFramebuffer == mBoundDrawFramebuffer) {
-        // TODO: It's actually more complicated than this. We need to check that
-        // the underlying buffers are not the same, not the framebuffers
-        // themselves.
-        ErrorInvalidOperation("blitFramebuffer: Source and destination must"
-                              " differ.");
-        return;
-    }
-
-    GLsizei srcSamples;
-    const webgl::FormatInfo* srcColorFormat = nullptr;
-    const webgl::FormatInfo* srcDepthFormat = nullptr;
-    const webgl::FormatInfo* srcStencilFormat = nullptr;
-
-    if (mBoundReadFramebuffer) {
-        if (!mBoundReadFramebuffer->ValidateAndInitAttachments("blitFramebuffer's READ_FRAMEBUFFER"))
-            return;
-
-        if (!GetFBInfoForBlit(mBoundReadFramebuffer, "READ_FRAMEBUFFER", &srcSamples,
-                              &srcColorFormat, &srcDepthFormat, &srcStencilFormat))
-        {
-            return;
-        }
-    } else {
-        srcSamples = 0; // Always 0.
-
-        GetBackbufferFormats(mOptions, &srcColorFormat, &srcDepthFormat,
-                             &srcStencilFormat);
-    }
-
-    GLsizei dstSamples;
-    const webgl::FormatInfo* dstColorFormat = nullptr;
-    const webgl::FormatInfo* dstDepthFormat = nullptr;
-    const webgl::FormatInfo* dstStencilFormat = nullptr;
-
-    if (mBoundDrawFramebuffer) {
-        if (!mBoundDrawFramebuffer->ValidateAndInitAttachments("blitFramebuffer's DRAW_FRAMEBUFFER"))
-            return;
-
-        if (!GetFBInfoForBlit(mBoundDrawFramebuffer, "DRAW_FRAMEBUFFER", &dstSamples,
-                              &dstColorFormat, &dstDepthFormat, &dstStencilFormat))
-        {
-            return;
-        }
-    } else {
-        dstSamples = gl->Screen()->Samples();
-
-        GetBackbufferFormats(mOptions, &dstColorFormat, &dstDepthFormat,
-                             &dstStencilFormat);
-    }
-
-    if (mask & LOCAL_GL_COLOR_BUFFER_BIT) {
-        const auto fnSignlessType = [](const webgl::FormatInfo* format)
-                                    -> webgl::ComponentType
-        {
-            if (!format)
-                return webgl::ComponentType::None;
-
-            switch (format->componentType) {
-            case webgl::ComponentType::UInt:
-                return webgl::ComponentType::Int;
-
-            case webgl::ComponentType::NormUInt:
-                return webgl::ComponentType::NormInt;
-
-            default:
-                return format->componentType;
-            }
-        };
-
-        const auto srcType = fnSignlessType(srcColorFormat);
-        const auto dstType = fnSignlessType(dstColorFormat);
-
-        if (srcType != dstType) {
-            ErrorInvalidOperation("blitFramebuffer: Color buffer format component type"
-                                  " mismatch.");
-            return;
-        }
-
-        const bool srcIsInt = (srcType == webgl::ComponentType::Int);
-        if (srcIsInt && filter != LOCAL_GL_NEAREST) {
-            ErrorInvalidOperation("blitFramebuffer: Integer read buffers can only"
-                                  " be filtered with NEAREST.");
-            return;
-        }
-    }
-
-    /* GLES 3.0.4, p199:
-     *   Calling BlitFramebuffer will result in an INVALID_OPERATION error if
-     *   mask includes DEPTH_BUFFER_BIT or STENCIL_BUFFER_BIT, and the source
-     *   and destination depth and stencil buffer formats do not match.
-     *
-     * jgilbert: The wording is such that if only DEPTH_BUFFER_BIT is specified,
-     * the stencil formats must match. This seems wrong. It could be a spec bug,
-     * or I could be missing an interaction in one of the earlier paragraphs.
-     */
-    if (mask & LOCAL_GL_DEPTH_BUFFER_BIT &&
-        dstDepthFormat != srcDepthFormat)
+    const auto& drawFB = mBoundDrawFramebuffer;
+    if (drawFB &&
+        !drawFB->ValidateAndInitAttachments("blitFramebuffer's DRAW_FRAMEBUFFER"))
     {
-        ErrorInvalidOperation("blitFramebuffer: Depth buffer formats must match"
-                              " if selected.");
         return;
     }
 
-    if (mask & LOCAL_GL_STENCIL_BUFFER_BIT &&
-        dstStencilFormat != srcStencilFormat)
-    {
-        ErrorInvalidOperation("blitFramebuffer: Stencil buffer formats must"
-                              " match if selected.");
-        return;
-    }
+    ////
 
-    if (dstSamples != 0) {
-        ErrorInvalidOperation("blitFramebuffer: DRAW_FRAMEBUFFER may not have"
-                              " multiple samples.");
-        return;
-    }
-
-    if (srcSamples != 0) {
-        if (mask & LOCAL_GL_COLOR_BUFFER_BIT &&
-            dstColorFormat != srcColorFormat)
-        {
-            ErrorInvalidOperation("blitFramebuffer: Color buffer formats must"
-                                  " match if selected, when reading from a"
-                                  " multisampled source.");
-            return;
-        }
-
-        if (dstX0 != srcX0 ||
-            dstX1 != srcX1 ||
-            dstY0 != srcY0 ||
-            dstY1 != srcY1)
-        {
-            ErrorInvalidOperation("blitFramebuffer: If the source is"
-                                  " multisampled, then the source and dest"
-                                  " regions must match exactly.");
-            return;
-        }
-    }
-
-    MakeContextCurrent();
-    gl->fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1,
-                         dstX0, dstY0, dstX1, dstY1,
-                         mask, filter);
+    WebGLFramebuffer::BlitFramebuffer(this,
+                                      readFB, srcX0, srcY0, srcX1, srcY1,
+                                      drawFB, dstX0, dstY0, dstX1, dstY1,
+                                      mask, filter);
 }
 
 static bool
@@ -283,27 +96,37 @@ void
 WebGL2Context::FramebufferTextureLayer(GLenum target, GLenum attachment,
                                        WebGLTexture* texture, GLint level, GLint layer)
 {
+    const char funcName[] = "framebufferTextureLayer";
     if (IsContextLost())
         return;
 
-    if (!ValidateFramebufferTarget(target, "framebufferTextureLayer"))
+    if (!ValidateFramebufferTarget(target, funcName))
         return;
 
-    if (!ValidateTextureLayerAttachment(attachment))
-        return ErrorInvalidEnumInfo("framebufferTextureLayer: attachment:", attachment);
+    WebGLFramebuffer* fb;
+    switch (target) {
+    case LOCAL_GL_FRAMEBUFFER:
+    case LOCAL_GL_DRAW_FRAMEBUFFER:
+        fb = mBoundDrawFramebuffer;
+        break;
+
+    case LOCAL_GL_READ_FRAMEBUFFER:
+        fb = mBoundReadFramebuffer;
+        break;
+
+    default:
+        MOZ_CRASH("GFX: Bad target.");
+    }
+
+    if (!fb) {
+        return ErrorInvalidOperation("framebufferTextureLayer: cannot modify"
+                                     " framebuffer 0.");
+    }
+
+    if (!ValidateObjectAllowNull("framebufferTextureLayer: texture", texture))
+        return;
 
     if (texture) {
-        if (texture->IsDeleted()) {
-            return ErrorInvalidValue("framebufferTextureLayer: texture must be a valid "
-                                     "texture object.");
-        }
-
-        if (layer < 0)
-            return ErrorInvalidValue("framebufferTextureLayer: layer must be >= 0.");
-
-        if (level < 0)
-            return ErrorInvalidValue("framebufferTextureLayer: level must be >= 0.");
-
         switch (texture->Target().get()) {
         case LOCAL_GL_TEXTURE_3D:
             if (uint32_t(layer) >= mImplMax3DTextureSize) {
@@ -335,27 +158,7 @@ WebGL2Context::FramebufferTextureLayer(GLenum target, GLenum attachment,
         }
     }
 
-    WebGLFramebuffer* fb;
-    switch (target) {
-    case LOCAL_GL_FRAMEBUFFER:
-    case LOCAL_GL_DRAW_FRAMEBUFFER:
-        fb = mBoundDrawFramebuffer;
-        break;
-
-    case LOCAL_GL_READ_FRAMEBUFFER:
-        fb = mBoundReadFramebuffer;
-        break;
-
-    default:
-        MOZ_CRASH("GFX: Bad target.");
-    }
-
-    if (!fb) {
-        return ErrorInvalidOperation("framebufferTextureLayer: cannot modify"
-                                     " framebuffer 0.");
-    }
-
-    fb->FramebufferTextureLayer(attachment, texture, level, layer);
+    fb->FramebufferTextureLayer(funcName, attachment, texture, level, layer);
 }
 
 JS::Value
@@ -532,32 +335,12 @@ WebGL2Context::InvalidateSubFramebuffer(GLenum target, const dom::Sequence<GLenu
 void
 WebGL2Context::ReadBuffer(GLenum mode)
 {
+    const char funcName[] = "readBuffer";
     if (IsContextLost())
         return;
 
-    const bool isColorAttachment = (mode >= LOCAL_GL_COLOR_ATTACHMENT0 &&
-                                    mode <= LastColorAttachmentEnum());
-
-    if (mode != LOCAL_GL_NONE && mode != LOCAL_GL_BACK && !isColorAttachment) {
-        ErrorInvalidEnum("readBuffer: `mode` must be one of NONE, BACK, or "
-                         "COLOR_ATTACHMENTi. Was %s",
-                         EnumName(mode));
-        return;
-    }
-
     if (mBoundReadFramebuffer) {
-        if (mode != LOCAL_GL_NONE &&
-            !isColorAttachment)
-        {
-            ErrorInvalidOperation("readBuffer: If READ_FRAMEBUFFER is non-null, `mode` "
-                                  "must be COLOR_ATTACHMENTi or NONE. Was %s",
-                                  EnumName(mode));
-            return;
-        }
-
-        MakeContextCurrent();
-        mBoundReadFramebuffer->SetReadBufferMode(mode);
-        gl->fReadBuffer(mode);
+        mBoundReadFramebuffer->ReadBuffer(funcName, mode);
         return;
     }
 
@@ -565,9 +348,9 @@ WebGL2Context::ReadBuffer(GLenum mode)
     if (mode != LOCAL_GL_NONE &&
         mode != LOCAL_GL_BACK)
     {
-        ErrorInvalidOperation("readBuffer: If READ_FRAMEBUFFER is null, `mode`"
-                              " must be BACK or NONE. Was %s",
-                              EnumName(mode));
+        ErrorInvalidOperation("%s: If READ_FRAMEBUFFER is null, `mode` must be BACK or"
+                              " NONE. Was %s",
+                              funcName, EnumName(mode));
         return;
     }
 
