@@ -127,14 +127,19 @@ public:
     {
         MOZ_ASSERT(wgl->HasDXInterop2());
         gfxWindowsPlatform* plat = gfxWindowsPlatform::GetPlatform();
-        const RefPtr<ID3D11Device> d3d = plat->GetD3D11ContentDevice();
+
+        RefPtr<ID3D11Device> d3d;
+        if (!plat->GetD3D11ImageBridgeDevice(&d3d)) {
+            gfxCriticalNote << "GetD3D11ImageBridgeDevice failed.";
+            return nullptr;
+        }
 
         if (!gl->MakeCurrent())
             return nullptr;
 
         const auto interopDevice = wgl->fDXOpenDevice(d3d);
         if (!interopDevice) {
-            NS_WARNING("Failed to open D3D device for use by WGL.");
+            gfxCriticalNote << "wglDXOpenDevice failed.";
             return nullptr;
         }
 
