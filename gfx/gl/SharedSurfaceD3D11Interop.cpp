@@ -127,7 +127,9 @@ public:
     {
         MOZ_ASSERT(wgl->HasDXInterop2());
         gfxWindowsPlatform* plat = gfxWindowsPlatform::GetPlatform();
-        const RefPtr<ID3D11Device> d3d = plat->GetD3D11ContentDevice();
+		//const RefPtr<ID3D11Device> d3d = plat->GetD3D11ContentDevice();
+        RefPtr<ID3D11Device> d3d;
+        MOZ_ALWAYS_TRUE( plat->GetD3D11ImageBridgeDevice(&d3d) );
 
 		if (!gl->MakeCurrent())
 			return nullptr;
