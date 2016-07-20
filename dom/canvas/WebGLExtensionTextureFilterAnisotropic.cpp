@@ -11,13 +11,10 @@
 
 namespace mozilla {
 
-WebGLExtensionTextureFilterAnisotropic::WebGLExtensionTextureFilterAnisotropic(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+/*static*/ bool
+WebGLExtensionTextureFilterAnisotropic::IsSupported(const WebGLContext* webgl)
 {
-}
-
-WebGLExtensionTextureFilterAnisotropic::~WebGLExtensionTextureFilterAnisotropic()
-{
+    return webgl->GL()->IsExtensionSupported(gl::GLContext::EXT_texture_filter_anisotropic);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionTextureFilterAnisotropic, EXT_texture_filter_anisotropic)

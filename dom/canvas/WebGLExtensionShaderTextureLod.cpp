@@ -11,13 +11,13 @@
 
 namespace mozilla {
 
-WebGLExtensionShaderTextureLod::WebGLExtensionShaderTextureLod(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+/*static*/ bool
+WebGLExtensionShaderTextureLod::IsSupported(const WebGLContext* webgl)
 {
-}
+    if (webgl->IsWebGL2())
+        return false;
 
-WebGLExtensionShaderTextureLod::~WebGLExtensionShaderTextureLod()
-{
+    return webgl->GL()->IsSupported(gl::GLFeature::shader_texture_lod);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionShaderTextureLod, EXT_shader_texture_lod)

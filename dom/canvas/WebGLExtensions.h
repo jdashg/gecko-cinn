@@ -28,161 +28,54 @@ class WebGLQuery;
 class WebGLTimerQuery;
 class WebGLVertexArray;
 
+////////////////////////////////////////
+
 class WebGLExtensionBase
     : public nsWrapperCache
     , public WebGLContextBoundObject
 {
 public:
-    explicit WebGLExtensionBase(WebGLContext* webgl);
-
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
-    void MarkLost();
-
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLExtensionBase)
     NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLExtensionBase)
 
 protected:
-    virtual ~WebGLExtensionBase();
+    explicit WebGLExtensionBase(WebGLContext* webgl)
+        : WebGLContextBoundObject(webgl)
+    { }
 
-    virtual void OnMarkLost() { }
+    virtual ~WebGLExtensionBase() { }
 
-    bool mIsLost;
+public:
+    WebGLContext* GetParentObject() const { return mContext; }
+
+private:
+    virtual void DetachImpl() override { }
 };
+
+////////////////////////////////////////
 
 #define DECL_WEBGL_EXTENSION_GOOP \
-    virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
+    virtual JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override; \
+    static bool IsSupported(const WebGLContext*);
 
-#define IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionType, WebGLBindingType)\
-    JSObject*                                                    \
-    WebGLExtensionType::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) {              \
-        return dom::WebGLBindingType##Binding::Wrap(cx, this, givenProto); \
-    }
+////////////////////////////////////////
 
-class WebGLExtensionCompressedTextureATC
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionCompressedTextureATC(WebGLContext*);
-    virtual ~WebGLExtensionCompressedTextureATC();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionCompressedTextureES3
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionCompressedTextureES3(WebGLContext*);
-    virtual ~WebGLExtensionCompressedTextureES3();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionCompressedTextureETC1
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionCompressedTextureETC1(WebGLContext*);
-    virtual ~WebGLExtensionCompressedTextureETC1();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionCompressedTexturePVRTC
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionCompressedTexturePVRTC(WebGLContext*);
-    virtual ~WebGLExtensionCompressedTexturePVRTC();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionCompressedTextureS3TC
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionCompressedTextureS3TC(WebGLContext*);
-    virtual ~WebGLExtensionCompressedTextureS3TC();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionDebugRendererInfo
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionDebugRendererInfo(WebGLContext*);
-    virtual ~WebGLExtensionDebugRendererInfo();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionDebugShaders
+class WebGLExtensionDebugShaders final
     : public WebGLExtensionBase
 {
 public:
     explicit WebGLExtensionDebugShaders(WebGLContext*);
-    virtual ~WebGLExtensionDebugShaders();
 
     void GetTranslatedShaderSource(WebGLShader* shader, nsAString& retval);
 
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionDepthTexture
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionDepthTexture(WebGLContext*);
-    virtual ~WebGLExtensionDepthTexture();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionElementIndexUint
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionElementIndexUint(WebGLContext*);
-    virtual ~WebGLExtensionElementIndexUint();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionEXTColorBufferFloat
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionEXTColorBufferFloat(WebGLContext*);
-    virtual ~WebGLExtensionEXTColorBufferFloat() { }
-
-    static bool IsSupported(const WebGLContext*);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionFragDepth
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionFragDepth(WebGLContext*);
-    virtual ~WebGLExtensionFragDepth();
-
-    static bool IsSupported(const WebGLContext* context);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionLoseContext
+class WebGLExtensionLoseContext final
     : public WebGLExtensionBase
 {
 public:
     explicit WebGLExtensionLoseContext(WebGLContext*);
-    virtual ~WebGLExtensionLoseContext();
 
     void LoseContext();
     void RestoreContext();
@@ -190,140 +83,44 @@ public:
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionSRGB
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionSRGB(WebGLContext*);
-    virtual ~WebGLExtensionSRGB();
-
-    static bool IsSupported(const WebGLContext* context);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionStandardDerivatives
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionStandardDerivatives(WebGLContext*);
-    virtual ~WebGLExtensionStandardDerivatives();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionShaderTextureLod
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionShaderTextureLod(WebGLContext*);
-    virtual ~WebGLExtensionShaderTextureLod();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionTextureFilterAnisotropic
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionTextureFilterAnisotropic(WebGLContext*);
-    virtual ~WebGLExtensionTextureFilterAnisotropic();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionTextureFloat
+class WebGLExtensionTextureFloat final
     : public WebGLExtensionBase
 {
 public:
     static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
 
     explicit WebGLExtensionTextureFloat(WebGLContext*);
-    virtual ~WebGLExtensionTextureFloat();
-
-    static bool IsSupported(const WebGLContext*);
 
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionTextureFloatLinear
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionTextureFloatLinear(WebGLContext*);
-    virtual ~WebGLExtensionTextureFloatLinear();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionTextureHalfFloat
+class WebGLExtensionTextureHalfFloat final
     : public WebGLExtensionBase
 {
 public:
     static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
 
     explicit WebGLExtensionTextureHalfFloat(WebGLContext*);
-    virtual ~WebGLExtensionTextureHalfFloat();
-
-    static bool IsSupported(const WebGLContext*);
 
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionTextureHalfFloatLinear
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionTextureHalfFloatLinear(WebGLContext*);
-    virtual ~WebGLExtensionTextureHalfFloatLinear();
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionColorBufferFloat
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionColorBufferFloat(WebGLContext*);
-    virtual ~WebGLExtensionColorBufferFloat();
-
-    static bool IsSupported(const WebGLContext*);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionColorBufferHalfFloat
-    : public WebGLExtensionBase
-{
-public:
-    explicit WebGLExtensionColorBufferHalfFloat(WebGLContext*);
-    virtual ~WebGLExtensionColorBufferHalfFloat();
-
-    static bool IsSupported(const WebGLContext*);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionDrawBuffers
+class WebGLExtensionDrawBuffers final
     : public WebGLExtensionBase
 {
 public:
     explicit WebGLExtensionDrawBuffers(WebGLContext*);
-    virtual ~WebGLExtensionDrawBuffers();
 
     void DrawBuffersWEBGL(const dom::Sequence<GLenum>& buffers);
-
-    static bool IsSupported(const WebGLContext*);
 
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionVertexArray
+class WebGLExtensionVertexArray final
     : public WebGLExtensionBase
 {
 public:
     explicit WebGLExtensionVertexArray(WebGLContext* webgl);
-    virtual ~WebGLExtensionVertexArray();
 
     already_AddRefed<WebGLVertexArray> CreateVertexArrayOES();
     void DeleteVertexArrayOES(WebGLVertexArray* array);
@@ -333,12 +130,11 @@ public:
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionInstancedArrays
+class WebGLExtensionInstancedArrays final
     : public WebGLExtensionBase
 {
 public:
     explicit WebGLExtensionInstancedArrays(WebGLContext* webgl);
-    virtual ~WebGLExtensionInstancedArrays();
 
     void DrawArraysInstancedANGLE(GLenum mode, GLint first, GLsizei count,
                                   GLsizei primcount);
@@ -346,29 +142,19 @@ public:
                                     WebGLintptr offset, GLsizei primcount);
     void VertexAttribDivisorANGLE(GLuint index, GLuint divisor);
 
-    static bool IsSupported(const WebGLContext* webgl);
-
     DECL_WEBGL_EXTENSION_GOOP
 };
 
-class WebGLExtensionBlendMinMax
+class WebGLExtensionDisjointTimerQuery final
     : public WebGLExtensionBase
 {
-public:
-    explicit WebGLExtensionBlendMinMax(WebGLContext* webgl);
-    virtual ~WebGLExtensionBlendMinMax();
+    /**
+     * An active TIME_ELAPSED query participating in a begin/end block.
+     */
+    WebGLRefPtr<WebGLTimerQuery> mActiveQuery;
 
-    static bool IsSupported(const WebGLContext*);
-
-    DECL_WEBGL_EXTENSION_GOOP
-};
-
-class WebGLExtensionDisjointTimerQuery
-    : public WebGLExtensionBase
-{
 public:
     explicit WebGLExtensionDisjointTimerQuery(WebGLContext* webgl);
-    virtual ~WebGLExtensionDisjointTimerQuery();
 
     already_AddRefed<WebGLTimerQuery> CreateQueryEXT();
     void DeleteQueryEXT(WebGLTimerQuery* query);
@@ -382,18 +168,68 @@ public:
                            GLenum pname,
                            JS::MutableHandle<JS::Value> retval);
 
-    static bool IsSupported(const WebGLContext*);
-
     DECL_WEBGL_EXTENSION_GOOP
 
 private:
-    virtual void OnMarkLost() override;
-
-    /**
-     * An active TIME_ELAPSED query participating in a begin/end block.
-     */
-    WebGLRefPtr<WebGLTimerQuery> mActiveQuery;
+    virtual void DetachImpl() override;
 };
+
+////////////////////////////////////////
+
+#define BASIC_EXT_DECL(T) \
+    class T final : public WebGLExtensionBase \
+    {                                         \
+    public:                                   \
+        explicit T(WebGLContext*);            \
+                                              \
+        DECL_WEBGL_EXTENSION_GOOP             \
+    };
+
+#define BASIC_EXT_DEFINE(T) \
+    class T final : public WebGLExtensionBase \
+    {                                         \
+    public:                                   \
+        explicit T(WebGLContext* webgl);      \
+            : WebGLExtensionBase(webgl)       \
+        {                                     \
+            IsSupported(webgl);               \
+        }                                     \
+                                              \
+        DECL_WEBGL_EXTENSION_GOOP             \
+    };
+
+BASIC_EXT_DEFINE(WebGLExtensionBlendMinMax)
+BASIC_EXT_DECL(WebGLExtensionColorBufferFloat)
+BASIC_EXT_DECL(WebGLExtensionColorBufferHalfFloat)
+BASIC_EXT_DECL(WebGLExtensionCompressedTextureATC)
+BASIC_EXT_DECL(WebGLExtensionCompressedTextureES3)
+BASIC_EXT_DECL(WebGLExtensionCompressedTextureETC1)
+BASIC_EXT_DECL(WebGLExtensionCompressedTexturePVRTC)
+BASIC_EXT_DECL(WebGLExtensionCompressedTextureS3TC)
+BASIC_EXT_DEFINE(WebGLExtensionDebugRendererInfo)
+BASIC_EXT_DECL(WebGLExtensionDepthTexture)
+BASIC_EXT_DEFINE(WebGLExtensionElementIndexUint)
+BASIC_EXT_DECL(WebGLExtensionEXTColorBufferFloat)
+BASIC_EXT_DEFINE(WebGLExtensionFragDepth)
+BASIC_EXT_DEFINE(WebGLExtensionShaderTextureLod)
+BASIC_EXT_DECL(WebGLExtensionSRGB)
+BASIC_EXT_DEFINE(WebGLExtensionStandardDerivatives)
+BASIC_EXT_DEFINE(WebGLExtensionTextureFilterAnisotropic)
+BASIC_EXT_DEFINE(WebGLExtensionTextureFloatLinear)
+BASIC_EXT_DEFINE(WebGLExtensionTextureHalfFloatLinear)
+
+#define BASIC_EXT_DECL aaaaaaa
+#undef BASIC_EXT_DECL
+#undef BASIC_EXT_DEFINE
+#undef DECL_WEBGL_EXTENSION_GOOP
+
+////
+
+#define IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionType, WebGLBindingType) \
+    JSObject*                                                           \
+    WebGLExtensionType::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) { \
+        return dom::WebGLBindingType##Binding::Wrap(cx, this, givenProto); \
+    }
 
 } // namespace mozilla
 

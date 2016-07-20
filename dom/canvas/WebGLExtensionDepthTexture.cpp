@@ -40,8 +40,20 @@ WebGLExtensionDepthTexture::WebGLExtensionDepthTexture(WebGLContext* webgl)
           LOCAL_GL_UNSIGNED_INT_24_8);
 }
 
-WebGLExtensionDepthTexture::~WebGLExtensionDepthTexture()
+/*static*/ bool
+WebGLExtensionDepthTexture::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
+    const auto& gl = webgl->GL();
+
+    // WEBGL_depth_texture supports DEPTH_STENCIL textures
+    if (!gl->IsSupported(gl::GLFeature::packed_depth_stencil))
+        return false;
+
+    return gl->IsSupported(gl::GLFeature::depth_texture) ||
+           gl->IsExtensionSupported(gl::GLContext::ANGLE_depth_texture);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionDepthTexture, WEBGL_depth_texture)

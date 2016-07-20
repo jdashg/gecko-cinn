@@ -10,10 +10,40 @@
 #include "GLContext.h"
 
 #include "nsString.h"
-#include "mozilla/Preferences.h"
 #include "AccessCheck.h"
 
 namespace mozilla {
+
+#define FOR_EACH_PRIVILEGED_EXT(FUNC) \
+    FUNC(WEBGL_debug_renderer_info, WebGLExtensionDebugRendererInfo) \
+    FUNC(WEBGL_debug_shaders      , WebGLExtensionDebugShaders     )
+
+#define FOR_EACH_EXT(FUNC) \
+    FUNC(ANGLE_instanced_arrays        , WebGLExtensionInstancedArrays         ) \
+    FUNC(EXT_blend_minmax              , WebGLExtensionBlendMinMax             ) \
+    FUNC(EXT_color_buffer_float        , WebGLExtensionEXTColorBufferFloat     ) \
+    FUNC(EXT_color_buffer_half_float   , WebGLExtensionColorBufferHalfFloat    ) \
+    FUNC(EXT_disjoint_timer_query      , WebGLExtensionDisjointTimerQuery      ) \
+    FUNC(EXT_frag_depth                , WebGLExtensionFragDepth               ) \
+    FUNC(EXT_shader_texture_lod        , WebGLExtensionShaderTextureLod        ) \
+    FUNC(EXT_sRGB                      , WebGLExtensionSRGB                    ) \
+    FUNC(EXT_texture_filter_anisotropic, WebGLExtensionTextureFilterAnisotropic) \
+    FUNC(OES_element_index_uint        , WebGLExtensionElementIndexUint        ) \
+    FUNC(OES_standard_derivatives      , WebGLExtensionStandardDerivatives     ) \
+    FUNC(OES_texture_float             , WebGLExtensionTextureFloat            ) \
+    FUNC(OES_texture_float_linear      , WebGLExtensionTextureFloatLinear      ) \
+    FUNC(OES_texture_half_float        , WebGLExtensionTextureHalfFloat        ) \
+    FUNC(OES_texture_half_float_linear , WebGLExtensionTextureHalfFloatLinear  ) \
+    FUNC(OES_vertex_array_object       , WebGLExtensionVertexArray             ) \
+    FUNC(WEBGL_color_buffer_float      , WebGLExtensionColorBufferFloat        ) \
+    FUNC(WEBGL_compressed_texture_atc  , WebGLExtensionCompressedTextureATC    ) \
+    FUNC(WEBGL_compressed_texture_es3  , WebGLExtensionCompressedTextureES3    ) \
+    FUNC(WEBGL_compressed_texture_etc1 , WebGLExtensionCompressedTextureETC1   ) \
+    FUNC(WEBGL_compressed_texture_pvrtc, WebGLExtensionCompressedTexturePVRTC  ) \
+    FUNC(WEBGL_compressed_texture_s3tc , WebGLExtensionCompressedTextureS3TC   ) \
+    FUNC(WEBGL_depth_texture           , WebGLExtensionDepthTexture            ) \
+    FUNC(WEBGL_draw_buffers            , WebGLExtensionDrawBuffers             ) \
+    FUNC(WEBGL_lose_context            , WebGLExtensionLoseContext             )
 
 /*static*/ const char*
 WebGLContext::GetExtensionString(WebGLExtensionID ext)
@@ -27,38 +57,12 @@ WebGLContext::GetExtensionString(WebGLExtensionID ext)
     if (!initialized) {
         initialized = true;
 
-#define WEBGL_EXTENSION_IDENTIFIER(x) \
-        sExtensionNamesEnumeratedArray[WebGLExtensionID::x] = #x;
+#define FOO(ID,FUNC) sExtensionNamesEnumeratedArray[WebGLExtensionID::ID] = #ID;
 
-        WEBGL_EXTENSION_IDENTIFIER(ANGLE_instanced_arrays)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_blend_minmax)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_color_buffer_float)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_color_buffer_half_float)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_frag_depth)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_shader_texture_lod)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_sRGB)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_texture_filter_anisotropic)
-        WEBGL_EXTENSION_IDENTIFIER(EXT_disjoint_timer_query)
-        WEBGL_EXTENSION_IDENTIFIER(OES_element_index_uint)
-        WEBGL_EXTENSION_IDENTIFIER(OES_standard_derivatives)
-        WEBGL_EXTENSION_IDENTIFIER(OES_texture_float)
-        WEBGL_EXTENSION_IDENTIFIER(OES_texture_float_linear)
-        WEBGL_EXTENSION_IDENTIFIER(OES_texture_half_float)
-        WEBGL_EXTENSION_IDENTIFIER(OES_texture_half_float_linear)
-        WEBGL_EXTENSION_IDENTIFIER(OES_vertex_array_object)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_color_buffer_float)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_compressed_texture_atc)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_compressed_texture_es3)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_compressed_texture_etc1)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_compressed_texture_pvrtc)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_compressed_texture_s3tc)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_debug_renderer_info)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_debug_shaders)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_depth_texture)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_draw_buffers)
-        WEBGL_EXTENSION_IDENTIFIER(WEBGL_lose_context)
+        FOR_EACH_PRIVILEGED_EXT(FOO)
+        FOR_EACH_EXT(FOO)
 
-#undef WEBGL_EXTENSION_IDENTIFIER
+#undef FOO
     }
 
     return sExtensionNamesEnumeratedArray[ext];
@@ -89,10 +93,15 @@ bool WebGLContext::IsExtensionSupported(JSContext* cx,
 
     if (allowPrivilegedExts) {
         switch (ext) {
-        case WebGLExtensionID::WEBGL_debug_renderer_info:
+
+#define FOO(ID,TYPE)               \
+        case WebGLExtensionID::ID: \
             return true;
-        case WebGLExtensionID::WEBGL_debug_shaders:
-            return true;
+
+            FOR_EACH_PRIVILEGED_EXT(FOO)
+
+#undef FOO
+
         default:
             // For warnings-as-errors.
             break;
@@ -108,118 +117,19 @@ WebGLContext::IsExtensionSupported(WebGLExtensionID ext) const
     if (mDisableExtensions)
         return false;
 
-    // Extensions for both WebGL 1 and 2.
     switch (ext) {
-    // In alphabetical order
-    // EXT_
-    case WebGLExtensionID::EXT_texture_filter_anisotropic:
-        return gl->IsExtensionSupported(gl::GLContext::EXT_texture_filter_anisotropic);
 
-    // OES_
-    case WebGLExtensionID::OES_texture_float_linear:
-        return gl->IsSupported(gl::GLFeature::texture_float_linear);
+#define FOO(ID,TYPE)           \
+    case WebGLExtensionID::ID: \
+        return TYPE::IsSupported(this);
 
-    // WEBGL_
-    case WebGLExtensionID::WEBGL_compressed_texture_atc:
-        return gl->IsExtensionSupported(gl::GLContext::AMD_compressed_ATC_texture);
-    case WebGLExtensionID::WEBGL_compressed_texture_etc1:
-        return gl->IsExtensionSupported(gl::GLContext::OES_compressed_ETC1_RGB8_texture);
-    case WebGLExtensionID::WEBGL_compressed_texture_pvrtc:
-        return gl->IsExtensionSupported(gl::GLContext::IMG_texture_compression_pvrtc);
-    case WebGLExtensionID::WEBGL_compressed_texture_s3tc:
-        if (gl->IsExtensionSupported(gl::GLContext::EXT_texture_compression_s3tc))
-            return true;
+        FOR_EACH_EXT(FOO)
 
-        return gl->IsExtensionSupported(gl::GLContext::EXT_texture_compression_dxt1) &&
-               gl->IsExtensionSupported(gl::GLContext::ANGLE_texture_compression_dxt3) &&
-               gl->IsExtensionSupported(gl::GLContext::ANGLE_texture_compression_dxt5);
-
-    case WebGLExtensionID::WEBGL_debug_renderer_info:
-        return Preferences::GetBool("webgl.enable-debug-renderer-info", false);
-
-    case WebGLExtensionID::WEBGL_lose_context:
-        // We always support this extension.
-        return true;
+#undef FOO
 
     default:
         // For warnings-as-errors.
         break;
-    }
-
-    if (IsWebGL2()) {
-        // WebGL2-only extensions
-        switch (ext) {
-        // EXT_
-        case WebGLExtensionID::EXT_color_buffer_float:
-            return WebGLExtensionEXTColorBufferFloat::IsSupported(this);
-
-        default:
-            // For warnings-as-errors.
-            break;
-        }
-    } else {
-        // WebGL1-only extensions
-        switch (ext) {
-        // ANGLE_
-        case WebGLExtensionID::ANGLE_instanced_arrays:
-            return WebGLExtensionInstancedArrays::IsSupported(this);
-
-        // EXT_
-        case WebGLExtensionID::EXT_blend_minmax:
-            return WebGLExtensionBlendMinMax::IsSupported(this);
-        case WebGLExtensionID::EXT_color_buffer_half_float:
-            return WebGLExtensionColorBufferHalfFloat::IsSupported(this);
-        case WebGLExtensionID::EXT_frag_depth:
-            return WebGLExtensionFragDepth::IsSupported(this);
-        case WebGLExtensionID::EXT_shader_texture_lod:
-            return gl->IsSupported(gl::GLFeature::shader_texture_lod);
-        case WebGLExtensionID::EXT_sRGB:
-            return WebGLExtensionSRGB::IsSupported(this);
-
-        // OES_
-        case WebGLExtensionID::OES_element_index_uint:
-            return gl->IsSupported(gl::GLFeature::element_index_uint);
-        case WebGLExtensionID::OES_standard_derivatives:
-            return gl->IsSupported(gl::GLFeature::standard_derivatives);
-        case WebGLExtensionID::OES_texture_float:
-            return WebGLExtensionTextureFloat::IsSupported(this);
-        case WebGLExtensionID::OES_texture_half_float:
-            return WebGLExtensionTextureHalfFloat::IsSupported(this);
-        case WebGLExtensionID::OES_texture_half_float_linear:
-            return gl->IsSupported(gl::GLFeature::texture_half_float_linear);
-
-        case WebGLExtensionID::OES_vertex_array_object:
-            return true;
-
-        // WEBGL_
-        case WebGLExtensionID::WEBGL_color_buffer_float:
-            return WebGLExtensionColorBufferFloat::IsSupported(this);
-        case WebGLExtensionID::WEBGL_depth_texture:
-            // WEBGL_depth_texture supports DEPTH_STENCIL textures
-            if (!gl->IsSupported(gl::GLFeature::packed_depth_stencil))
-                return false;
-
-            return gl->IsSupported(gl::GLFeature::depth_texture) ||
-                   gl->IsExtensionSupported(gl::GLContext::ANGLE_depth_texture);
-        case WebGLExtensionID::WEBGL_draw_buffers:
-            return WebGLExtensionDrawBuffers::IsSupported(this);
-        default:
-            // For warnings-as-errors.
-            break;
-        }
-
-        if (gfxPrefs::WebGLDraftExtensionsEnabled()) {
-            switch (ext) {
-            case WebGLExtensionID::EXT_disjoint_timer_query:
-                return WebGLExtensionDisjointTimerQuery::IsSupported(this);
-            case WebGLExtensionID::WEBGL_compressed_texture_es3:
-                return gl->IsExtensionSupported(gl::GLContext::ARB_ES3_compatibility);
-
-            default:
-                // For warnings-as-errors.
-                break;
-            }
-        }
     }
 
     return false;
@@ -333,98 +243,22 @@ WebGLContext::EnableExtension(WebGLExtensionID ext)
     MOZ_ASSERT(IsExtensionEnabled(ext) == false);
 
     WebGLExtensionBase* obj = nullptr;
+
     switch (ext) {
-    // ANGLE_
-    case WebGLExtensionID::ANGLE_instanced_arrays:
-        obj = new WebGLExtensionInstancedArrays(this);
+
+#define FOO(ID,TYPE)           \
+    case WebGLExtensionID::ID: \
+        obj = new TYPE(this);  \
         break;
 
-    // EXT_
-    case WebGLExtensionID::EXT_blend_minmax:
-        obj = new WebGLExtensionBlendMinMax(this);
-        break;
-    case WebGLExtensionID::EXT_color_buffer_float:
-        obj = new WebGLExtensionEXTColorBufferFloat(this);
-        break;
-    case WebGLExtensionID::EXT_color_buffer_half_float:
-        obj = new WebGLExtensionColorBufferHalfFloat(this);
-        break;
-    case WebGLExtensionID::EXT_disjoint_timer_query:
-        obj = new WebGLExtensionDisjointTimerQuery(this);
-        break;
-    case WebGLExtensionID::EXT_frag_depth:
-        obj = new WebGLExtensionFragDepth(this);
-        break;
-    case WebGLExtensionID::EXT_shader_texture_lod:
-        obj = new WebGLExtensionShaderTextureLod(this);
-        break;
-    case WebGLExtensionID::EXT_sRGB:
-        obj = new WebGLExtensionSRGB(this);
-        break;
-    case WebGLExtensionID::EXT_texture_filter_anisotropic:
-        obj = new WebGLExtensionTextureFilterAnisotropic(this);
-        break;
+    FOR_EACH_PRIVILEGED_EXT(FOO)
+    FOR_EACH_EXT(FOO)
 
-    // OES_
-    case WebGLExtensionID::OES_element_index_uint:
-        obj = new WebGLExtensionElementIndexUint(this);
-        break;
-    case WebGLExtensionID::OES_standard_derivatives:
-        obj = new WebGLExtensionStandardDerivatives(this);
-        break;
-    case WebGLExtensionID::OES_texture_float:
-        obj = new WebGLExtensionTextureFloat(this);
-        break;
-    case WebGLExtensionID::OES_texture_float_linear:
-        obj = new WebGLExtensionTextureFloatLinear(this);
-        break;
-    case WebGLExtensionID::OES_texture_half_float:
-        obj = new WebGLExtensionTextureHalfFloat(this);
-        break;
-    case WebGLExtensionID::OES_texture_half_float_linear:
-        obj = new WebGLExtensionTextureHalfFloatLinear(this);
-        break;
-    case WebGLExtensionID::OES_vertex_array_object:
-        obj = new WebGLExtensionVertexArray(this);
-        break;
-
-    // WEBGL_
-    case WebGLExtensionID::WEBGL_color_buffer_float:
-        obj = new WebGLExtensionColorBufferFloat(this);
-        break;
-    case WebGLExtensionID::WEBGL_compressed_texture_atc:
-        obj = new WebGLExtensionCompressedTextureATC(this);
-        break;
-    case WebGLExtensionID::WEBGL_compressed_texture_es3:
-        obj = new WebGLExtensionCompressedTextureES3(this);
-        break;
-    case WebGLExtensionID::WEBGL_compressed_texture_etc1:
-        obj = new WebGLExtensionCompressedTextureETC1(this);
-        break;
-    case WebGLExtensionID::WEBGL_compressed_texture_pvrtc:
-        obj = new WebGLExtensionCompressedTexturePVRTC(this);
-        break;
-    case WebGLExtensionID::WEBGL_compressed_texture_s3tc:
-        obj = new WebGLExtensionCompressedTextureS3TC(this);
-        break;
-    case WebGLExtensionID::WEBGL_debug_renderer_info:
-        obj = new WebGLExtensionDebugRendererInfo(this);
-        break;
-    case WebGLExtensionID::WEBGL_debug_shaders:
-        obj = new WebGLExtensionDebugShaders(this);
-        break;
-    case WebGLExtensionID::WEBGL_depth_texture:
-        obj = new WebGLExtensionDepthTexture(this);
-        break;
-    case WebGLExtensionID::WEBGL_draw_buffers:
-        obj = new WebGLExtensionDrawBuffers(this);
-        break;
-    case WebGLExtensionID::WEBGL_lose_context:
-        obj = new WebGLExtensionLoseContext(this);
-        break;
+#undef FOO
 
     default:
-        MOZ_ASSERT(false, "should not get there.");
+        gfxCriticalNote << "Invalid extension id: " << uint32_t(ext);
+        return;
     }
 
     mExtensions[ext] = obj;
@@ -465,5 +299,8 @@ WebGLContext::GetSupportedExtensions(JSContext* cx,
     if (IsExtensionSupported(cx, WebGLExtensionID::WEBGL_depth_texture))
         arr.AppendElement(NS_LITERAL_STRING("MOZ_WEBGL_depth_texture"));
 }
+
+#undef FOR_EACH_PRIVILEGED_EXT
+#undef FOR_EACH_EXT
 
 } // namespace mozilla

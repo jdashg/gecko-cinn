@@ -23,8 +23,10 @@ WebGLExtensionTextureFloatLinear::WebGLExtensionTextureFloatLinear(WebGLContext*
     fua->EditUsage(webgl::EffectiveFormat::Alpha32F)->isFilterable = true;
 }
 
-WebGLExtensionTextureFloatLinear::~WebGLExtensionTextureFloatLinear()
+/*static*/ bool
+WebGLExtensionTextureFloatLinear::IsSupported(const WebGLContext* webgl)
 {
+    return webgl->GL()->IsSupported(gl::GLFeature::texture_float_linear);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionTextureFloatLinear, OES_texture_float_linear)

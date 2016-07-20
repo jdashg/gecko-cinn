@@ -53,19 +53,17 @@ WebGLExtensionSRGB::WebGLExtensionSRGB(WebGLContext* webgl)
     fua->AllowRBFormat(LOCAL_GL_SRGB8_ALPHA8, usage);
 }
 
-WebGLExtensionSRGB::~WebGLExtensionSRGB()
-{
-}
-
-bool
+/*static*/ bool
 WebGLExtensionSRGB::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     gl::GLContext* gl = webgl->GL();
 
     return gl->IsSupported(gl::GLFeature::sRGB_framebuffer) &&
            gl->IsSupported(gl::GLFeature::sRGB_texture);
 }
-
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionSRGB, EXT_sRGB)
 

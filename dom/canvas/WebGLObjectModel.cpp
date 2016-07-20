@@ -5,21 +5,15 @@
 
 #include "WebGLObjectModel.h"
 
-#include "WebGLContext.h"
-
 namespace mozilla {
 
-WebGLContextBoundObject::WebGLContextBoundObject(WebGLContext* webgl)
-    : mContext(webgl)
-    , mContextGeneration(webgl->Generation())
+void
+WebGLContextBoundObject::Detach()
 {
-}
+    MOZ_ASSERT(mContext);
 
-bool
-WebGLContextBoundObject::IsCompatibleWithContext(WebGLContext* other)
-{
-    return (mContext == other &&
-            mContextGeneration == other->Generation());
+    DetachImpl();
+    mContext = nullptr;
 }
 
 } // namespace mozilla

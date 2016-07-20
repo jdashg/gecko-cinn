@@ -37,8 +37,10 @@ WebGLExtensionCompressedTextureATC::WebGLExtensionCompressedTextureATC(WebGLCont
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureATC::~WebGLExtensionCompressedTextureATC()
+/*static*/ bool
+WebGLExtensionCompressedTextureATC::IsSupported(const WebGLContext* webgl)
 {
+    return webgl->GL()->IsExtensionSupported(gl::GLContext::AMD_compressed_ATC_texture);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionCompressedTextureATC, WEBGL_compressed_texture_atc)

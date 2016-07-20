@@ -36,13 +36,12 @@ WebGLExtensionColorBufferFloat::WebGLExtensionColorBufferFloat(WebGLContext* web
 #undef FOO
 }
 
-WebGLExtensionColorBufferFloat::~WebGLExtensionColorBufferFloat()
-{
-}
-
-bool
+/*static*/ bool
 WebGLExtensionColorBufferFloat::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     gl::GLContext* gl = webgl->GL();
 
     // ANGLE supports this, but doesn't have a way to advertize its support,

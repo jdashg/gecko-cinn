@@ -38,8 +38,10 @@ WebGLExtensionCompressedTexturePVRTC::WebGLExtensionCompressedTexturePVRTC(WebGL
 #undef FOO
 }
 
-WebGLExtensionCompressedTexturePVRTC::~WebGLExtensionCompressedTexturePVRTC()
+/*static*/ bool
+WebGLExtensionCompressedTexturePVRTC::IsSupported(const WebGLContext* webgl)
 {
+    return webgl->GL()->IsExtensionSupported(gl::GLContext::IMG_texture_compression_pvrtc);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionCompressedTexturePVRTC, WEBGL_compressed_texture_pvrtc)

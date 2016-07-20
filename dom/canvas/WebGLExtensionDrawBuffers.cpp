@@ -28,24 +28,21 @@ WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
                                           webgl->mImplMaxColorAttachments);
 }
 
-WebGLExtensionDrawBuffers::~WebGLExtensionDrawBuffers()
-{
-}
-
 void
 WebGLExtensionDrawBuffers::DrawBuffersWEBGL(const dom::Sequence<GLenum>& buffers)
 {
-    if (mIsLost) {
-        mContext->ErrorInvalidOperation("drawBuffersWEBGL: Extension is lost.");
+    if (!mContext)
         return;
-    }
 
     mContext->DrawBuffers(buffers);
 }
 
-bool
+/*static*/ bool
 WebGLExtensionDrawBuffers::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     gl::GLContext* gl = webgl->GL();
 
     if (!gl->IsSupported(gl::GLFeature::draw_buffers))

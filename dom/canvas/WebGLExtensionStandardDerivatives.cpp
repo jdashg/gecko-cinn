@@ -11,13 +11,13 @@
 
 namespace mozilla {
 
-WebGLExtensionStandardDerivatives::WebGLExtensionStandardDerivatives(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+/*static*/ bool
+WebGLExtensionStandardDerivatives::IsSupported(const WebGLContext* webgl)
 {
-}
+    if (webgl->IsWebGL2())
+        return false;
 
-WebGLExtensionStandardDerivatives::~WebGLExtensionStandardDerivatives()
-{
+    return webgl->GL()->IsSupported(gl::GLFeature::standard_derivatives);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionStandardDerivatives, OES_standard_derivatives)

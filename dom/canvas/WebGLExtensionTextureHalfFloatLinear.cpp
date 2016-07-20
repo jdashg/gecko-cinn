@@ -23,8 +23,13 @@ WebGLExtensionTextureHalfFloatLinear::WebGLExtensionTextureHalfFloatLinear(WebGL
     fua->EditUsage(webgl::EffectiveFormat::Alpha16F)->isFilterable = true;
 }
 
-WebGLExtensionTextureHalfFloatLinear::~WebGLExtensionTextureHalfFloatLinear()
+/*static*/ bool
+WebGLExtensionTextureHalfFloatLinear::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
+    return webgl->GL()->IsSupported(gl::GLFeature::texture_half_float_linear);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionTextureHalfFloatLinear, OES_texture_half_float_linear)

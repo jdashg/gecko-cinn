@@ -5,27 +5,15 @@
 
 #include "WebGLExtensions.h"
 
-#include "GLContext.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
-#include "WebGLBuffer.h"
 #include "WebGLContext.h"
-#include "WebGLVertexArray.h"
 
 namespace mozilla {
-
-WebGLExtensionVertexArray::WebGLExtensionVertexArray(WebGLContext* webgl)
-  : WebGLExtensionBase(webgl)
-{
-}
-
-WebGLExtensionVertexArray::~WebGLExtensionVertexArray()
-{
-}
 
 already_AddRefed<WebGLVertexArray>
 WebGLExtensionVertexArray::CreateVertexArrayOES()
 {
-    if (mIsLost)
+    if (!mContext)
         return nullptr;
 
     return mContext->CreateVertexArray();
@@ -34,7 +22,7 @@ WebGLExtensionVertexArray::CreateVertexArrayOES()
 void
 WebGLExtensionVertexArray::DeleteVertexArrayOES(WebGLVertexArray* array)
 {
-    if (mIsLost)
+    if (!mContext)
         return;
 
     mContext->DeleteVertexArray(array);
@@ -43,7 +31,7 @@ WebGLExtensionVertexArray::DeleteVertexArrayOES(WebGLVertexArray* array)
 bool
 WebGLExtensionVertexArray::IsVertexArrayOES(WebGLVertexArray* array)
 {
-    if (mIsLost)
+    if (!mContext)
         return false;
 
     return mContext->IsVertexArray(array);
@@ -52,10 +40,19 @@ WebGLExtensionVertexArray::IsVertexArrayOES(WebGLVertexArray* array)
 void
 WebGLExtensionVertexArray::BindVertexArrayOES(WebGLVertexArray* array)
 {
-    if (mIsLost)
+    if (!mContext)
         return;
 
     mContext->BindVertexArray(array);
+}
+
+/*static*/ bool
+WebGLExtensionVertexArray::IsSupported(const WebGLContext* webgl)
+{
+    if (webgl->IsWebGL2())
+        return false;
+
+    return true;
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionVertexArray, OES_vertex_array_object)

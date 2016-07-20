@@ -10,15 +10,6 @@
 
 namespace mozilla {
 
-WebGLExtensionDebugShaders::WebGLExtensionDebugShaders(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
-{
-}
-
-WebGLExtensionDebugShaders::~WebGLExtensionDebugShaders()
-{
-}
-
 // If no source has been defined, compileShader() has not been called, or the
 // translation has failed for shader, an empty string is returned; otherwise,
 // return the translated source.
@@ -28,14 +19,17 @@ WebGLExtensionDebugShaders::GetTranslatedShaderSource(WebGLShader* shader,
 {
     retval.SetIsVoid(true);
 
-    if (mIsLost) {
-        mContext->ErrorInvalidOperation("%s: Extension is lost.",
-                                        "getTranslatedShaderSource");
+    if (!mContext)
         return;
-    }
 
     retval.SetIsVoid(false);
     mContext->GetShaderTranslatedSource(shader, retval);
+}
+
+/*static*/ bool
+WebGLExtensionDebugShaders::IsSupported(const WebGLContext* webgl)
+{
+    return true;
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionDebugShaders, WEBGL_debug_shaders)

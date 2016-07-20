@@ -11,27 +11,14 @@
 
 namespace mozilla {
 
-WebGLExtensionInstancedArrays::WebGLExtensionInstancedArrays(WebGLContext* webgl)
-  : WebGLExtensionBase(webgl)
-{
-    MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-}
-
-WebGLExtensionInstancedArrays::~WebGLExtensionInstancedArrays()
-{
-}
-
 void
 WebGLExtensionInstancedArrays::DrawArraysInstancedANGLE(GLenum mode,
                                                         GLint first,
                                                         GLsizei count,
                                                         GLsizei primcount)
 {
-    if (mIsLost) {
-        mContext->ErrorInvalidOperation("%s: Extension is lost.",
-                                        "drawArraysInstancedANGLE");
+    if (!mContext)
         return;
-    }
 
     mContext->DrawArraysInstanced(mode, first, count, primcount);
 }
@@ -43,11 +30,8 @@ WebGLExtensionInstancedArrays::DrawElementsInstancedANGLE(GLenum mode,
                                                           WebGLintptr offset,
                                                           GLsizei primcount)
 {
-    if (mIsLost) {
-        mContext->ErrorInvalidOperation("%s: Extension is lost.",
-                                        "drawElementsInstancedANGLE");
+    if (!mContext)
         return;
-    }
 
     mContext->DrawElementsInstanced(mode, count, type, offset, primcount);
 }
@@ -56,18 +40,18 @@ void
 WebGLExtensionInstancedArrays::VertexAttribDivisorANGLE(GLuint index,
                                                         GLuint divisor)
 {
-    if (mIsLost) {
-        mContext->ErrorInvalidOperation("%s: Extension is lost.",
-                                        "vertexAttribDivisorANGLE");
+    if (!mContext)
         return;
-    }
 
     mContext->VertexAttribDivisor(index, divisor);
 }
 
-bool
+/*static*/ bool
 WebGLExtensionInstancedArrays::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     gl::GLContext* gl = webgl->GL();
     return gl->IsSupported(gl::GLFeature::draw_instanced) &&
            gl->IsSupported(gl::GLFeature::instanced_arrays);

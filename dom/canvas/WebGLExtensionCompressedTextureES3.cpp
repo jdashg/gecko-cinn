@@ -47,8 +47,13 @@ WebGLExtensionCompressedTextureES3::WebGLExtensionCompressedTextureES3(WebGLCont
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureES3::~WebGLExtensionCompressedTextureES3()
+/*static*/ bool
+WebGLExtensionCompressedTextureES3::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
+    return webgl->GL()->IsExtensionSupported(gl::GLContext::ARB_ES3_compatibility);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionCompressedTextureES3, WEBGL_compressed_texture_es3)

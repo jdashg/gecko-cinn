@@ -97,13 +97,12 @@ WebGLExtensionTextureFloat::WebGLExtensionTextureFloat(WebGLContext* webgl)
     fnAdd(webgl::EffectiveFormat::Luminance32FAlpha32F);
 }
 
-WebGLExtensionTextureFloat::~WebGLExtensionTextureFloat()
-{
-}
-
-bool
+/*static*/ bool
 WebGLExtensionTextureFloat::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     gl::GLContext* gl = webgl->GL();
 
     if (!gl->IsSupported(gl::GLFeature::texture_float))

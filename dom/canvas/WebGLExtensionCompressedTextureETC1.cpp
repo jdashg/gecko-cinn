@@ -35,8 +35,10 @@ WebGLExtensionCompressedTextureETC1::WebGLExtensionCompressedTextureETC1(WebGLCo
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureETC1::~WebGLExtensionCompressedTextureETC1()
+/*static*/ bool
+WebGLExtensionCompressedTextureETC1::IsSupported(const WebGLContext* webgl)
 {
+    return webgl->GL()->IsExtensionSupported(gl::GLContext::OES_compressed_ETC1_RGB8_texture);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionCompressedTextureETC1, WEBGL_compressed_texture_etc1)

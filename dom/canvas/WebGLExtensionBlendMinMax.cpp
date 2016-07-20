@@ -10,19 +10,12 @@
 
 namespace mozilla {
 
-WebGLExtensionBlendMinMax::WebGLExtensionBlendMinMax(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
-{
-    MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-}
-
-WebGLExtensionBlendMinMax::~WebGLExtensionBlendMinMax()
-{
-}
-
-bool
+/*static*/ bool
 WebGLExtensionBlendMinMax::IsSupported(const WebGLContext* webgl)
 {
+    if (webgl->IsWebGL2())
+        return false;
+
     return webgl->GL()->IsSupported(gl::GLFeature::blend_minmax);
 }
 

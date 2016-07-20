@@ -260,18 +260,22 @@ protected:
 };
 
 // This class is a mixin for objects that are tied to a specific
-// context (which is to say, all of them).  They provide initialization
-// as well as comparison with the current context.
+// context (which is to say, all of them).
 class WebGLContextBoundObject
 {
-public:
-    explicit WebGLContextBoundObject(WebGLContext* webgl);
+    WebGLContext* mContext;
 
-    bool IsCompatibleWithContext(WebGLContext* other);
+    explicit WebGLContextBoundObject(WebGLContext* webgl)
+        : mContext(webgl)
+    { }
 
-    WebGLContext* const mContext;
-protected:
-    const uint32_t mContextGeneration;
+    virtual ~WebGLContextBoundObject() {
+        MOZ_ASSERT(!mContext, "Should be Detach()'d first before destroyed.");
+    }
+
+private:
+    void Detach();
+    virtual void DetachImpl() = 0;
 };
 
 // this class is a mixin for GL objects that have dimensions

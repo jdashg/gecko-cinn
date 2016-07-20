@@ -30,7 +30,7 @@ WebGLExtensionDisjointTimerQuery::~WebGLExtensionDisjointTimerQuery()
 already_AddRefed<WebGLTimerQuery>
 WebGLExtensionDisjointTimerQuery::CreateQueryEXT()
 {
-  if (mIsLost)
+  if (!mContext)
     return nullptr;
 
   RefPtr<WebGLTimerQuery> query = WebGLTimerQuery::Create(mContext);
@@ -40,7 +40,7 @@ WebGLExtensionDisjointTimerQuery::CreateQueryEXT()
 void
 WebGLExtensionDisjointTimerQuery::DeleteQueryEXT(WebGLTimerQuery* query)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   if (!mContext->ValidateObject("deleteQueryEXT", query))
@@ -52,6 +52,9 @@ WebGLExtensionDisjointTimerQuery::DeleteQueryEXT(WebGLTimerQuery* query)
 bool
 WebGLExtensionDisjointTimerQuery::IsQueryEXT(WebGLTimerQuery* query)
 {
+  if (!mContext)
+    return false;
+
   if (!query)
     return false;
 
@@ -68,7 +71,7 @@ void
 WebGLExtensionDisjointTimerQuery::BeginQueryEXT(GLenum target,
                                                 WebGLTimerQuery* query)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   if (!mContext->ValidateObject("beginQueryEXT", query))
@@ -102,7 +105,7 @@ WebGLExtensionDisjointTimerQuery::BeginQueryEXT(GLenum target,
 void
 WebGLExtensionDisjointTimerQuery::EndQueryEXT(GLenum target)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   if (target != LOCAL_GL_TIME_ELAPSED_EXT) {
@@ -126,7 +129,7 @@ void
 WebGLExtensionDisjointTimerQuery::QueryCounterEXT(WebGLTimerQuery* query,
                                                   GLenum target)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   if (!mContext->ValidateObject("queryCounterEXT", query))
@@ -149,7 +152,7 @@ WebGLExtensionDisjointTimerQuery::GetQueryEXT(JSContext* cx, GLenum target,
                                               GLenum pname,
                                               JS::MutableHandle<JS::Value> retval)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   mContext->MakeContextCurrent();
@@ -196,7 +199,7 @@ WebGLExtensionDisjointTimerQuery::GetQueryObjectEXT(JSContext* cx,
                                                     GLenum pname,
                                                     JS::MutableHandle<JS::Value> retval)
 {
-  if (mIsLost)
+  if (!mContext)
     return;
 
   if (!mContext->ValidateObject("getQueryObjectEXT", query))
@@ -237,20 +240,23 @@ WebGLExtensionDisjointTimerQuery::GetQueryObjectEXT(JSContext* cx,
   }
 }
 
-bool
+void
+WebGLExtensionDisjointTimerQuery::DetachImpl()
+{
+  mActiveQuery = nullptr;
+}
+
+/*static*/ bool
 WebGLExtensionDisjointTimerQuery::IsSupported(const WebGLContext* webgl)
 {
+  if (webgl->IsWebGL2())
+    return false;
+
   webgl->MakeContextCurrent();
   gl::GLContext* gl = webgl->GL();
   return gl->IsSupported(gl::GLFeature::query_objects) &&
          gl->IsSupported(gl::GLFeature::get_query_object_i64v) &&
          gl->IsSupported(gl::GLFeature::query_counter); // provides GL_TIMESTAMP
-}
-
-void
-WebGLExtensionDisjointTimerQuery::OnMarkLost()
-{
-  mActiveQuery = nullptr;
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionDisjointTimerQuery, EXT_disjoint_timer_query)

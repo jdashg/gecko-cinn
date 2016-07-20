@@ -302,7 +302,7 @@ WebGLContext::DestroyResourcesAndContext()
         if (!IsExtensionEnabled(extension) || (extension == WebGLExtensionID::WEBGL_lose_context))
             continue;
 
-        mExtensions[extension]->MarkLost();
+        mExtensions[extension]->Detach();
         mExtensions[extension] = nullptr;
     }
 

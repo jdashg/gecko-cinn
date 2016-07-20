@@ -11,13 +11,13 @@
 
 namespace mozilla {
 
-WebGLExtensionElementIndexUint::WebGLExtensionElementIndexUint(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+/*static*/ bool
+WebGLExtensionElementIndexUint::IsSupported(const WebGLContext* webgl)
 {
-}
+    if (webgl->IsWebGL2())
+        return false;
 
-WebGLExtensionElementIndexUint::~WebGLExtensionElementIndexUint()
-{
+    return webgl->GL()->IsSupported(gl::GLFeature::element_index_uint);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionElementIndexUint, OES_element_index_uint)
