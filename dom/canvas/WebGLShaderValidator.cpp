@@ -102,6 +102,7 @@ ShaderOutput(gl::GLContext* gl)
         return SH_ESSL_OUTPUT;
     } else {
         uint32_t version = gl->ShadingLanguageVersion();
+        printf_stderr("SL version: %u\n", version);
         switch (version) {
         case 100: return SH_GLSL_COMPATIBILITY_OUTPUT;
         case 120: return SH_GLSL_COMPATIBILITY_OUTPUT;
