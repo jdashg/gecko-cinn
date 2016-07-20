@@ -248,7 +248,8 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
         return false;
     }
 
-    if (ShGetShaderVersion(prev->mHandle) != ShGetShaderVersion(mHandle)) {
+    const auto shaderVersion = ShGetShaderVersion(mHandle);
+    if (ShGetShaderVersion(prev->mHandle) != shaderVersion) {
         nsPrintfCString error("Vertex shader version %d does not match"
                               " fragment shader version %d.",
                               ShGetShaderVersion(prev->mHandle),
@@ -314,7 +315,7 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
                 if (vertVarying.name != fragVarying.name)
                     continue;
 
-                if (!vertVarying.isSameVaryingAtLinkTime(fragVarying)) {
+                if (!vertVarying.isSameVaryingAtLinkTime(fragVarying, shaderVersion)) {
                     nsPrintfCString error("Varying `%s`is not linkable between"
                                           " attached shaders.",
                                           fragVarying.name.c_str());
