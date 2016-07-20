@@ -351,7 +351,7 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
         }
     }
 
-    {
+    if (shaderVersion == 100) {
         bool isInvariant_Position = false;
         bool isInvariant_PointSize = false;
         bool isInvariant_FragCoord = false;
