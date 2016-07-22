@@ -439,7 +439,7 @@ WebGLProgram::WebGLProgram(WebGLContext* webgl)
 
 WebGLProgram::~WebGLProgram()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

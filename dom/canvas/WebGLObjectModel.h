@@ -153,6 +153,10 @@ private:
         }
     }
 
+    virtual void DetachImpl() override {
+        DeleteOnce();
+    }
+
 protected:
     nsAutoRefCnt mWebGLRefCnt;
     DeletionStatus mDeletionStatus;

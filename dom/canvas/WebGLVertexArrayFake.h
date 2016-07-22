@@ -25,7 +25,7 @@ private:
     explicit WebGLVertexArrayFake(WebGLContext* webgl);
 
     ~WebGLVertexArrayFake() {
-        DeleteOnce();
+        DetachOnce();
     }
 
     bool mIsVAO;

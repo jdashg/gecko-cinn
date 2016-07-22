@@ -20,7 +20,7 @@ WebGLSync::WebGLSync(WebGLContext* webgl, GLenum condition, GLbitfield flags)
 
 WebGLSync::~WebGLSync()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

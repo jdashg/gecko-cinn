@@ -216,7 +216,7 @@ public:
 
 protected:
     ~WebGLTexture() {
-        DeleteOnce();
+        DetachOnce();
     }
 
 public:

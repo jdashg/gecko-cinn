@@ -17,7 +17,7 @@ WebGLVertexArrayGL::WebGLVertexArrayGL(WebGLContext* webgl)
 
 WebGLVertexArrayGL::~WebGLVertexArrayGL()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

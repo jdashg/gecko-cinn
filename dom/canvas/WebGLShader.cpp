@@ -152,7 +152,7 @@ WebGLShader::WebGLShader(WebGLContext* webgl, GLenum type)
 
 WebGLShader::~WebGLShader()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

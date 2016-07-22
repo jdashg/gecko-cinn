@@ -32,7 +32,7 @@ private:
   { }
 
   ~WebGLVertexArrayObject() {
-    DeleteOnce();
+    DetachOnce();
   }
 };
 

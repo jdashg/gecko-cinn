@@ -209,7 +209,7 @@ public:
 
 private:
     ~WebGLFramebuffer() {
-        DeleteOnce();
+        DetachOnce();
     }
 
     const WebGLRectangleObject& GetAnyRectObject() const;

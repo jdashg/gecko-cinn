@@ -82,7 +82,7 @@ public:
 
 protected:
     ~WebGLRenderbuffer() {
-        DeleteOnce();
+        DetachOnce();
     }
 
     void DoFramebufferRenderbuffer(GLenum attachment) const;

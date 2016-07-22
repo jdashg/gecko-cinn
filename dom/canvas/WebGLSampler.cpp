@@ -29,7 +29,7 @@ WebGLSampler::WebGLSampler(WebGLContext* webgl, GLuint sampler)
 
 WebGLSampler::~WebGLSampler()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

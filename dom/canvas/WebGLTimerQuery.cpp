@@ -31,7 +31,7 @@ WebGLTimerQuery::WebGLTimerQuery(WebGLContext* webgl, GLuint name)
 
 WebGLTimerQuery::~WebGLTimerQuery()
 {
-  DeleteOnce();
+  DetachOnce();
 }
 
 WebGLTimerQuery*

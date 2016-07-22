@@ -66,6 +66,9 @@ public:
 
 protected:
     ~WebGLUniformLocation();
+
+private:
+    virtual void DetachImpl() override { }
 };
 
 } // namespace mozilla

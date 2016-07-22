@@ -23,7 +23,7 @@ WebGLBuffer::WebGLBuffer(WebGLContext* webgl, GLuint buf)
 
 WebGLBuffer::~WebGLBuffer()
 {
-    DeleteOnce();
+    DetachOnce();
 }
 
 void

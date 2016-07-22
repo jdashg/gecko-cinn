@@ -61,7 +61,7 @@ public:
 
 private:
     ~WebGLQuery() {
-        DeleteOnce();
+        DetachOnce();
     };
 
     GLuint mGLName;

@@ -27,7 +27,7 @@ WebGLTransformFeedback::~WebGLTransformFeedback()
     mMode = LOCAL_GL_NONE;
     mIsActive = false;
     mIsPaused = false;
-    DeleteOnce();
+    DetachOnce();
 }
 
 void
