@@ -92,13 +92,14 @@ class WebGLContext;
  * known as the "curiously recursive template pattern (CRTP)".
  */
 template<typename Derived>
-class WebGLRefCountedObject
+class WebGLRefCountedObject : public WebGLContextBoundObject
 {
 public:
     enum DeletionStatus { Default, DeleteRequested, Deleted };
 
-    WebGLRefCountedObject()
-      : mDeletionStatus(Default)
+    explicit WebGLRefCountedObject(WebGLContext* webgl)
+      : WebGLContextBoundObject(webgl)
+      , mDeletionStatus(Default)
     {}
 
     ~WebGLRefCountedObject() {

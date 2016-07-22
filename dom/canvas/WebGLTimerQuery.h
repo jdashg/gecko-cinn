@@ -17,7 +17,6 @@ class WebGLTimerQuery final
   : public nsWrapperCache
   , public WebGLRefCountedObject<WebGLTimerQuery>
   , public LinkedListElement<WebGLTimerQuery>
-  , public WebGLContextBoundObject
 {
 public:
   static WebGLTimerQuery* Create(WebGLContext* webgl);

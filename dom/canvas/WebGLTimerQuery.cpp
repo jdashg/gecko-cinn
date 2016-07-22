@@ -21,7 +21,7 @@ WebGLTimerQuery::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto)
 }
 
 WebGLTimerQuery::WebGLTimerQuery(WebGLContext* webgl, GLuint name)
-  : WebGLContextBoundObject(webgl)
+  : WebGLRefCountedObject(webgl)
   , mGLName(name)
   , mTarget(LOCAL_GL_NONE)
   , mCanBeAvailable(false)

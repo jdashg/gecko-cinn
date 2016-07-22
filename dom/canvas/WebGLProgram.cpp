@@ -430,7 +430,7 @@ CreateProgram(gl::GLContext* gl)
 }
 
 WebGLProgram::WebGLProgram(WebGLContext* webgl)
-    : WebGLContextBoundObject(webgl)
+    : WebGLRefCountedObject(webgl)
     , mGLName(CreateProgram(webgl->GL()))
     , mTransformFeedbackBufferMode(LOCAL_GL_NONE)
 {

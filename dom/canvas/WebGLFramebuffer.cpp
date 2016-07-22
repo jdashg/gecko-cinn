@@ -627,7 +627,7 @@ WebGLFBAttachPoint::GetParameter(const char* funcName, WebGLContext* webgl, JSCo
 // WebGLFramebuffer
 
 WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
-    : WebGLContextBoundObject(webgl)
+    : WebGLRefCountedObject(webgl)
     , mGLName(fbo)
     , mIsKnownFBComplete(false)
     , mReadBufferMode(LOCAL_GL_COLOR_ATTACHMENT0)

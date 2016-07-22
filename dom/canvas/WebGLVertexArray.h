@@ -23,7 +23,6 @@ class WebGLVertexArray
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLVertexArray>
     , public LinkedListElement<WebGLVertexArray>
-    , public WebGLContextBoundObject
 {
 public:
     static WebGLVertexArray* Create(WebGLContext* webgl);

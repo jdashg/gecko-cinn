@@ -121,7 +121,6 @@ class WebGLProgram final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLProgram>
     , public LinkedListElement<WebGLProgram>
-    , public WebGLContextBoundObject
 {
 public:
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgram)

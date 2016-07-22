@@ -163,7 +163,6 @@ class WebGLFramebuffer final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLFramebuffer>
     , public LinkedListElement<WebGLFramebuffer>
-    , public WebGLContextBoundObject
     , public SupportsWeakPtr<WebGLFramebuffer>
 {
     friend class WebGLContext;
