@@ -45,7 +45,7 @@ WebGLExtensionEXTColorBufferFloat::IsSupported(const WebGLContext* webgl)
     if (!webgl->IsWebGL2())
         return false;
 
-    return webgl->gl->IsSupported(gl::GLFeature::EXT_color_buffer_float);
+    return webgl->GL()->IsSupported(gl::GLFeature::EXT_color_buffer_float);
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionEXTColorBufferFloat, EXT_color_buffer_float)

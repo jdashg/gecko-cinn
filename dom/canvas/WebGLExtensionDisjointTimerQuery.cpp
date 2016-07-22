@@ -23,10 +23,6 @@ WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(WebGLContext*
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-WebGLExtensionDisjointTimerQuery::~WebGLExtensionDisjointTimerQuery()
-{
-}
-
 already_AddRefed<WebGLTimerQuery>
 WebGLExtensionDisjointTimerQuery::CreateQueryEXT()
 {

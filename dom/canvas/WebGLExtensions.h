@@ -189,7 +189,7 @@ private:
     class T final : public WebGLExtensionBase \
     {                                         \
     public:                                   \
-        explicit T(WebGLContext* webgl);      \
+        explicit T(WebGLContext* webgl)       \
             : WebGLExtensionBase(webgl)       \
         {                                     \
             IsSupported(webgl);               \
@@ -215,10 +215,9 @@ BASIC_EXT_DEFINE(WebGLExtensionShaderTextureLod)
 BASIC_EXT_DECL(WebGLExtensionSRGB)
 BASIC_EXT_DEFINE(WebGLExtensionStandardDerivatives)
 BASIC_EXT_DEFINE(WebGLExtensionTextureFilterAnisotropic)
-BASIC_EXT_DEFINE(WebGLExtensionTextureFloatLinear)
-BASIC_EXT_DEFINE(WebGLExtensionTextureHalfFloatLinear)
+BASIC_EXT_DECL(WebGLExtensionTextureFloatLinear)
+BASIC_EXT_DECL(WebGLExtensionTextureHalfFloatLinear)
 
-#define BASIC_EXT_DECL aaaaaaa
 #undef BASIC_EXT_DECL
 #undef BASIC_EXT_DEFINE
 #undef DECL_WEBGL_EXTENSION_GOOP
