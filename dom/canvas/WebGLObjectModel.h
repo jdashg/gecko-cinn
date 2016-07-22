@@ -263,15 +263,29 @@ protected:
 // context (which is to say, all of them).
 class WebGLContextBoundObject
 {
+    friend class WebGLContext;
+
+protected:
     WebGLContext* mContext;
 
     explicit WebGLContextBoundObject(WebGLContext* webgl)
         : mContext(webgl)
-    { }
+    {
+        MOZ_ASSERT(mContext);
+    }
 
     virtual ~WebGLContextBoundObject() {
         MOZ_ASSERT(!mContext, "Should be Detach()'d first before destroyed.");
     }
+
+    void DetachOnce() {
+        if (mContext) {
+            Detach();
+        }
+    }
+
+public:
+    const decltype(mContext)& Context() const { return mContext; }
 
 private:
     void Detach();

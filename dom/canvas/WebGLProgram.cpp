@@ -121,7 +121,7 @@ webgl::UniformInfo::UniformInfo(WebGLActiveInfo* activeInfo)
 static already_AddRefed<const webgl::LinkedProgramInfo>
 QueryProgramInfo(WebGLProgram* prog, gl::GLContext* gl)
 {
-    WebGLContext* const webgl = prog->mContext;
+    const auto& webgl = prog->Context();
 
     RefPtr<webgl::LinkedProgramInfo> info(new webgl::LinkedProgramInfo(prog));
 

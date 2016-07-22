@@ -345,7 +345,7 @@ TexUnpackBytes::TexOrSubImage(bool isSubImage, bool needsRespec, const char* fun
                               const webgl::DriverUnpackInfo* dui, GLint xOffset,
                               GLint yOffset, GLint zOffset, GLenum* const out_error) const
 {
-    WebGLContext* webgl = tex->mContext;
+    const auto webgl = tex->Context();
 
     const auto pi = dui->ToPacking();
 
@@ -477,7 +477,7 @@ TexUnpackImage::TexOrSubImage(bool isSubImage, bool needsRespec, const char* fun
 {
     MOZ_ASSERT_IF(needsRespec, !isSubImage);
 
-    WebGLContext* webgl = tex->mContext;
+    const auto webgl = tex->Context();
 
     gl::GLContext* gl = webgl->GL();
     gl->MakeCurrent();
@@ -631,7 +631,7 @@ TexUnpackSurface::TexOrSubImage(bool isSubImage, bool needsRespec, const char* f
                                 GLint yOffset, GLint zOffset,
                                 GLenum* const out_error) const
 {
-    WebGLContext* webgl = tex->mContext;
+    const auto webgl = tex->Context();
 
     WebGLTexelFormat srcFormat;
     uint8_t srcBPP;

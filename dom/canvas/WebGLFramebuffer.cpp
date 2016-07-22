@@ -363,7 +363,7 @@ WebGLFBAttachPoint::FinalizeAttachment(gl::GLContext* gl, GLenum attachment) con
     MOZ_ASSERT(HasImage());
 
     if (Texture()) {
-        MOZ_ASSERT(gl == Texture()->mContext->GL());
+        MOZ_ASSERT(gl == Texture()->Context()->GL());
 
         const GLenum imageTarget = ImageTarget().get();
         const GLint mipLevel = MipLevel();
