@@ -1651,7 +1651,7 @@ inline bool
 WebGLContext::ValidateObjectAllowDeletedOrNull(const char* info,
                                                ObjectType* object)
 {
-    if (object && !object->IsCompatibleWithContext(this)) {
+    if (object && !object->Context()) {
         ErrorInvalidOperation("%s: object from different WebGL context "
                               "(or older generation of this one) "
                               "passed as argument", info);
