@@ -64,7 +64,11 @@ class WebGLExtensionDebugShaders final
     : public WebGLExtensionBase
 {
 public:
-    explicit WebGLExtensionDebugShaders(WebGLContext*);
+    explicit WebGLExtensionDebugShaders(WebGLContext* webgl)
+        : WebGLExtensionBase(webgl)
+    {
+        IsSupported(webgl);
+    }
 
     void GetTranslatedShaderSource(WebGLShader* shader, nsAString& retval);
 
@@ -75,7 +79,11 @@ class WebGLExtensionLoseContext final
     : public WebGLExtensionBase
 {
 public:
-    explicit WebGLExtensionLoseContext(WebGLContext*);
+    explicit WebGLExtensionLoseContext(WebGLContext* webgl)
+        : WebGLExtensionBase(webgl)
+    {
+        IsSupported(webgl);
+    }
 
     void LoseContext();
     void RestoreContext();
@@ -120,7 +128,11 @@ class WebGLExtensionVertexArray final
     : public WebGLExtensionBase
 {
 public:
-    explicit WebGLExtensionVertexArray(WebGLContext* webgl);
+    explicit WebGLExtensionVertexArray(WebGLContext* webgl)
+        : WebGLExtensionBase(webgl)
+    {
+        IsSupported(webgl);
+    }
 
     already_AddRefed<WebGLVertexArray> CreateVertexArrayOES();
     void DeleteVertexArrayOES(WebGLVertexArray* array);
@@ -134,7 +146,11 @@ class WebGLExtensionInstancedArrays final
     : public WebGLExtensionBase
 {
 public:
-    explicit WebGLExtensionInstancedArrays(WebGLContext* webgl);
+    explicit WebGLExtensionInstancedArrays(WebGLContext* webgl)
+        : WebGLExtensionBase(webgl)
+    {
+        IsSupported(webgl);
+    }
 
     void DrawArraysInstancedANGLE(GLenum mode, GLint first, GLsizei count,
                                   GLsizei primcount);
