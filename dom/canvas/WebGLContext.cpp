@@ -214,6 +214,21 @@ WebGLContext::~WebGLContext()
     RemovePostRefreshObserver();
 
     DestroyResourcesAndContext();
+
+    ////
+
+    auto& loseContextExt = mExtensions[WebGLExtensionID::WEBGL_lose_context];
+    if (loseContextExt) {
+        loseContextExt->Detach();
+        loseContextExt = nullptr;
+    }
+
+    for (const auto& cur : mExtensions) {
+        MOZ_ASSERT(!cur);
+    }
+
+    ////
+
     if (NS_IsMainThread()) {
         // XXX mtseng: bug 709490, not thread safe
         WebGLMemoryTracker::RemoveWebGLContext(this);
@@ -294,16 +309,17 @@ WebGLContext::DestroyResourcesAndContext()
         mFakeVertexAttrib0BufferObject = 0;
     }
 
-    // disable all extensions except "WEBGL_lose_context". see bug #927969
-    // spec: http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
-    for (size_t i = 0; i < size_t(WebGLExtensionID::Max); ++i) {
-        WebGLExtensionID extension = WebGLExtensionID(i);
-
-        if (!IsExtensionEnabled(extension) || (extension == WebGLExtensionID::WEBGL_lose_context))
+    // Detach extensions.
+    const auto& loseContextExt = mExtensions[WebGLExtensionID::WEBGL_lose_context];
+    for (auto& cur : mExtensions) {
+        if (!cur)
             continue;
 
-        mExtensions[extension]->Detach();
-        mExtensions[extension] = nullptr;
+        if (cur == loseContextExt)
+            continue; // Don't detach WEBGL_lose_context.
+
+        cur->Detach();
+        cur = nullptr;
     }
 
     // We just got rid of everything, so the context had better
