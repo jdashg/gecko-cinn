@@ -4,13 +4,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "WebGLContext.h"
-#include "WebGLContextUtils.h"
-#include "WebGLExtensions.h"
+
+#include "AccessCheck.h"
 #include "gfxPrefs.h"
 #include "GLContext.h"
-
+#include "mozilla/Preferences.h"
 #include "nsString.h"
-#include "AccessCheck.h"
+#include "WebGLContextUtils.h"
+#include "WebGLExtensions.h"
 
 namespace mozilla {
 
@@ -96,7 +97,7 @@ bool WebGLContext::IsExtensionSupported(JSContext* cx,
 
 #define FOO(ID,TYPE)               \
         case WebGLExtensionID::ID: \
-            return true;
+            return TYPE::IsSupported(this);
 
             FOR_EACH_PRIVILEGED_EXT(FOO)
 
@@ -126,6 +127,9 @@ WebGLContext::IsExtensionSupported(WebGLExtensionID ext) const
         FOR_EACH_EXT(FOO)
 
 #undef FOO
+
+    case WebGLExtensionID::WEBGL_debug_renderer_info:
+        return Preferences::GetBool("webgl.enable-debug-renderer-info", false);
 
     default:
         // For warnings-as-errors.

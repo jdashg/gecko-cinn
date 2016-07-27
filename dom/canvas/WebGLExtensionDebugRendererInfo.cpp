@@ -6,14 +6,13 @@
 #include "WebGLExtensions.h"
 
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
-#include "mozilla/Preferences.h"
 
 namespace mozilla {
 
 /*static*/ bool
 WebGLExtensionDebugRendererInfo::IsSupported(const WebGLContext* webgl)
 {
-    return Preferences::GetBool("webgl.enable-debug-renderer-info", false);
+    return true;
 }
 
 IMPL_WEBGL_EXTENSION_GOOP(WebGLExtensionDebugRendererInfo, WEBGL_debug_renderer_info)
