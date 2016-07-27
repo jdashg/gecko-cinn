@@ -14,8 +14,6 @@ namespace mozilla {
 WebGLExtensionEXTColorBufferFloat::WebGLExtensionEXTColorBufferFloat(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
-    MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-
     auto& fua = webgl->mFormatUsage;
 
     auto fnUpdateUsage = [&fua](GLenum sizedFormat, webgl::EffectiveFormat effFormat) {

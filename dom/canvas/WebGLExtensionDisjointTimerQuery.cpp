@@ -19,9 +19,7 @@ namespace mozilla {
 WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(WebGLContext* webgl)
   : WebGLExtensionBase(webgl)
   , mActiveQuery(nullptr)
-{
-  MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-}
+{ }
 
 already_AddRefed<WebGLTimerQuery>
 WebGLExtensionDisjointTimerQuery::CreateQueryEXT()

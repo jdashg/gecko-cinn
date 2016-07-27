@@ -30,6 +30,7 @@ class WebGLVertexArray;
 
 ////////////////////////////////////////
 
+template<typename T>
 class WebGLExtensionBase
     : public nsWrapperCache
     , public WebGLContextBoundObject
@@ -41,7 +42,9 @@ public:
 protected:
     explicit WebGLExtensionBase(WebGLContext* webgl)
         : WebGLContextBoundObject(webgl)
-    { }
+    {
+        MOZ_ASSERT(T::IsSupported(webgl));
+    }
 
     virtual ~WebGLExtensionBase() { }
 
@@ -61,14 +64,12 @@ private:
 ////////////////////////////////////////
 
 class WebGLExtensionDebugShaders final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionDebugShaders>
 {
 public:
     explicit WebGLExtensionDebugShaders(WebGLContext* webgl)
         : WebGLExtensionBase(webgl)
-    {
-        IsSupported(webgl);
-    }
+    { }
 
     void GetTranslatedShaderSource(WebGLShader* shader, nsAString& retval);
 
@@ -76,14 +77,12 @@ public:
 };
 
 class WebGLExtensionLoseContext final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionLoseContext>
 {
 public:
     explicit WebGLExtensionLoseContext(WebGLContext* webgl)
         : WebGLExtensionBase(webgl)
-    {
-        IsSupported(webgl);
-    }
+    { }
 
     void LoseContext();
     void RestoreContext();
@@ -92,7 +91,7 @@ public:
 };
 
 class WebGLExtensionTextureFloat final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionTextureFloat>
 {
 public:
     static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
@@ -103,7 +102,7 @@ public:
 };
 
 class WebGLExtensionTextureHalfFloat final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionTextureHalfFloat>
 {
 public:
     static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
@@ -114,7 +113,7 @@ public:
 };
 
 class WebGLExtensionDrawBuffers final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionDrawBuffers>
 {
 public:
     explicit WebGLExtensionDrawBuffers(WebGLContext*);
@@ -125,14 +124,12 @@ public:
 };
 
 class WebGLExtensionVertexArray final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionVertexArray>
 {
 public:
     explicit WebGLExtensionVertexArray(WebGLContext* webgl)
         : WebGLExtensionBase(webgl)
-    {
-        IsSupported(webgl);
-    }
+    { }
 
     already_AddRefed<WebGLVertexArray> CreateVertexArrayOES();
     void DeleteVertexArrayOES(WebGLVertexArray* array);
@@ -143,14 +140,12 @@ public:
 };
 
 class WebGLExtensionInstancedArrays final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionInstancedArrays>
 {
 public:
     explicit WebGLExtensionInstancedArrays(WebGLContext* webgl)
         : WebGLExtensionBase(webgl)
-    {
-        IsSupported(webgl);
-    }
+    { }
 
     void DrawArraysInstancedANGLE(GLenum mode, GLint first, GLsizei count,
                                   GLsizei primcount);
@@ -162,7 +157,7 @@ public:
 };
 
 class WebGLExtensionDisjointTimerQuery final
-    : public WebGLExtensionBase
+    : public WebGLExtensionBase<WebGLExtensionDisjointTimerQuery>
 {
     /**
      * An active TIME_ELAPSED query participating in a begin/end block.
@@ -193,25 +188,23 @@ private:
 ////////////////////////////////////////
 
 #define BASIC_EXT_DECL(T) \
-    class T final : public WebGLExtensionBase \
-    {                                         \
-    public:                                   \
-        explicit T(WebGLContext*);            \
-                                              \
-        DECL_WEBGL_EXTENSION_GOOP             \
+    class T final : public WebGLExtensionBase<T> \
+    {                                            \
+    public:                                      \
+        explicit T(WebGLContext*);               \
+                                                 \
+        DECL_WEBGL_EXTENSION_GOOP                \
     };
 
 #define BASIC_EXT_DEFINE(T) \
-    class T final : public WebGLExtensionBase \
-    {                                         \
-    public:                                   \
-        explicit T(WebGLContext* webgl)       \
-            : WebGLExtensionBase(webgl)       \
-        {                                     \
-            IsSupported(webgl);               \
-        }                                     \
-                                              \
-        DECL_WEBGL_EXTENSION_GOOP             \
+    class T final : public WebGLExtensionBase<T> \
+    {                                            \
+    public:                                      \
+        explicit T(WebGLContext* webgl)          \
+            : WebGLExtensionBase(webgl)          \
+        { }                                      \
+                                                 \
+        DECL_WEBGL_EXTENSION_GOOP                \
     };
 
 BASIC_EXT_DEFINE(WebGLExtensionBlendMinMax)

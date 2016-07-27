@@ -15,8 +15,6 @@ namespace mozilla {
 WebGLExtensionSRGB::WebGLExtensionSRGB(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
-    MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-
     gl::GLContext* gl = webgl->GL();
     if (!gl->IsGLES()) {
         // Desktop OpenGL requires the following to be enabled in order to

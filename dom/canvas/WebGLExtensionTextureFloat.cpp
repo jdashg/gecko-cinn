@@ -14,8 +14,6 @@ namespace mozilla {
 WebGLExtensionTextureFloat::WebGLExtensionTextureFloat(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
-    MOZ_ASSERT(IsSupported(webgl));
-
     auto& fua = webgl->mFormatUsage;
     gl::GLContext* gl = webgl->GL();
 
