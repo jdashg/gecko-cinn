@@ -7,6 +7,7 @@
 #define WEBGL2CONTEXT_H_
 
 #include "WebGLContext.h"
+#include "mozilla/dom/WebGL2RenderingContextBinding.h"
 
 namespace mozilla {
 
@@ -30,10 +31,7 @@ public:
     static bool IsSupported();
     static WebGL2Context* Create();
 
-    virtual bool IsWebGL2() const override
-    {
-        return true;
-    }
+    virtual bool IsWebGL2() const override { return true; }
 
     // -------------------------------------------------------------------------
     // IMPLEMENT nsWrapperCache
@@ -43,27 +41,25 @@ public:
     // -------------------------------------------------------------------------
     // Buffer objects - WebGL2ContextBuffers.cpp
 
-    void CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
-                           GLintptr readOffset, GLintptr writeOffset, GLsizeiptr size);
+    void CopyBufferSubData(GLenum readTarget, GLenum writeTarget, GLintptr readOffset,
+                           GLintptr writeOffset, GLsizeiptr size);
 
 private:
-    template<typename BufferT>
-    void GetBufferSubDataT(GLenum target, GLintptr offset, const BufferT& data);
+    void GetBufferSubDataImpl(GLenum target, GLintptr srcByteOffset, const OmniData& dst,
+                              GLuint length);
 
 public:
-    void GetBufferSubData(GLenum target, GLintptr offset,
-                          const dom::Nullable<dom::ArrayBuffer>& maybeData);
-    void GetBufferSubData(GLenum target, GLintptr offset,
-                          const dom::SharedArrayBuffer& data);
-    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
-                    GLenum type, WebGLsizeiptr offset, ErrorResult& out_error);
-
-    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                    GLenum format, GLenum type,
-                    const dom::Nullable<dom::ArrayBufferView>& pixels,
-                    ErrorResult& out_error)
+    template<typename Union>
+    void GetBufferSubData(GLenum target, GLintptr srcByteOffset, const Union& dstUnion,
+                          GLuint dstOffset, GLuint length)
     {
-        WebGLContext::ReadPixels(x, y, width, height, format, type, pixels, out_error);
+        OmniData dst;
+        dst.dataElemOffset = dstOffset;
+
+        const DebugOnly<bool> captured = dst.AsBufferDataSource(dstUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        GetBufferSubDataImpl(target, srcByteOffset, dst, length);
     }
 
     // -------------------------------------------------------------------------
@@ -99,176 +95,45 @@ public:
     // Texture objects - WebGL2ContextTextures.cpp
 
     void TexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width,
-                      GLsizei height);
+                      GLsizei height)
+    {
+        const char funcName[] = "texStorage2D";
+        const uint8_t funcDims = 2;
+        const GLsizei depth = 1;
+        TexStorage(funcName, funcDims, target, levels, internalFormat, width, height,
+                   depth);
+    }
+
     void TexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width,
-                      GLsizei height, GLsizei depth);
-    void TexImage3D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
-                    GLsizei height, GLsizei depth, GLint border, GLenum unpackFormat,
-                    GLenum unpackType,
-                    const dom::Nullable<dom::ArrayBufferView>& pixels);
-    void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                       GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
-                       GLenum unpackFormat, GLenum unpackType,
-                       const dom::Nullable<dom::ArrayBufferView>& pixels,
-                       ErrorResult& out_rv);
-    void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                       GLint zOffset, GLenum unpackFormat, GLenum unpackType,
-                       dom::ImageData* data, ErrorResult& out_rv);
-protected:
-    void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                       GLint zOffset, GLenum unpackFormat, GLenum unpackType,
-                       dom::Element* elem, ErrorResult* const out_rv);
-public:
-    template<class T>
-    inline void
-    TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset, GLint zOffset,
-                  GLenum unpackFormat, GLenum unpackType, T& any, ErrorResult& out_rv)
+                      GLsizei height, GLsizei depth)
     {
-        TexSubImage3D(target, level, xOffset, yOffset, zOffset, unpackFormat, unpackType,
-                      &any, &out_rv);
+        const char funcName[] = "texStorage3D";
+        const uint8_t funcDims = 3;
+        TexStorage(funcName, funcDims, target, levels, internalFormat, width, height,
+                   depth);
     }
 
-    void CopyTexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                           GLint zOffset, GLint x, GLint y, GLsizei width,
-                           GLsizei height);
-    void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
-                              GLsizei width, GLsizei height, GLsizei depth,
-                              GLint border,
-                              const dom::ArrayBufferView& data);
-    void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                                 GLint zOffset, GLsizei width, GLsizei height,
-                                 GLsizei depth, GLenum sizedUnpackFormat,
-                                 const dom::ArrayBufferView& data);
+private:
+    void TexStorage(const char* funcName, uint8_t funcDims, GLenum target, GLsizei levels,
+                    GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth);
 
-    ////////////////
-    // Texture PBOs
-
-    void TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                    GLsizei width, GLsizei height, GLint border, GLenum unpackFormat,
-                    GLenum unpackType, WebGLsizeiptr offset, ErrorResult&);
-
-    void TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                       GLsizei width, GLsizei height, GLenum unpackFormat,
-                       GLenum unpackType, WebGLsizeiptr offset, ErrorResult&);
-
-    void TexImage3D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
-                    GLsizei height, GLsizei depth, GLint border, GLenum unpackFormat,
-                    GLenum unpackType, WebGLsizeiptr offset);
-
-    void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                       GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
-                       GLenum unpackFormat, GLenum unpackType, WebGLsizeiptr offset,
-                       ErrorResult&);
-
-    ////////////////
-    // WebGL1 overloads
-
-    void
-    TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat, GLsizei width,
-               GLsizei height, GLint border, GLenum unpackFormat, GLenum unpackType,
-               const dom::Nullable<dom::ArrayBufferView>& pixels, ErrorResult& out_rv)
-    {
-        WebGLContext::TexImage2D(texImageTarget, level, internalFormat, width, height,
-                                 border, unpackFormat, unpackType, pixels, out_rv);
-    }
-
-    template<typename T>
-    void
-    TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-               GLenum unpackFormat, GLenum unpackType, T& any, ErrorResult& out_rv)
-    {
-        WebGLContext::TexImage2D(texImageTarget, level, internalFormat, unpackFormat,
-                                 unpackType, any, out_rv);
-    }
-
-    void
-    TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                  GLsizei width, GLsizei height, GLenum unpackFormat, GLenum unpackType,
-                  const dom::Nullable<dom::ArrayBufferView>& pixels, ErrorResult& out_rv)
-    {
-        WebGLContext::TexSubImage2D(texImageTarget, level, xOffset, yOffset, width,
-                                    height, unpackFormat, unpackType, pixels, out_rv);
-    }
-
-    template<typename T>
-    inline void
-    TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                  GLenum unpackFormat, GLenum unpackType, T& any, ErrorResult& out_rv)
-    {
-        WebGLContext::TexSubImage2D(texImageTarget, level, xOffset, yOffset, unpackFormat,
-                                    unpackType, any, out_rv);
-    }
 
     // -------------------------------------------------------------------------
     // Programs and shaders - WebGL2ContextPrograms.cpp
+public:
     GLint GetFragDataLocation(WebGLProgram* program, const nsAString& name);
 
 
     // -------------------------------------------------------------------------
     // Uniforms and attributes - WebGL2ContextUniforms.cpp
-    void VertexAttribIPointer(GLuint index, GLint size, GLenum type, GLsizei stride, GLintptr offset);
+    void VertexAttribIPointer(GLuint index, GLint size, GLenum type, GLsizei stride,
+                              GLintptr offset);
 
     // GL 3.0 & ES 3.0
     void Uniform1ui(WebGLUniformLocation* loc, GLuint v0);
     void Uniform2ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1);
     void Uniform3ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2);
-    void Uniform4ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2,
-                    GLuint v3);
-
-    ////////////////
-
-protected:
-    typedef Arr<GLuint, dom::Uint32Array> UintArr;
-
-    void UniformNuiv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
-                     const UintArr& arr);
-
-    //////
-
-public:
-    template<typename T>
-    void Uniform1uiv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNuiv("uniform1uiv", 1, loc, UintArr(arr));
-    }
-    template<typename T>
-    void Uniform2uiv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNuiv("uniform2uiv", 2, loc, UintArr(arr));
-    }
-    template<typename T>
-    void Uniform3uiv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNuiv("uniform3uiv", 3, loc, UintArr(arr));
-    }
-    template<typename T>
-    void Uniform4uiv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNuiv("uniform4uiv", 4, loc, UintArr(arr));
-    }
-
-    //////
-
-    template<typename T>
-    void UniformMatrix2x3fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix2x3fv", 2, 3, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix2x4fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix2x4fv", 2, 4, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix3x2fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix3x2fv", 3, 2, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix3x4fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix3x4fv", 3, 4, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix4x2fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix4x2fv", 4, 2, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix4x3fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix4x3fv", 4, 3, loc, transpose, FloatArr(arr));
-    }
+    void Uniform4ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2, GLuint v3);
 
     ////////////////
 
@@ -279,43 +144,47 @@ private:
 public:
     // GL 3.0 & ES 3.0
     void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w);
-    void VertexAttribI4iv(GLuint index, const dom::Sequence<GLint>& v);
     void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w);
-    void VertexAttribI4uiv(GLuint index, const dom::Sequence<GLuint>& v);
 
 
     // -------------------------------------------------------------------------
     // Writing to the drawing buffer
-    // TODO(djg): Implemented in WebGLContext
-/*
-    void VertexAttribDivisor(GLuint index, GLuint divisor);
-    void DrawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei instanceCount);
-    void DrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, GLintptr offset, GLsizei instanceCount);
-*/
+
     void DrawRangeElements(GLenum mode, GLuint start, GLuint end, GLsizei count, GLenum type, GLintptr offset);
 
 
     // ------------------------------------------------------------------------
     // Multiple Render Targets - WebGL2ContextMRTs.cpp
-    // TODO(djg): Implemented in WebGLContext
-/*
-    void DrawBuffers(const dom::Sequence<GLenum>& buffers);
-*/
 
-    void ClearBufferiv_base(GLenum buffer, GLint drawbuffer, const GLint* value);
-    void ClearBufferuiv_base(GLenum buffer, GLint drawbuffer, const GLuint* value);
-    void ClearBufferfv_base(GLenum buffer, GLint drawbuffer, const GLfloat* value);
+private:
+    void ClearBufferivImpl(GLenum buffer, GLint drawbuffer, const IntArr& values);
+    void ClearBufferuivImpl(GLenum buffer, GLint drawbuffer, const UIntArr& values);
+    void ClearBufferfvImpl(GLenum buffer, GLint drawbuffer, const FloatArr& values);
 
-    void ClearBufferiv(GLenum buffer, GLint drawbuffer, const dom::Int32Array& value);
-    void ClearBufferiv(GLenum buffer, GLint drawbuffer, const dom::Sequence<GLint>& value);
-    void ClearBufferuiv(GLenum buffer, GLint drawbuffer, const dom::Uint32Array& value);
-    void ClearBufferuiv(GLenum buffer, GLint drawbuffer, const dom::Sequence<GLuint>& value);
-    void ClearBufferfv(GLenum buffer, GLint drawbuffer, const dom::Float32Array& value);
-    void ClearBufferfv(GLenum buffer, GLint drawbuffer, const dom::Sequence<GLfloat>& value);
+public:
+    template<typename T>
+    void ClearBufferiv(GLenum buffer, GLint drawbuffer, const T& values,
+                       GLuint srcOffset = 0, GLuint srcLength = 0)
+    {
+        ClearBufferivImpl(buffer, drawBuffer, IntArr(values, srcOffset, srcLength));
+    }
+    template<typename T>
+    void ClearBufferfv(GLenum buffer, GLint drawbuffer, const T& values,
+                       GLuint srcOffset = 0, GLuint srcLength = 0)
+    {
+        ClearBufferivImpl(buffer, drawBuffer, FloatArr(values, srcOffset, srcLength));
+    }
+    template<typename T>
+    void ClearBufferuiv(GLenum buffer, GLint drawbuffer, const T& values,
+                        GLuint srcOffset = 0, GLuint srcLength = 0)
+    {
+        ClearBufferivImpl(buffer, drawBuffer, UIntArr(values, srcOffset, srcLength));
+    }
+
     void ClearBufferfi(GLenum buffer, GLint drawbuffer, GLfloat depth, GLint stencil);
 
-    bool ValidateClearBuffer(const char* info, GLenum buffer, GLint drawbuffer, size_t elemCount);
-
+    bool ValidateClearBuffer(const char* info, GLenum buffer, GLint drawbuffer,
+                             size_t elemCount);
 
     // -------------------------------------------------------------------------
     // Query Objects - WebGL2ContextQueries.cpp

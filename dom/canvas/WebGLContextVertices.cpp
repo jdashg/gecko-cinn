@@ -183,104 +183,31 @@ WebGLContext::VertexAttrib4f(GLuint index, GLfloat x0, GLfloat x1,
     }
 }
 
-
 void
-WebGLContext::VertexAttrib1fv_base(GLuint index, uint32_t arrayLength,
-                                   const GLfloat* ptr)
+WebGLContext::VertexAttribNfv(const char* funcName, GLuint index, uint8_t N,
+                              const FloatArr& arr)
 {
-    if (!ValidateAttribArraySetter("VertexAttrib1fv", 1, arrayLength))
+    if (!ValidateAttribArraySetter(funcName, N, arr.dataCount))
         return;
 
-    if (!ValidateAttribIndex(index, "vertexAttrib1fv"))
+    if (!ValidateAttribIndex(index, funcName))
         return;
 
     mVertexAttribType[index] = LOCAL_GL_FLOAT;
 
-    MakeContextCurrent();
-    if (index) {
-        gl->fVertexAttrib1fv(index, ptr);
-    } else {
-        mVertexAttrib0Vector[0] = ptr[0];
-        mVertexAttrib0Vector[1] = GLfloat(0);
-        mVertexAttrib0Vector[2] = GLfloat(0);
-        mVertexAttrib0Vector[3] = GLfloat(1);
-        if (gl->IsGLES())
-            gl->fVertexAttrib1fv(index, ptr);
+    float arr4[4] = {0, 0, 0, 1};
+    for (uint8_t i = 0; i < N; i++) {
+        arr4[i] = arr.data[i];
     }
-}
-
-void
-WebGLContext::VertexAttrib2fv_base(GLuint index, uint32_t arrayLength,
-                                   const GLfloat* ptr)
-{
-    if (!ValidateAttribArraySetter("VertexAttrib2fv", 2, arrayLength))
-        return;
-
-    if (!ValidateAttribIndex(index, "vertexAttrib2fv"))
-        return;
-
-    mVertexAttribType[index] = LOCAL_GL_FLOAT;
 
     MakeContextCurrent();
     if (index) {
-        gl->fVertexAttrib2fv(index, ptr);
+        gl->fVertexAttrib4fv(index, arr4);
     } else {
-        mVertexAttrib0Vector[0] = ptr[0];
-        mVertexAttrib0Vector[1] = ptr[1];
-        mVertexAttrib0Vector[2] = GLfloat(0);
-        mVertexAttrib0Vector[3] = GLfloat(1);
-        if (gl->IsGLES())
-            gl->fVertexAttrib2fv(index, ptr);
-    }
-}
-
-void
-WebGLContext::VertexAttrib3fv_base(GLuint index, uint32_t arrayLength,
-                                   const GLfloat* ptr)
-{
-    if (!ValidateAttribArraySetter("VertexAttrib3fv", 3, arrayLength))
-        return;
-
-    if (!ValidateAttribIndex(index, "vertexAttrib3fv"))
-        return;
-
-    mVertexAttribType[index] = LOCAL_GL_FLOAT;
-
-    MakeContextCurrent();
-    if (index) {
-        gl->fVertexAttrib3fv(index, ptr);
-    } else {
-        mVertexAttrib0Vector[0] = ptr[0];
-        mVertexAttrib0Vector[1] = ptr[1];
-        mVertexAttrib0Vector[2] = ptr[2];
-        mVertexAttrib0Vector[3] = GLfloat(1);
-        if (gl->IsGLES())
-            gl->fVertexAttrib3fv(index, ptr);
-    }
-}
-
-void
-WebGLContext::VertexAttrib4fv_base(GLuint index, uint32_t arrayLength,
-                                   const GLfloat* ptr)
-{
-    if (!ValidateAttribArraySetter("VertexAttrib4fv", 4, arrayLength))
-        return;
-
-    if (!ValidateAttribIndex(index, "vertexAttrib4fv"))
-        return;
-
-    mVertexAttribType[index] = LOCAL_GL_FLOAT;
-
-    MakeContextCurrent();
-    if (index) {
-        gl->fVertexAttrib4fv(index, ptr);
-    } else {
-        mVertexAttrib0Vector[0] = ptr[0];
-        mVertexAttrib0Vector[1] = ptr[1];
-        mVertexAttrib0Vector[2] = ptr[2];
-        mVertexAttrib0Vector[3] = ptr[3];
-        if (gl->IsGLES())
-            gl->fVertexAttrib4fv(index, ptr);
+        memcpy(mVertexAttrib0Vector, arr4, sizeof(arr4));
+        if (gl->IsGLES()) {
+            gl->fVertexAttrib4fv(index, arr4);
+        }
     }
 }
 

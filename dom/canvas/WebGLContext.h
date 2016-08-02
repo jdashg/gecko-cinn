@@ -399,6 +399,105 @@ public:
                                 dom::Nullable< nsTArray<nsString> >& retval);
     void GetExtension(JSContext* cx, const nsAString& name,
                       JS::MutableHandle<JSObject*> retval, ErrorResult& rv);
+
+
+    ////////////////////////////////////
+
+    struct OmniData {
+        dom::ImageData* imageData;
+        dom::Element* elem;
+        ErrorResult* out_domResult;
+
+        bool isPBO;
+        int64_t pboOffset;
+
+        void* data;
+        int64_t dataByteSize;
+        js::Scalar::Type dataJSType;
+
+        uint32_t dataElemOffset;
+
+        ////
+
+        OmniData() {
+            memset(this, 0, sizeof(*this));
+        }
+
+        ////
+
+        template<typename Union>
+        bool AsNull(const Union& u) {
+            return u.IsNull();
+        }
+
+        template<typename Union>
+        bool AsPBOOffset(const Union& u) {
+            if (u.IsLongLong())
+                isPBO = true;
+                pboOffset = u.GetAsLongLong();
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        template<typename Union>
+        bool AsAllocSize(const Union& u) {
+            if (u.IsLongLong())
+                data = nullptr;
+                dataByteSize = u.GetAsLongLong();
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        template<typename Union>
+        bool AsTexImageSource(const Union& u) {
+            if (u.IsImageData()) {
+                source.imageData = u.GetAsImageData();
+            } else if (u.IsHTMLImageElement()) {
+                source.elem = u.GetAsHTMLImageElement();
+            } else if (u.IsHTMLCanvasElement()) {
+                source.elem = u.GetAsHTMLCanvasElement();
+            } else if (u.IsHTMLVideoElement()) {
+                source.elem = u.GetAsHTMLVideoElement();
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        ////
+
+        template<typename Arr>
+        void FromTypedArray(const Arr& arr) {
+            arr.ComputeLengthAndData();
+            data = arr.DataAllowShared();
+            dataByteSize = arr.LengthAllowShared();
+        }
+
+        template<typename Union>
+        bool AsBufferDataSource(const Union& u) {
+            if (u.IsArrayBuffer()) {
+                FromTypedArray(u.GetAsArrayBuffer());
+                dataJSType = js::Scalar::Type::MaxTypedArrayViewType;
+            } else if (u.IsSharedArrayBuffer()) {
+                FromTypedArray(u.GetAsSharedArrayBuffer());
+                dataJSType = js::Scalar::Type::MaxTypedArrayViewType;
+            } else if (u.IsArrayBufferView()) {
+                const auto& view = u.GetAsArrayBufferView();
+                FromTypedArray(view);
+                dataJSType = JS_GetArrayBufferViewType(view.Obj());
+            } else {
+                return false;
+            }
+            return true;
+        }
+    };
+
+    ////////////////////////////////////
+
     void AttachShader(WebGLProgram* prog, WebGLShader* shader);
     void BindAttribLocation(WebGLProgram* prog, GLuint location,
                             const nsAString& name);
@@ -539,19 +638,70 @@ public:
     void LinkProgram(WebGLProgram* prog);
     void PixelStorei(GLenum pname, GLint param);
     void PolygonOffset(GLfloat factor, GLfloat units);
-protected:
+
+    ////
+
+private:
     bool ReadPixels_SharedPrecheck(ErrorResult* const out_error);
     void ReadPixelsImpl(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
-                        GLenum type, void* data, uint32_t dataLen);
+                        GLenum type, const OmniData& dst);
     bool DoReadPixelsAndConvert(const webgl::FormatInfo* srcFormat, GLint x, GLint y,
                                 GLsizei width, GLsizei height, GLenum format,
                                 GLenum destType, void* dest, uint32_t dataLen,
                                 uint32_t rowStride);
 public:
-    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                    GLenum format, GLenum type,
-                    const dom::Nullable<dom::ArrayBufferView>& pixels,
-                    ErrorResult& rv);
+    // WebGL1
+    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
+                    GLenum type, const Nullable<ArrayBufferView>& nullable,
+                    ErrorResult& out_rv)
+    {
+        if (nullable.IsNull()) {
+            ErrorInvalidValue("readPixels: `pixels` must not be null.");
+            return;
+        }
+
+        OmniData dst;
+        dst.out_domResult = &out_rv;
+        dst.FromTypedArray(nullable.Value());
+
+        ReadPixelsImpl(x, y, width, height, format, type, dst);
+    }
+
+    // WebGL2
+    template<typename Union> // = (GLintptr or BufferDataSource)
+    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
+                    GLenum type, const Union& dstUnion, ErrorResult& out_rv)
+    {
+        OmniData dst;
+        dst.out_domResult = &out_rv;
+
+        // Optimize the order for these, rather than mirror the webidl exactly.
+        const DebugOnly<bool> captured = (dst.AsPBOOffset(dstUnion) ||
+                                          dst.AsBufferDataSource(dstUnion));
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        ReadPixelsImpl(x, y, width, height, format, type, dst);
+    }
+
+    // WebGL2
+    template<typename Union> // = BufferDataSource, with dstOffset
+    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
+                    GLenum type, const Union& dstUnion, GLuint dstOffset,
+                    ErrorResult& out_rv)
+    {
+        OmniData dst;
+        dataElemOffset = dstOffset;
+        dst.out_domResult = &out_rv;
+
+        // Optimize the order for these, rather than mirror the webidl exactly.
+        const DebugOnly<bool> captured = dst.AsBufferDataSource(dstUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        ReadPixelsImpl(x, y, width, height, format, type, dst);
+    }
+
+    ////
+
     void RenderbufferStorage(GLenum target, GLenum internalFormat,
                              GLsizei width, GLsizei height);
 protected:
@@ -600,18 +750,26 @@ protected:
             dataCount = arr.Length();
             data = arr.Elements();
         }
+
+        template<size_t N>
+        explicit Arr(const elemT (&stackArr)[N]) {
+            dataCount = N;
+            data = stackArr;
+        }
     };
 
-    typedef Arr<GLint, dom::Int32Array> IntArr;
     typedef Arr<GLfloat, dom::Float32Array> FloatArr;
+    typedef Arr<GLint, dom::Int32Array> IntArr;
+    typedef Arr<GLuint, dom::Uint32Array> UIntArr;
 
     ////////////////
 
     void UniformNiv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
                     const IntArr& arr);
-
     void UniformNfv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
                     const FloatArr& arr);
+    void UniformNuiv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
+                     const UIntArr& arr);
 
     void UniformMatrixAxBfv(const char* funcName, uint8_t A, uint8_t B,
                             WebGLUniformLocation* loc, bool transpose,
@@ -620,56 +778,57 @@ protected:
     ////////////////
 
 public:
-    template<typename T>
-    void Uniform1iv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNiv("uniform1iv", 1, loc, IntArr(arr));
+#define FOO(N,SUFFIX,ARR_TYPE) \
+    template<typename T> \
+    void Uniform ## N ## SUFFIX(WebGLUniformLocation* loc, const T& arr, \
+                                GLuint srcOffset = 0, GLuint srcLength = 0) \
+    { \
+        UniformN ## SUFFIX("uniform" #N #SUFFIX, 1, loc, \
+                           ARR_TYPE(arr, srcOffset, srcLength)); \
     }
-    template<typename T>
-    void Uniform2iv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNiv("uniform2iv", 2, loc, IntArr(arr));
-    }
-    template<typename T>
-    void Uniform3iv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNiv("uniform3iv", 3, loc, IntArr(arr));
-    }
-    template<typename T>
-    void Uniform4iv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNiv("uniform4iv", 4, loc, IntArr(arr));
+
+    FOO(1,fv,FloatArr)
+    FOO(2,fv,FloatArr)
+    FOO(3,fv,FloatArr)
+    FOO(4,fv,FloatArr)
+
+    FOO(1,iv,IntArr)
+    FOO(2,iv,IntArr)
+    FOO(3,iv,IntArr)
+    FOO(4,iv,IntArr)
+
+    FOO(1,uiv,UIntArr)
+    FOO(2,uiv,UIntArr)
+    FOO(3,uiv,UIntArr)
+    FOO(4,uiv,UIntArr)
+
+#undef FOO
+
+#define FOO(AxB,A,B) \
+    template<typename T> \
+    void UniformMatrix ## AxB ## fv(WebGLUniformLocation* loc, bool transpose, \
+                                    const T& arr, GLuint srcOffset = 0, \
+                                    GLuint srcLength = 0) \
+    { \
+        UniformMatrixAxBfV("uniformMatrix" #AxB "fv", A, B, loc, transpose, \
+                           FloatArr(arr, srcOffset, srcLength)); \
     }
 
     //////
 
-    template<typename T>
-    void Uniform1fv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNfv("uniform1fv", 1, loc, FloatArr(arr));
-    }
-    template<typename T>
-    void Uniform2fv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNfv("uniform2fv", 2, loc, FloatArr(arr));
-    }
-    template<typename T>
-    void Uniform3fv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNfv("uniform3fv", 3, loc, FloatArr(arr));
-    }
-    template<typename T>
-    void Uniform4fv(WebGLUniformLocation* loc, const T& arr) {
-        UniformNfv("uniform4fv", 4, loc, FloatArr(arr));
-    }
+    FOO(2  ,2,2)
+    FOO(2x3,2,3)
+    FOO(2x4,2,4)
 
-    //////
+    FOO(3x2,3,2)
+    FOO(3  ,3,3)
+    FOO(3x4,3,4)
 
-    template<typename T>
-    void UniformMatrix2fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix2fv", 2, 2, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix3fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix3fv", 3, 3, loc, transpose, FloatArr(arr));
-    }
-    template<typename T>
-    void UniformMatrix4fv(WebGLUniformLocation* loc, bool transpose, const T& arr) {
-        UniformMatrixAxBfv("uniformMatrix4fv", 4, 4, loc, transpose, FloatArr(arr));
-    }
+    FOO(4x2,4,2)
+    FOO(4x3,4,3)
+    FOO(4  ,4,4)
+
+#undef FOO
 
     ////////////////////////////////////
 
@@ -716,30 +875,70 @@ public:
                          WebGLintptr offset, WebGLsizeiptr size);
 
 private:
-    template<typename BufferT>
-    void BufferDataT(GLenum target, const BufferT& data, GLenum usage);
+    void BufferDataImpl(GLenum target, const OmniData& src, GLenum usage, GLuint length);
+    void BufferSubDataImpl(GLenum target, GLintptr dstByteOffset, const OmniData& src,
+                           GLuint length);
 
 public:
-    void BufferData(GLenum target, WebGLsizeiptr size, GLenum usage);
-    void BufferData(GLenum target, const dom::ArrayBufferView& data,
-                    GLenum usage);
-    void BufferData(GLenum target, const dom::Nullable<dom::ArrayBuffer>& maybeData,
-                    GLenum usage);
-    void BufferData(GLenum target, const dom::SharedArrayBuffer& data,
-                    GLenum usage);
+    void BufferData(GLenum target, GLsizeiptr allocSize, GLenum usage) {
+        OmniData src;
+        src.dataByteSize = allocSize;
+        BufferDataImpl(target, src, usage, 0);
+    }
 
-private:
-    template<typename BufferT>
-    void BufferSubDataT(GLenum target, WebGLsizeiptr byteOffset,
-                        const BufferT& data);
+    template<typename Union> // = BufferDataSource
+    void BufferData(GLenum target, const dom::Nullable<Union>& nullable, GLenum usage)
+    {
+        if (nullable.IsNull()) {
+            ErrorInvalidValue("bufferData: `data` must not be null.");
+            return;
+        }
 
-public:
-    void BufferSubData(GLenum target, WebGLsizeiptr byteOffset,
-                       const dom::ArrayBufferView& data);
-    void BufferSubData(GLenum target, WebGLsizeiptr byteOffset,
-                       const dom::Nullable<dom::ArrayBuffer>& maybeData);
-    void BufferSubData(GLenum target, WebGLsizeiptr byteOffset,
-                       const dom::SharedArrayBuffer& data);
+        BufferData(target, nullable.Value(), usage);
+    }
+
+    template<typename Union> // = BufferDataSource
+    void BufferData(GLenum target, const Union& srcUnion, GLenum usage,
+                    GLuint srcOffset = 0, GLuint length = 0)
+    {
+        OmniData src;
+        src.dataElemOffset = srcOffset;
+
+        const DebugOnly<bool> captured = src.AsBufferDataSource(srcUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        BufferDataImpl(target, src, usage, length);
+    }
+
+    ////
+
+    template<typename Union> // = BufferDataSource
+    void BufferSubData(GLenum target, GLintptr dstByteOffset,
+                       const dom::Nullable<Union>& nullable)
+    {
+        if (nullable.IsNull()) {
+            ErrorInvalidValue("bufferSubData: `data` must not be null.");
+            return;
+        }
+
+        BufferSubData(target, dstByteOffset, nullable.Value());
+    }
+
+    template<typename Union> // = BufferDataSource
+    void BufferSubData(GLenum target, GLintptr dstByteOffset, const Union& srcUnion,
+                       GLuint srcOffset = 0, GLuint length = 0)
+    {
+        OmniData src;
+        src.dataElemOffset = srcOffset;
+
+        const DebugOnly<bool> captured = src.AsBufferDataSource(srcUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        BufferSubDataImpl(target, dstByteOffset, src, length);
+    }
+
+    ////
+
     already_AddRefed<WebGLBuffer> CreateBuffer();
     void DeleteBuffer(WebGLBuffer* buf);
     bool IsBuffer(WebGLBuffer* buf);
@@ -834,63 +1033,456 @@ protected:
     virtual bool IsTexParamValid(GLenum pname) const;
 
     // Upload funcs
-public:
-    void CompressedTexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                              GLsizei width, GLsizei height, GLint border,
-                              const dom::ArrayBufferView& view);
-    void CompressedTexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset,
-                                 GLint yOffset, GLsizei width, GLsizei height,
-                                 GLenum unpackFormat, const dom::ArrayBufferView& view);
 
-    void CopyTexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                        GLint x, GLint y, GLsizei width, GLsizei height, GLint border);
+    ////////////////////////////////////
+    // TexImage*
+
+public:
+    // We use Unions here primarily because some of the full typenames are over 150 chars.
+    template<typename Union>
+    void TexImage2D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
+                    GLsizei height, GLint border, GLenum unpackFormat, GLenum unpackType,
+                    const Union& srcUnion, ErrorResult& out_rv)
+    {
+        const char funcName[] = "texImage2D";
+        const uint8_t funcDims = 2;
+        const GLsizei depth = 1;
+        TexImageU(funcName, funcDims, target, level, internalFormat, width, height, depth,
+                  border, unpackFormat, unpackType, srcUnion, &out_rv);
+    }
+
+    template<typename Union>
+    void TexImage3D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
+                    GLsizei height, GLsizei depth, GLint border, GLenum unpackFormat,
+                    GLenum unpackType, const Union& srcUnion, ErrorResult& out_rv)
+    {
+        const char funcName[] = "texImage3D";
+        const uint8_t funcDims = 3;
+        TexImageU(funcName, funcDims, target, level, internalFormat, width, height, depth,
+                  border, unpackFormat, unpackType, srcUnion, &out_rv);
+    }
+
+    ////
+
+    template<typename Union>
+    void TexImage2D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
+                    GLsizei height, GLint border, GLenum unpackFormat, GLenum unpackType,
+                    const Union& srcUnion, GLuint srcOffset, ErrorResult& out_rv)
+    {
+        const char funcName[] = "texImage2D";
+        const bool isSubImage = false;
+        const uint8_t funcDims = 2;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        TexOrSubImageU(funcName, isSubImage, funcDims, target, level, internalFormat,
+                       xOffset, yOffset, zOffset, width, height, depth, border,
+                       unpackFormat, unpackType, srcUnion, srcOffset, &out_rv);
+    }
+
+    template<typename Union>
+    void TexImage3D(GLenum target, GLint level, GLenum internalFormat, GLsizei width,
+                    GLsizei height, GLsizei depth, GLint border, GLenum unpackFormat,
+                    GLenum unpackType, const Union& srcUnion, GLuint srcOffset,
+                    ErrorResult& out_rv)
+    {
+        const char funcName[] = "texImage3D";
+        const bool isSubImage = false;
+        const uint8_t funcDims = 3;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        TexOrSubImageU(funcName, isSubImage, funcDims, target, level, internalFormat,
+                       xOffset, yOffset, zOffset, width, height, depth, border,
+                       unpackFormat, unpackType, srcUnion, srcOffset, &out_rv);
+    }
+
+    ////////////////
+    // TexSubImage*
+
+    template<typename Union>
+    void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                       GLsizei width, GLsizei height, GLenum unpackFormat,
+                       GLenum unpackType, const Union& srcUnion, ErrorResult& out_rv)
+    {
+        const char funcName[] = "texSubImage2D";
+        const uint8_t funcDims = 2;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        TexSubImageU(funcName, funcDims, target, level, xOffset, yOffset, zOffset, width,
+                     height, depth, unpackFormat, unpackType, srcUnion, &out_rv);
+    }
+
+    template<typename Union>
+    void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                       GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
+                       GLenum unpackFormat, GLenum unpackType, const Union& srcUnion,
+                       ErrorResult& out_rv)
+    {
+        const char funcName[] = "texSubImage3D";
+        const uint8_t funcDims = 3;
+        TexSubImageU(funcName, funcDims, target, level, xOffset, yOffset, zOffset, width,
+                     height, depth, unpackFormat, unpackType, srcUnion, &out_rv);
+    }
+
+    ////
+
+    template<typename Union>
+    void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                       GLsizei width, GLsizei height, GLenum unpackFormat,
+                       GLenum unpackType, const Union& srcUnion, GLuint srcOffset,
+                       ErrorResult& out_rv)
+    {
+        const char funcName[] = "texSubImage2D";
+        const bool isSubImage = true;
+        const uint8_t funcDims = 2;
+        const GLint internalFormat = 0;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        const GLint border = 0;
+        TexOrSubImageU(funcName, isSubImage, funcDims, target, level, internalFormat,
+                       xOffset, yOffset, zOffset, width, height, depth, border,
+                       unpackFormat, unpackType, srcUnion, srcOffset, &out_rv);
+    }
+
+    template<typename Union>
+    void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                       GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
+                       GLenum unpackFormat, GLenum unpackType, const Union& srcUnion,
+                       GLuint srcOffset, ErrorResult& out_rv)
+    {
+        const char funcName[] = "texSubImage3D";
+        const bool isSubImage = true;
+        const uint8_t funcDims = 3;
+        const GLint internalFormat = 0;
+        const GLint border = 0;
+        TexOrSubImageU(funcName, isSubImage, funcDims, target, level, internalFormat,
+                       xOffset, yOffset, zOffset, width, height, depth, border,
+                       unpackFormat, unpackType, srcUnion, srcOffset, &out_rv);
+    }
+
+    //////////////////////////
+    // Tease apart the union types.
+
+private:
+    template<typename Union> // = (GLintptr or TexImageSource? or BufferDataSource)
+    void TexImageU(const char* funcName, uint8_t funcDims, GLenum target, GLint level,
+                   GLenum internalFormat, GLsizei width, GLsizei height, GLsizei depth,
+                   GLint border, GLenum unpackFormat, GLenum unpackType,
+                   const Union& srcUnion, ErrorResult* const out_rv)
+    {
+        MultiData source;
+        source.dataElemOffset = 0;
+        source.out_domResult = out_rv;
+
+        // Optimize the order for these, rather than mirror the webidl exactly.
+        const DebugOnly<bool> captured = (source.AsPBOOffset(srcUnion) ||
+                                          source.AsBufferDataSource(srcUnion) ||
+                                          source.AsNull(srcUnion) ||
+                                          source.AsTexImageSource(srcUnion));
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        const bool isSubImage = false;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        TexOrSubImage(funcName, funcDims, target, level, internalFormat, xOffset, yOffset,
+                      zOffset, width, height, depth, border, unpackFormat, unpackType,
+                      source);
+    }
+
+    template<typename Union> // = (GLintptr or TexImageSource or BufferDataSource)
+    void TexSubImageU(const char* funcName, uint8_t funcDims, GLenum target, GLint level,
+                      GLint xOffset, GLint yOffset, GLint zOffset, GLsizei width,
+                      GLsizei height, GLsizei depth, GLenum unpackFormat,
+                      GLenum unpackType, const Union& srcUnion, ErrorResult* const out_rv)
+    {
+        MultiData source;
+        source.dataElemOffset = 0;
+        source.out_domResult = out_rv;
+
+        // Optimize the order for these, rather than mirror the webidl exactly.
+        const DebugOnly<bool> captured = (source.AsPBOOffset(srcUnion) ||
+                                          source.AsBufferDataSource(srcUnion) ||
+                                          source.AsTexImageSource(srcUnion));
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        const bool isSubImage = true;
+        const GLint internalFormat = 0;
+        const GLint border = 0;
+        TexOrSubImage(funcName, funcDims, target, level, internalFormat, xOffset, yOffset,
+                      zOffset, width, height, depth, border, unpackFormat, unpackType,
+                      source);
+    }
+
+    template<typename Union> // = BufferDataSource, with srcOffset
+    void TexOrSubImageU(const char* funcName, bool isSubImage, uint8_t funcDims,
+                        GLenum target, GLint level, GLenum internalFormat, GLint xOffset,
+                        GLint yOffset, GLint zOffset, GLsizei width, GLsizei height,
+                        GLsizei depth, GLint border, GLenum unpackFormat,
+                        GLenum unpackType, const Union& srcUnion, GLuint srcOffset,
+                        ErrorResult* const out_rv)
+    {
+        MultiData source;
+        source.dataElemOffset = srcOffset;
+        source.out_domResult = out_rv;
+
+        const DebugOnly<bool> captured = source.AsBufferDataSource(srcUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        TexOrSubImage(funcName, funcDims, target, level, internalFormat, xOffset, yOffset,
+                      zOffset, width, height, depth, border, unpackFormat, unpackType,
+                      source);
+    }
+
+    //////////////////////////
+
+    void TexOrSubImage(const char* funcName, bool isSubImage, uint8_t funcDims,
+                       GLenum target, GLint level, GLenum internalFormat, GLint xOffset,
+                       GLint yOffset, GLint zOffset, GLsizei width, GLsizei height,
+                       GLsizei depth, GLint border, GLenum unpackFormat,
+                       GLenum unpackType, const MultiData& src);
+
+    ////////////////////////////////////////////////////////
+    // compressedTex[Sub]Image{2,3}D
+
+    ////////////////
+    // Union = (GLintptr or BufferDataSource)
+public:
+    template<typename Union>
+    void CompressedTexImage2D(GLenum target, GLint level, GLenum internalFormat,
+                              GLsizei width, GLsizei height, GLint border,
+                              const Union& srcUnion)
+    {
+        const char funcName[] = "compressedTexImage2D";
+        const isSubImage = false;
+        const uint8_t funcDims = 2;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        CompTexOrSubImageU1(funcName, isSubImage, funcDims, target, level, internalFormat,
+                            xOffset, yOffset, zOffset, width, height, depth, border,
+                            srcUnion);
+    }
+
+    template<typename Union>
+    void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
+                              GLsizei width, GLsizei height, GLsizei depth, GLint border,
+                              const Union& srcUnion)
+    {
+        const char funcName[] = "compressedTexImage3D";
+        const isSubImage = false;
+        const uint8_t funcDims = 3;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        CompTexOrSubImageU1(funcName, isSubImage, funcDims, target, level, internalFormat,
+                            xOffset, yOffset, zOffset, width, height, depth, border,
+                            srcUnion);
+    }
+
+    ////
+
+    template<typename Union>
+    void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                                 GLsizei width, GLsizei height, GLenum sizedUnpackFormat,
+                                 const Union& srcUnion)
+    {
+        const char funcName[] = "compressedTexSubImage2D";
+        const isSubImage = true;
+        const uint8_t funcDims = 2;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        const GLint border = 0;
+        CompTexOrSubImageU1(funcName, isSubImage, funcDims, target, level,
+                            sizedUnpackFormat, xOffset, yOffset, zOffset, width, height,
+                            depth, border, srcUnion);
+    }
+
+    template<typename Union>
+    void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                                 GLint zOffset, GLsizei width, GLsizei height,
+                                 GLsizei depth, GLenum sizedUnpackFormat,
+                                 const Union& srcUnion)
+    {
+        const char funcName[] = "compressedTexSubImage3D";
+        const isSubImage = true;
+        const uint8_t funcDims = 3;
+        const GLint border = 0;
+        CompTexOrSubImageU1(funcName, isSubImage, funcDims, target, level,
+                            sizedUnpackFormat, xOffset, yOffset, zOffset, width, height,
+                            depth, border, srcUnion);
+    }
+
+    ////
+
+private:
+    template<typename Union> // = (GLintptr or BufferDataSource)
+    void CompTexOrSubImageU1(const char* funcName, bool isSubImage, uint8_t funcDims,
+                             GLenum target, GLint level, GLenum internalFormat,
+                             GLint xOffset, GLint yOffset, GLint zOffset, GLsizei width,
+                             GLsizei height, GLsizei depth, GLint border,
+                             const Union& srcUnion)
+    {
+        MultiData source;
+        source.dataElemOffset = 0;
+
+        const DebugOnly<bool> captured = (source.AsPBOOffset(srcUnion) ||
+                                          source.AsBufferDataSource(srcUnion));
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        CompTexOrSubImage(funcName, funcDims, target, level, internalFormat, xOffset,
+                          yOffset, zOffset, width, height, depth, border, source);
+    }
+
+    ////////////////
+    // Union = BufferDataSource, with srcOffset
+
+public:
+    template<typename Union>
+    void CompressedTexImage2D(GLenum target, GLint level, GLenum internalFormat,
+                              GLsizei width, GLsizei height, GLint border,
+                              const Union& srcUnion, GLuint srcOffset)
+    {
+        const char funcName[] = "compressedTexImage2D";
+        const isSubImage = false;
+        const uint8_t funcDims = 2;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        CompTexOrSubImageU2(funcName, isSubImage, funcDims, target, level, internalFormat,
+                            xOffset, yOffset, zOffset, width, height, depth, border,
+                            srcUnion, srcOffset);
+    }
+
+    template<typename Union>
+    void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
+                              GLsizei width, GLsizei height, GLsizei depth, GLint border,
+                              const Union& srcUnion, GLuint srcOffset))
+    {
+        const char funcName[] = "compressedTexImage3D";
+        const isSubImage = false;
+        const uint8_t funcDims = 3;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        CompTexOrSubImageU2(funcName, isSubImage, funcDims, target, level, internalFormat,
+                            xOffset, yOffset, zOffset, width, height, depth, border,
+                            srcUnion, srcOffset);
+    }
+
+    ////
+
+    template<typename Union>
+    void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                                 GLsizei width, GLsizei height, GLenum sizedUnpackFormat,
+                                 const Union& srcUnion, GLuint srcOffset))
+    {
+        const char funcName[] = "compressedTexSubImage2D";
+        const isSubImage = true;
+        const uint8_t funcDims = 2;
+        const GLint zOffset = 0;
+        const GLsizei depth = 1;
+        const GLint border = 0;
+        CompTexOrSubImageU2(funcName, isSubImage, funcDims, target, level,
+                            sizedUnpackFormat, xOffset, yOffset, zOffset, width, height,
+                            depth, border, srcUnion, srcOffset);
+    }
+
+    template<typename Union>
+    void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                                 GLint zOffset, GLsizei width, GLsizei height,
+                                 GLsizei depth, GLenum sizedUnpackFormat,
+                                 const Union& srcUnion, GLuint srcOffset))
+    {
+        const char funcName[] = "compressedTexSubImage3D";
+        const isSubImage = true;
+        const uint8_t funcDims = 3;
+        const GLint border = 0;
+        CompTexOrSubImageU2(funcName, isSubImage, funcDims, target, level,
+                            sizedUnpackFormat, xOffset, yOffset, zOffset, width, height,
+                            depth, border, srcUnion, srcOffset);
+    }
+
+    ////
+
+private:
+    template<typename Union> // = BufferDataSource, with srcOffset
+    void CompTexOrSubImageU2(const char* funcName, bool isSubImage, uint8_t funcDims,
+                             GLenum target, GLint level, GLenum internalFormat,
+                             GLint xOffset, GLint yOffset, GLint zOffset, GLsizei width,
+                             GLsizei height, GLsizei depth, GLint border,
+                             const Union& srcUnion, GLuint srcOffset)
+    {
+        MultiData source;
+        source.dataElemOffset = srcOffset;
+
+        const DebugOnly<bool> captured = source.AsBufferDataSource(srcUnion);
+        MOZ_ASSERT(captured, "We missed something specified by the webidl!");
+
+        CompTexOrSubImage(funcName, funcDims, target, level, internalFormat, xOffset,
+                          yOffset, zOffset, width, height, depth, border, source);
+    }
+
+    ////////////////////////////////////
+
+    void CompTexOrSubImage(const char* funcName, bool isSubImage, uint8_t funcDims,
+                           GLenum target, GLint level, GLenum internalFormat,
+                           GLint xOffset, GLint yOffset, GLint zOffset, GLsizei width,
+                           GLsizei height, GLsizei depth, GLint border,
+                           const MultiData& src);
+
+    ////////////////////////////////////////////////////////
+
+public:
+    void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x,
+                        GLint y, GLsizei width, GLsizei height, GLint border)
+    {
+        const char funcName[] = "copyTexImage2D";
+        const bool isSubFunc = false;
+        const uint8_t funcDims = 2;
+        const GLint xOffset = 0;
+        const GLint yOffset = 0;
+        const GLint zOffset = 0;
+        CopyTexOrSubImage(funcName, isSubFunc, funcDims, target, level, internalFormat,
+                          xOffset, yOffset, zOffset, x, y, width, height, border);
+    }
+
     void CopyTexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset,
                            GLint yOffset, GLint x, GLint y, GLsizei width,
-                           GLsizei height);
-
-    void TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                    GLsizei width, GLsizei height, GLint border, GLenum unpackFormat,
-                    GLenum unpackType,
-                    const dom::Nullable<dom::ArrayBufferView>& maybeView,
-                    ErrorResult&);
-    void TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                    GLenum unpackFormat, GLenum unpackType, dom::ImageData* imageData,
-                    ErrorResult&);
-    void TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-                    GLenum unpackFormat, GLenum unpackType, dom::Element* elem,
-                    ErrorResult* const out_error);
-
-    void TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                       GLsizei width, GLsizei height, GLenum unpackFormat,
-                       GLenum unpackType,
-                       const dom::Nullable<dom::ArrayBufferView>& maybeView,
-                       ErrorResult&);
-    void TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                       GLenum unpackFormat, GLenum unpackType, dom::ImageData* imageData,
-                       ErrorResult&);
-    void TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                       GLenum unpackFormat, GLenum unpackType, dom::Element* elem,
-                       ErrorResult* const out_error);
-
-    // Allow whatever element unpackTypes the bindings are willing to pass
-    // us in Tex(Sub)Image2D
-    template<typename T>
-    inline void
-    TexImage2D(GLenum texImageTarget, GLint level, GLenum internalFormat,
-               GLenum unpackFormat, GLenum unpackType, T& elem, ErrorResult& out_error)
+                           GLsizei height)
     {
-        TexImage2D(texImageTarget, level, internalFormat, unpackFormat, unpackType, &elem,
-                   &out_error);
+        const char funcName[] = "copyTexSubImage2D";
+        const bool isSubFunc = true;
+        const uint8_t funcDims = 2;
+        const GLenum internalFormat = 0;
+        const GLint zOffset = 0;
+        const GLint border = 0;
+        CopyTexOrSubImage(funcName, isSubFunc, funcDims, target, level, internalFormat,
+                          xOffset, yOffset, zOffset, x, y, width, height, border);
     }
 
-    template<typename T>
-    inline void
-    TexSubImage2D(GLenum texImageTarget, GLint level, GLint xOffset, GLint yOffset,
-                  GLenum unpackFormat, GLenum unpackType, T& elem, ErrorResult& out_error)
+    void CopyTexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                           GLint zOffset, GLint x, GLint y, GLsizei width,
+                           GLsizei height)
     {
-        TexSubImage2D(texImageTarget, level, xOffset, yOffset, unpackFormat, unpackType,
-                      &elem, &out_error);
+        const char funcName[] = "copyTexSubImage3D";
+        const bool isSubFunc = true;
+        const uint8_t funcDims = 3;
+        const GLenum internalFormat = 0;
+        const GLint border = 0;
+        CopyTexOrSubImage(funcName, isSubFunc, funcDims, target, level, internalFormat,
+                          xOffset, yOffset, zOffset, x, y, width, height, border);
     }
+
+private:
+    void CopyTexOrSubImage(const char* funcName, bool isSubImage, uint8_t funcDims,
+                           GLenum target, GLint level, GLenum internalFormat,
+                           GLint xOffset, GLint yOffset, GLint zOffset, GLint x, GLint y,
+                           GLsizei width, GLsizei height, GLint border);
 
     //////
     // WebGLTextureUpload.cpp
@@ -944,44 +1536,53 @@ public:
 
     WebGLsizeiptr GetVertexAttribOffset(GLuint index, GLenum pname);
 
-    void VertexAttrib1f(GLuint index, GLfloat x0);
-    void VertexAttrib2f(GLuint index, GLfloat x0, GLfloat x1);
-    void VertexAttrib3f(GLuint index, GLfloat x0, GLfloat x1, GLfloat x2);
-    void VertexAttrib4f(GLuint index, GLfloat x0, GLfloat x1, GLfloat x2,
-                        GLfloat x3);
+    ////
 
-    void VertexAttrib1fv(GLuint idx, const dom::Float32Array& arr) {
-        arr.ComputeLengthAndData();
-        VertexAttrib1fv_base(idx, arr.LengthAllowShared(), arr.DataAllowShared());
+    void VertexAttrib1f(GLuint index, GLfloat x0) {
+        VertexAttribNf("VertexAttrib1f", index, x0);
     }
-    void VertexAttrib1fv(GLuint idx, const dom::Sequence<GLfloat>& arr) {
-        VertexAttrib1fv_base(idx, arr.Length(), arr.Elements());
+    void VertexAttrib2f(GLuint index, GLfloat x0, GLfloat x1) {
+        VertexAttribNf("VertexAttrib2f", index, x0, x1);
     }
-
-    void VertexAttrib2fv(GLuint idx, const dom::Float32Array& arr) {
-        arr.ComputeLengthAndData();
-        VertexAttrib2fv_base(idx, arr.LengthAllowShared(), arr.DataAllowShared());
+    void VertexAttrib3f(GLuint index, GLfloat x0, GLfloat x1, GLfloat x2) {
+        VertexAttribNf("VertexAttrib3f", index, x0, x1, x2);
     }
-    void VertexAttrib2fv(GLuint idx, const dom::Sequence<GLfloat>& arr) {
-        VertexAttrib2fv_base(idx, arr.Length(), arr.Elements());
+    void VertexAttrib4f(GLuint index, GLfloat x0, GLfloat x1, GLfloat x2, GLfloat x3) {
+        VertexAttribNf("VertexAttrib4f", index, x0, x1, x2, x3);
     }
 
-    void VertexAttrib3fv(GLuint idx, const dom::Float32Array& arr) {
-        arr.ComputeLengthAndData();
-        VertexAttrib3fv_base(idx, arr.LengthAllowShared(), arr.DataAllowShared());
+    ////
+
+    template<typename T>
+    void VertexAttrib1fv(GLuint index, const T& arr) {
+        VertexAttribNfv("vertexAttrib1fv", index, 1, FloatArr(arr));
     }
-    void VertexAttrib3fv(GLuint idx, const dom::Sequence<GLfloat>& arr) {
-        VertexAttrib3fv_base(idx, arr.Length(), arr.Elements());
+    template<typename T>
+    void VertexAttrib2fv(GLuint index, const T& arr) {
+        VertexAttribNfv("vertexAttrib2fv", index, 2, FloatArr(arr));
+    }
+    template<typename T>
+    void VertexAttrib3fv(GLuint index, const T& arr) {
+        VertexAttribNfv("vertexAttrib3fv", index, 3, FloatArr(arr));
+    }
+    template<typename T>
+    void VertexAttrib4fv(GLuint index, const T& arr) {
+        VertexAttribNfv("vertexAttrib4fv", index, 4, FloatArr(arr));
     }
 
-    void VertexAttrib4fv(GLuint idx, const dom::Float32Array& arr) {
-        arr.ComputeLengthAndData();
-        VertexAttrib4fv_base(idx, arr.LengthAllowShared(), arr.DataAllowShared());
+private:
+    void VertexAttribNf(const char* funcName, GLuint index, GLfloat x0, GLfloat x1 = 0,
+                        GLfloat x2 = 0, GLfloat x3 = 1)
+    {
+        const GLfloat stackArr[4] = {x0, x1, x2, x3};
+        VertexAttribNfv(funcName, index, 4, FloatArr(stackArr));
     }
-    void VertexAttrib4fv(GLuint idx, const dom::Sequence<GLfloat>& arr) {
-        VertexAttrib4fv_base(idx, arr.Length(), arr.Elements());
-    }
+    void VertexAttribNfv(const char* funcName, GLuint index, uint8_t N,
+                         const FloatArr& arr);
 
+    ////
+
+public:
     void VertexAttribPointer(GLuint index, GLint size, GLenum type,
                              WebGLboolean normalized, GLsizei stride,
                              WebGLintptr byteOffset);
@@ -1003,15 +1604,6 @@ private:
                             GLuint* out_upperBound);
     bool DrawInstanced_check(const char* info);
     void Draw_cleanup(const char* funcName);
-
-    void VertexAttrib1fv_base(GLuint index, uint32_t arrayLength,
-                              const GLfloat* ptr);
-    void VertexAttrib2fv_base(GLuint index, uint32_t arrayLength,
-                              const GLfloat* ptr);
-    void VertexAttrib3fv_base(GLuint index, uint32_t arrayLength,
-                              const GLfloat* ptr);
-    void VertexAttrib4fv_base(GLuint index, uint32_t arrayLength,
-                              const GLfloat* ptr);
 
     bool ValidateBufferFetching(const char* info);
     bool BindArrayAttribToLocation0(WebGLProgram* prog);
