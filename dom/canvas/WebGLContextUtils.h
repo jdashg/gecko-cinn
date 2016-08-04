@@ -64,7 +64,7 @@ WebGLContext::WebGLObjectAsJSValue(JSContext* cx, const WebGLObjectType* object,
     if (!object)
         return JS::NullValue();
 
-    MOZ_ASSERT(this == object->Context());
+    MOZ_ASSERT(this == object->mContext);
     JS::Rooted<JS::Value> v(cx);
     JS::Rooted<JSObject*> wrapper(cx, GetWrapper());
     JSAutoCompartment ac(cx, wrapper);

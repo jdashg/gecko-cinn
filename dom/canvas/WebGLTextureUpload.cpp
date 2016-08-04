@@ -820,7 +820,7 @@ EnsureImageDataInitializedForUpload(WebGLTexture* tex, const char* funcName,
         if (isFullUpload) {
             *out_uploadWillInitialize = true;
         } else {
-            const auto& webgl = tex->Context();
+            const auto& webgl = tex->mContext;
             webgl->GenerateWarning("%s: Texture has not been initialized prior to a"
                                    " partial upload, forcing the browser to clear it."
                                    " This may be slow.",
