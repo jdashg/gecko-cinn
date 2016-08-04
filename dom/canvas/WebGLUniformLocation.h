@@ -36,10 +36,6 @@ public:
 
     virtual JSObject* WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto) override;
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     //////
 
     const WeakPtr<const webgl::LinkedProgramInfo> mLinkInfo;

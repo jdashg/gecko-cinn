@@ -66,10 +66,6 @@ public:
 
     int64_t MemoryUsage() const;
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     void RenderbufferStorage(const char* funcName, uint32_t samples,
                              GLenum internalFormat, uint32_t width, uint32_t height);
     // Only handles a subset of `pname`s.

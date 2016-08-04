@@ -50,10 +50,6 @@ public:
 
     bool IsElementArrayUsedWithMultipleTypes() const;
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
     const GLenum mGLName;

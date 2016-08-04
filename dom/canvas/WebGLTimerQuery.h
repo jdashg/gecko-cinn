@@ -27,8 +27,6 @@ public:
   void QueueAvailablity();
   GLenum Target() const { return mTarget; }
 
-  WebGLContext* GetParentObject() const;
-
   // NS
   virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 

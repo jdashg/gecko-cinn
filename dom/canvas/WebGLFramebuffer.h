@@ -264,10 +264,6 @@ public:
 
     void DetachRenderbuffer(const WebGLRenderbuffer* rb);
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     void FinalizeAttachments() const;
 
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;

@@ -205,10 +205,6 @@ public:
     bool HasEverBeenBound() const { return mTarget != LOCAL_GL_NONE; }
     TexTarget Target() const { return mTarget; }
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
 protected:

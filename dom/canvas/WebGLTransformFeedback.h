@@ -22,7 +22,6 @@ public:
     WebGLTransformFeedback(WebGLContext* webgl, GLuint tf);
 
     void Delete();
-    WebGLContext* GetParentObject() const;
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
     const GLuint mGLName;

@@ -181,10 +181,6 @@ public:
         return mMostRecentLinkInfo.get();
     }
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     virtual JSObject* WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto) override;
 
 private:

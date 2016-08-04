@@ -43,10 +43,6 @@ public:
     void Delete();
     bool IsVertexArray();
 
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLVertexArray)

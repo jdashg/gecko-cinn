@@ -41,11 +41,6 @@ public:
     // WebGLRefCountedObject
     void Delete();
 
-    // nsWrapperCache
-    WebGLContext* GetParentObject() const {
-        return mContext;
-    }
-
     // NS
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
