@@ -10,8 +10,9 @@
 
 namespace mozilla {
 
-WebGLExtensionCompressedTextureATC::WebGLExtensionCompressedTextureATC(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionCompressedTextureATC::WebGLExtensionCompressedTextureATC(WebGLContext* webgl,
+                                                                       WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     RefPtr<WebGLContext> webgl_ = webgl; // Bug 1201275
     const auto fnAdd = [&webgl_](GLenum sizedFormat, webgl::EffectiveFormat effFormat) {

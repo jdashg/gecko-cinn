@@ -1398,6 +1398,7 @@ protected:
     WebGLRefPtr<WebGLTransformFeedback> mDefaultTransformFeedback;
     WebGLRefPtr<WebGLVertexArray> mDefaultVertexArray;
 
+
     // PixelStore parameters
     uint32_t mPixelStore_UnpackImageHeight;
     uint32_t mPixelStore_UnpackSkipImages;

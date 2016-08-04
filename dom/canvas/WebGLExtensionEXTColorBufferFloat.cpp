@@ -11,8 +11,9 @@
 
 namespace mozilla {
 
-WebGLExtensionEXTColorBufferFloat::WebGLExtensionEXTColorBufferFloat(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionEXTColorBufferFloat::WebGLExtensionEXTColorBufferFloat(WebGLContext* webgl,
+                                                                     WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     auto& fua = webgl->mFormatUsage;
 

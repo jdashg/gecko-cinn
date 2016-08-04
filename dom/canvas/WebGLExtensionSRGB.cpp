@@ -12,8 +12,8 @@
 
 namespace mozilla {
 
-WebGLExtensionSRGB::WebGLExtensionSRGB(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionSRGB::WebGLExtensionSRGB(WebGLContext* webgl, WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     gl::GLContext* gl = webgl->GL();
     if (!gl->IsGLES()) {

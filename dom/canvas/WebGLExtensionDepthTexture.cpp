@@ -11,8 +11,9 @@
 
 namespace mozilla {
 
-WebGLExtensionDepthTexture::WebGLExtensionDepthTexture(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionDepthTexture::WebGLExtensionDepthTexture(WebGLContext* webgl,
+                                                       WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     auto& fua = webgl->mFormatUsage;
 

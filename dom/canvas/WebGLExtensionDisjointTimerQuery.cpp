@@ -16,9 +16,9 @@
 
 namespace mozilla {
 
-WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(WebGLContext* webgl)
-  : WebGLExtensionBase(webgl)
-  , mActiveQuery(nullptr)
+WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(WebGLContext* webgl,
+                                                                   WebGLExtensionID extID)
+  : WebGLExtensionHelper(webgl, extID)
 { }
 
 already_AddRefed<WebGLTimerQuery>
@@ -83,7 +83,7 @@ WebGLExtensionDisjointTimerQuery::BeginQueryEXT(GLenum target,
     return;
   }
 
-  if (mActiveQuery) {
+  if (mContext->mActiveQuery) {
     mContext->ErrorInvalidOperation("beginQueryEXT: A query is already"
                                     " active.");
     return;
@@ -93,7 +93,7 @@ WebGLExtensionDisjointTimerQuery::BeginQueryEXT(GLenum target,
   gl::GLContext* gl = mContext->GL();
   gl->fBeginQuery(target, query->mGLName);
   query->mTarget = LOCAL_GL_TIME_ELAPSED_EXT;
-  mActiveQuery = query;
+  mContext->mActiveQuery = query;
 }
 
 void
@@ -108,15 +108,15 @@ WebGLExtensionDisjointTimerQuery::EndQueryEXT(GLenum target)
     return;
   }
 
-  if (!mActiveQuery) {
+  if (!mContext->mActiveQuery) {
     mContext->ErrorInvalidOperation("endQueryEXT: A query is not active.");
     return;
   }
 
   mContext->MakeContextCurrent();
   mContext->GL()->fEndQuery(target);
-  mActiveQuery->QueueAvailablity();
-  mActiveQuery = nullptr;
+  mContext->mActiveQuery->QueueAvailablity();
+  mContext->mActiveQuery = nullptr;
 }
 
 void
@@ -157,9 +157,9 @@ WebGLExtensionDisjointTimerQuery::GetQueryEXT(JSContext* cx, GLenum target,
                                      target);
       return;
     }
-    if (mActiveQuery) {
+    if (mContext->mActiveQuery) {
       JS::Rooted<JS::Value> v(cx);
-      dom::GetOrCreateDOMReflector(cx, mActiveQuery.get(), &v);
+      dom::GetOrCreateDOMReflector(cx, mContext->mActiveQuery.get(), &v);
       retval.set(v);
     } else {
       retval.set(JS::NullValue());
@@ -199,7 +199,7 @@ WebGLExtensionDisjointTimerQuery::GetQueryObjectEXT(JSContext* cx,
   if (!mContext->ValidateObject("getQueryObjectEXT", query))
     return;
 
-  if (query == mActiveQuery.get()) {
+  if (query == mContext->mActiveQuery.get()) {
     mContext->ErrorInvalidOperation("getQueryObjectEXT: Query must not be"
                                     " active.");
   }
@@ -232,12 +232,6 @@ WebGLExtensionDisjointTimerQuery::GetQueryObjectEXT(JSContext* cx,
                                    " property.", pname);
     break;
   }
-}
-
-void
-WebGLExtensionDisjointTimerQuery::DetachImpl()
-{
-  mActiveQuery = nullptr;
 }
 
 /*static*/ bool

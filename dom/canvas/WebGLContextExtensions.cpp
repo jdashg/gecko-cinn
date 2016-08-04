@@ -252,7 +252,7 @@ WebGLContext::EnableExtension(WebGLExtensionID ext)
 
 #define FOO(ID,TYPE)           \
     case WebGLExtensionID::ID: \
-        obj = new TYPE(this);  \
+        obj = new TYPE(this, WebGLExtensionID::ID); \
         break;
 
     FOR_EACH_PRIVILEGED_EXT(FOO)

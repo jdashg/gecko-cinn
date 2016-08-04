@@ -11,8 +11,9 @@
 
 namespace mozilla {
 
-WebGLExtensionTextureHalfFloat::WebGLExtensionTextureHalfFloat(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionTextureHalfFloat::WebGLExtensionTextureHalfFloat(WebGLContext* webgl,
+                                                               WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     auto& fua = webgl->mFormatUsage;
     gl::GLContext* gl = webgl->GL();

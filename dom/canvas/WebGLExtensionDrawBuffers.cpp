@@ -15,8 +15,9 @@
 
 namespace mozilla {
 
-WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
-    : WebGLExtensionBase(webgl)
+WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl,
+                                                     WebGLExtensionID extID)
+    : WebGLExtensionHelper(webgl, extID)
 {
     // WEBGL_draw_buffers:
     // "The value of the MAX_COLOR_ATTACHMENTS_WEBGL parameter must be greater than or
