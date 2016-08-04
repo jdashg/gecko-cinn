@@ -181,88 +181,48 @@ protected:
 template<typename T>
 class WebGLRefPtr
 {
+    RefPtr<T> mPtr;
+
 public:
-    WebGLRefPtr()
-        : mRawPtr(0)
-    {}
+    WebGLRefPtr() { }
 
-    WebGLRefPtr(const WebGLRefPtr<T>& smartPtr)
-        : mRawPtr(smartPtr.mRawPtr)
+    WebGLRefPtr(T* ptr)
+        : mPtr(ptr)
     {
-        AddRefOnPtr(mRawPtr);
-    }
-
-    explicit WebGLRefPtr(T* rawPtr)
-        : mRawPtr(rawPtr)
-    {
-        AddRefOnPtr(mRawPtr);
+        if (mPtr) {
+            mPtr->WebGLAddRef();
+        }
     }
 
     ~WebGLRefPtr() {
-        ReleasePtr(mRawPtr);
-    }
-
-    WebGLRefPtr<T>&
-    operator=(const WebGLRefPtr<T>& rhs)
-    {
-        assign_with_AddRef(rhs.mRawPtr);
-        return *this;
+        if (mPtr) {
+            mPtr->WebGLRelease();
+        }
     }
 
     WebGLRefPtr<T>&
     operator=(T* rhs)
     {
-        assign_with_AddRef(rhs);
+        const RefPtr<T> old = mPtr;
+        mPtr = rhs;
+
+        if (mPtr) {
+            mPtr->WebGLAddRef();
+        }
+
+        if (old) {
+            old->WebGLRelease();
+        }
+
         return *this;
     }
 
-    T* get() const {
-        return static_cast<T*>(mRawPtr);
-    }
+    ////
 
-    operator T*() const {
-        return get();
-    }
-
-    T* operator->() const MOZ_NO_ADDREF_RELEASE_ON_RETURN {
-        MOZ_ASSERT(mRawPtr != 0, "You can't dereference a nullptr WebGLRefPtr with operator->()!");
-        return get();
-    }
-
-    T& operator*() const {
-        MOZ_ASSERT(mRawPtr != 0, "You can't dereference a nullptr WebGLRefPtr with operator*()!");
-        return *get();
-    }
-
-private:
-
-    static void AddRefOnPtr(T* rawPtr) {
-        if (rawPtr) {
-            rawPtr->WebGLAddRef();
-            rawPtr->AddRef();
-        }
-    }
-
-    static void ReleasePtr(T* rawPtr) {
-        if (rawPtr) {
-            rawPtr->WebGLRelease(); // must be done first before Release(), as Release() might actually destroy the object
-            rawPtr->Release();
-        }
-    }
-
-    void assign_with_AddRef(T* rawPtr) {
-        AddRefOnPtr(rawPtr);
-        assign_assuming_AddRef(rawPtr);
-    }
-
-    void assign_assuming_AddRef(T* newPtr) {
-        T* oldPtr = mRawPtr;
-        mRawPtr = newPtr;
-        ReleasePtr(oldPtr);
-    }
-
-protected:
-    T* mRawPtr;
+    T* get() const { return mPtr.get(); }
+    operator T*() const { return get(); }
+    T* operator->() const MOZ_NO_ADDREF_RELEASE_ON_RETURN { return get(); }
+    T& operator*() const { return *get(); }
 };
 
 //////////
