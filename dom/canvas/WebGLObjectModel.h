@@ -6,8 +6,8 @@
 #ifndef WEBGLOBJECTMODEL_H_
 #define WEBGLOBJECTMODEL_H_
 
+#include <set>
 #include "nsCycleCollectionNoteChild.h"
-
 #include "WebGLTypes.h"
 
 namespace mozilla {
@@ -92,15 +92,16 @@ class WebGLContext;
  * known as the "curiously recursive template pattern (CRTP)".
  */
 template<typename Derived>
-class WebGLRefCountedObject : public WebGLContextBoundObject
+class WebGLRefCountedObject
+    : public WebGLContextBoundObject
 {
 public:
     enum DeletionStatus { Default, DeleteRequested, Deleted };
 
-    explicit WebGLRefCountedObject(WebGLContext* webgl)
-      : WebGLContextBoundObject(webgl)
-      , mDeletionStatus(Default)
-    {}
+    WebGLRefCountedObject(WebGLContext* webgl)
+        : WebGLContextBoundObject(webgl)
+        , mDeletionStatus(Default)
+    { }
 
     ~WebGLRefCountedObject() {
         MOZ_ASSERT(mWebGLRefCnt == 0,
@@ -138,6 +139,7 @@ public:
         return mDeletionStatus != Default;
     }
 
+private:
     void DeleteOnce() {
         if (mDeletionStatus != Deleted) {
             static_cast<Derived*>(this)->Delete();
@@ -145,7 +147,6 @@ public:
         }
     }
 
-private:
     void MaybeDelete() {
         if (mWebGLRefCnt == 0 &&
             mDeletionStatus == DeleteRequested)
@@ -154,7 +155,7 @@ private:
         }
     }
 
-    virtual void DetachImpl() override {
+    virtual void OnDetach() override {
         DeleteOnce();
     }
 
@@ -264,24 +265,27 @@ protected:
     T* mRawPtr;
 };
 
+//////////
+
 // This class is a mixin for objects that are tied to a specific
 // context (which is to say, all of them).
 class WebGLContextBoundObject
 {
     friend class WebGLContext;
 
-protected:
-    WebGLContext* mContext;
+    WebGLContext* mMutableContext;
+    std::set<WebGLContextBoundObject*>& mSet;
+public:
+    const decltype(mMutableContext)& mContext;
 
-    explicit WebGLContextBoundObject(WebGLContext* webgl)
-        : mContext(webgl)
-    {
-        MOZ_ASSERT(mContext);
-    }
+protected:
+    WebGLContextBoundObject(WebGLContext* webgl, bool isPermament = false);
 
     virtual ~WebGLContextBoundObject() {
-        MOZ_ASSERT(!mContext, "Should be Detach()'d first before destroyed.");
+        MOZ_ASSERT(!mContext, "Must be detached before this dtor.");
     }
+
+    virtual void OnDetach() { }
 
     void DetachOnce() {
         if (mContext) {
@@ -289,12 +293,14 @@ protected:
         }
     }
 
-public:
-    const decltype(mContext)& Context() const { return mContext; }
-
 private:
     void Detach();
-    virtual void DetachImpl() = 0;
+
+public:
+    virtual uint64_t HeapMemory() const { return 0; }
+    virtual uint64_t GPUMemory() const { return 0; }
+
+    WebGLContext* GetParentObject() const { return mContext; }
 };
 
 // this class is a mixin for GL objects that have dimensions

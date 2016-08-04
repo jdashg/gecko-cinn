@@ -127,7 +127,6 @@ WebGLContext::WebGLContext()
     , mNeedsEmulatedLoneDepthStencil(false)
     , mVRPresentationActive(false)
 {
-    mGeneration = 0;
     mInvalidated = false;
     mCapturedFrameInvalidated = false;
     mShouldPresent = true;
@@ -217,14 +216,14 @@ WebGLContext::~WebGLContext()
 
     ////
 
-    auto& loseContextExt = mExtensions[WebGLExtensionID::WEBGL_lose_context];
-    if (loseContextExt) {
-        loseContextExt->Detach();
-        loseContextExt = nullptr;
-    }
+    MOZ_ASSERT(!mGenerationObjects.size());
 
-    for (const auto& cur : mExtensions) {
-        MOZ_ASSERT(!cur);
+    while (true) {
+        const auto itr = mPermanentObjects.begin();
+        if (itr == mPermanentObjects.end())
+            break;
+
+        (*itr)->Detach();
     }
 
     ////
@@ -232,15 +231,6 @@ WebGLContext::~WebGLContext()
     if (NS_IsMainThread()) {
         // XXX mtseng: bug 709490, not thread safe
         WebGLMemoryTracker::RemoveWebGLContext(this);
-    }
-}
-
-template<typename T>
-static void
-ClearLinkedList(LinkedList<T>& list)
-{
-    while (!list.isEmpty()) {
-        list.getLast()->DeleteOnce();
     }
 }
 
@@ -280,18 +270,13 @@ WebGLContext::DestroyResourcesAndContext()
 
     //////
 
-    ClearLinkedList(mBuffers);
-    ClearLinkedList(mFramebuffers);
-    ClearLinkedList(mPrograms);
-    ClearLinkedList(mQueries);
-    ClearLinkedList(mRenderbuffers);
-    ClearLinkedList(mSamplers);
-    ClearLinkedList(mShaders);
-    ClearLinkedList(mSyncs);
-    ClearLinkedList(mTextures);
-    ClearLinkedList(mTimerQueries);
-    ClearLinkedList(mTransformFeedbacks);
-    ClearLinkedList(mVertexArrays);
+    while (true) {
+        const auto itr = mGenerationObjects.begin();
+        if (itr == mGenerationObjects.end())
+            break;
+
+        (*itr)->Detach();
+    }
 
     //////
 
@@ -307,19 +292,6 @@ WebGLContext::DestroyResourcesAndContext()
     if (mFakeVertexAttrib0BufferObject) {
         gl->fDeleteBuffers(1, &mFakeVertexAttrib0BufferObject);
         mFakeVertexAttrib0BufferObject = 0;
-    }
-
-    // Detach extensions.
-    const auto& loseContextExt = mExtensions[WebGLExtensionID::WEBGL_lose_context];
-    for (auto& cur : mExtensions) {
-        if (!cur)
-            continue;
-
-        if (cur == loseContextExt)
-            continue; // Don't detach WEBGL_lose_context.
-
-        cur->Detach();
-        cur = nullptr;
     }
 
     // We just got rid of everything, so the context had better
@@ -948,27 +920,6 @@ WebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight)
     // Here is the right place to do so, as we are about to create the OpenGL context
     // and that is what can fail if we already have too many.
     LoseOldestWebGLContextIfLimitExceeded();
-
-    // We're going to create an entirely new context.  If our
-    // generation is not 0 right now (that is, if this isn't the first
-    // context we're creating), we may have to dispatch a context lost
-    // event.
-
-    // If incrementing the generation would cause overflow,
-    // don't allow it.  Allowing this would allow us to use
-    // resource handles created from older context generations.
-    if (!(mGeneration + 1).isValid()) {
-        // exit without changing the value of mGeneration
-        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_TOO_MANY");
-        const nsLiteralCString text("Too many WebGL contexts created this run.");
-        ThrowEvent_WebGLContextCreationError(text);
-        return NS_ERROR_FAILURE;
-    }
-
-    // increment the generation number - Do this early because later
-    // in CreateOffscreenGL(), "default" objects are created that will
-    // pick up the old generation.
-    ++mGeneration;
 
     bool disabled = gfxPrefs::WebGLDisabled();
 

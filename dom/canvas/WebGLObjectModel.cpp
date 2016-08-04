@@ -5,15 +5,32 @@
 
 #include "WebGLObjectModel.h"
 
+#include "WebGLContext.h"
+
 namespace mozilla {
+
+WebGLContextBoundObject::WebGLContextBoundObject(WebGLContext* webgl, bool isPermanent)
+    : mMutableContext(webgl)
+    , mSet(isPermanent ? webgl->mPermanentObjects
+                       : webgl->mGenerationObjects)
+    , mContext(mMutableContext) // By ref.
+{
+    MOZ_ASSERT(mContext);
+
+    MOZ_ALWAYS_TRUE( mSet.insert(this).second );
+}
 
 void
 WebGLContextBoundObject::Detach()
 {
     MOZ_ASSERT(mContext);
 
-    DetachImpl();
-    mContext = nullptr;
+    OnDetach();
+
+    MOZ_ALWAYS_TRUE( mSet.erase(this) == 1 );
+
+    mMutableContext = nullptr;
+    MOZ_ASSERT(!mContext);
 }
 
 } // namespace mozilla

@@ -17,7 +17,6 @@
 #include "mozilla/EnumeratedArray.h"
 #include "mozilla/ErrorResult.h"
 #include "mozilla/gfx/2D.h"
-#include "mozilla/LinkedList.h"
 #include "mozilla/UniquePtr.h"
 #include "nsCycleCollectionNoteChild.h"
 #include "nsICanvasRenderingContextInternal.h"
@@ -190,7 +189,9 @@ class WebGLContext
     , public nsWrapperCache
 {
     friend class WebGL2Context;
+    friend class WebGLContextBoundObject;
     friend class WebGLContextUserData;
+    friend class WebGLExtensionBase;
     friend class WebGLExtensionCompressedTextureATC;
     friend class WebGLExtensionCompressedTextureES3;
     friend class WebGLExtensionCompressedTextureETC1;
@@ -354,10 +355,6 @@ public:
     bool IsPreservingDrawingBuffer() const { return mOptions.preserveDrawingBuffer; }
 
     bool PresentScreenBuffer();
-
-    // a number that increments every time we have an event that causes
-    // all context resources to be lost.
-    uint32_t Generation() { return mGeneration.value(); }
 
     // This is similar to GLContext::ClearSafely, but tries to minimize the
     // amount of work it does.
@@ -1074,7 +1071,8 @@ protected:
         mMaxFetchedInstances = 0;
     }
 
-    CheckedUint32 mGeneration;
+    std::set<WebGLContextBoundObject*> mGenerationObjects;
+    std::set<WebGLContextBoundObject*> mPermanentObjects;
 
     WebGLContextOptions mOptions;
 
