@@ -8,7 +8,6 @@
 
 #include <vector>
 
-#include "mozilla/LinkedList.h"
 #include "mozilla/WeakPtr.h"
 #include "nsWrapperCache.h"
 
@@ -162,7 +161,6 @@ public:
 class WebGLFramebuffer final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLFramebuffer>
-    , public LinkedListElement<WebGLFramebuffer>
     , public SupportsWeakPtr<WebGLFramebuffer>
 {
     friend class WebGLContext;
@@ -171,7 +169,6 @@ public:
     MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLFramebuffer)
 
     const GLuint mGLName;
-
 private:
     mutable bool mIsKnownFBComplete;
 

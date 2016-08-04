@@ -24,8 +24,6 @@ WebGLQuery::WebGLQuery(WebGLContext* webgl)
     , mGLName(0)
     , mType(0)
 {
-    mContext->mQueries.insertBack(this);
-
     mContext->MakeContextCurrent();
     mContext->gl->fGenQueries(1, &mGLName);
 }
@@ -35,7 +33,6 @@ WebGLQuery::Delete()
 {
     mContext->MakeContextCurrent();
     mContext->gl->fDeleteQueries(1, &mGLName);
-    LinkedListElement<WebGLQuery>::removeFrom(mContext->mQueries);
 }
 
 bool

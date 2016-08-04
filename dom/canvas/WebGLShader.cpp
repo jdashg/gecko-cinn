@@ -146,9 +146,7 @@ WebGLShader::WebGLShader(WebGLContext* webgl, GLenum type)
     , mType(type)
     , mTranslationSuccessful(false)
     , mCompilationSuccessful(false)
-{
-    mContext->mShaders.insertBack(this);
-}
+{ }
 
 WebGLShader::~WebGLShader()
 {
@@ -474,8 +472,6 @@ WebGLShader::Delete()
 
     gl->MakeCurrent();
     gl->fDeleteShader(mGLName);
-
-    LinkedListElement<WebGLShader>::removeFrom(mContext->mShaders);
 }
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLShader)

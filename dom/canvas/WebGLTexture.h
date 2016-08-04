@@ -14,7 +14,6 @@
 #include "mozilla/Assertions.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/dom/TypedArray.h"
-#include "mozilla/LinkedList.h"
 #include "nsWrapperCache.h"
 
 #include "WebGLFramebufferAttachable.h"
@@ -55,7 +54,6 @@ DoesTargetMatchDimensions(WebGLContext* webgl, TexImageTarget target, uint8_t di
 class WebGLTexture final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLTexture>
-    , public LinkedListElement<WebGLTexture>
 {
     // Friends
     friend class WebGLContext;

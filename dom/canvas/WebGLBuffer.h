@@ -7,7 +7,6 @@
 #define WEBGL_BUFFER_H_
 
 #include "GLDefs.h"
-#include "mozilla/LinkedList.h"
 #include "nsAutoPtr.h"
 #include "nsWrapperCache.h"
 
@@ -21,10 +20,8 @@ class WebGLElementArrayCache;
 class WebGLBuffer final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLBuffer>
-    , public LinkedListElement<WebGLBuffer>
 {
 public:
-
     enum class Kind {
         Undefined,
         ElementArray,

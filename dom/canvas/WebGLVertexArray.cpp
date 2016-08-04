@@ -23,9 +23,7 @@ WebGLVertexArray::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto)
 WebGLVertexArray::WebGLVertexArray(WebGLContext* webgl)
     : WebGLRefCountedObject(webgl)
     , mGLName(0)
-{
-    mContext->mVertexArrays.insertBack(this);
-}
+{ }
 
 WebGLVertexArray*
 WebGLVertexArray::Create(WebGLContext* webgl)
@@ -44,7 +42,6 @@ WebGLVertexArray::Delete()
 {
     DeleteImpl();
 
-    LinkedListElement<WebGLVertexArray>::removeFrom(mContext->mVertexArrays);
     mElementArrayBuffer = nullptr;
     mAttribs.Clear();
 }

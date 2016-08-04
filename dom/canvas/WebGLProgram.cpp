@@ -433,9 +433,7 @@ WebGLProgram::WebGLProgram(WebGLContext* webgl)
     : WebGLRefCountedObject(webgl)
     , mGLName(CreateProgram(webgl->GL()))
     , mTransformFeedbackBufferMode(LOCAL_GL_NONE)
-{
-    mContext->mPrograms.insertBack(this);
-}
+{ }
 
 WebGLProgram::~WebGLProgram()
 {
@@ -454,8 +452,6 @@ WebGLProgram::Delete()
     mFragShader = nullptr;
 
     mMostRecentLinkInfo = nullptr;
-
-    LinkedListElement<WebGLProgram>::removeFrom(mContext->mPrograms);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

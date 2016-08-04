@@ -18,30 +18,13 @@ WebGLTransformFeedback::WebGLTransformFeedback(WebGLContext* webgl,
     , mMode(LOCAL_GL_NONE)
     , mIsActive(false)
     , mIsPaused(false)
-{
-    mContext->mTransformFeedbacks.insertBack(this);
-}
-
-WebGLTransformFeedback::~WebGLTransformFeedback()
-{
-    mMode = LOCAL_GL_NONE;
-    mIsActive = false;
-    mIsPaused = false;
-    DetachOnce();
-}
+{ }
 
 void
 WebGLTransformFeedback::Delete()
 {
     mContext->MakeContextCurrent();
     mContext->gl->fDeleteTransformFeedbacks(1, &mGLName);
-    removeFrom(mContext->mTransformFeedbacks);
-}
-
-WebGLContext*
-WebGLTransformFeedback::GetParentObject() const
-{
-    return mContext;
 }
 
 JSObject*

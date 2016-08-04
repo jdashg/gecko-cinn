@@ -55,9 +55,7 @@ WebGLRenderbuffer::WebGLRenderbuffer(WebGLContext* webgl)
     , mSamples(0)
     , mImageDataStatus(WebGLImageDataStatus::NoImageData)
     , mHasBeenBound(false)
-{
-    mContext->mRenderbuffers.insertBack(this);
-}
+{ }
 
 void
 WebGLRenderbuffer::Delete()
@@ -65,10 +63,9 @@ WebGLRenderbuffer::Delete()
     mContext->MakeContextCurrent();
 
     mContext->gl->fDeleteRenderbuffers(1, &mPrimaryRB);
-    if (mSecondaryRB)
+    if (mSecondaryRB) {
         mContext->gl->fDeleteRenderbuffers(1, &mSecondaryRB);
-
-    LinkedListElement<WebGLRenderbuffer>::removeFrom(mContext->mRenderbuffers);
+    }
 }
 
 int64_t

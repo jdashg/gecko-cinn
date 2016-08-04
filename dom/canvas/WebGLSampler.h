@@ -6,7 +6,6 @@
 #ifndef WEBGL_SAMPLER_H_
 #define WEBGL_SAMPLER_H_
 
-#include "mozilla/LinkedList.h"
 #include "nsWrapperCache.h"
 #include "WebGLObjectModel.h"
 #include "WebGLStrongTypes.h"
@@ -16,7 +15,6 @@ namespace mozilla {
 class WebGLSampler final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLSampler>
-    , public LinkedListElement<WebGLSampler>
 {
     friend class WebGLContext2;
     friend class WebGLTexture;

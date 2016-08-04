@@ -13,29 +13,14 @@ namespace mozilla {
 
 WebGLSync::WebGLSync(WebGLContext* webgl, GLenum condition, GLbitfield flags)
     : WebGLRefCountedObject(webgl)
-{
-   mContext->mSyncs.insertBack(this);
-   mGLName = mContext->gl->fFenceSync(condition, flags);
-}
-
-WebGLSync::~WebGLSync()
-{
-    DetachOnce();
-}
+    , mGLName(mContext->gl->fFenceSync(condition, flags))
+{ }
 
 void
 WebGLSync::Delete()
 {
     mContext->MakeContextCurrent();
     mContext->gl->fDeleteSync(mGLName);
-    mGLName = 0;
-    LinkedListElement<WebGLSync>::removeFrom(mContext->mSyncs);
-}
-
-WebGLContext*
-WebGLSync::GetParentObject() const
-{
-    return mContext;
 }
 
 // -------------------------------------------------------------------------

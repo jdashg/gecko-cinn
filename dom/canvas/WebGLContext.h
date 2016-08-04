@@ -1393,19 +1393,7 @@ protected:
     WebGLRefPtr<WebGLRenderbuffer> mBoundRenderbuffer;
     WebGLRefPtr<WebGLTransformFeedback> mBoundTransformFeedback;
     WebGLRefPtr<WebGLVertexArray> mBoundVertexArray;
-
-    LinkedList<WebGLBuffer> mBuffers;
-    LinkedList<WebGLFramebuffer> mFramebuffers;
-    LinkedList<WebGLProgram> mPrograms;
-    LinkedList<WebGLQuery> mQueries;
-    LinkedList<WebGLRenderbuffer> mRenderbuffers;
-    LinkedList<WebGLSampler> mSamplers;
-    LinkedList<WebGLShader> mShaders;
-    LinkedList<WebGLSync> mSyncs;
-    LinkedList<WebGLTexture> mTextures;
-    LinkedList<WebGLTimerQuery> mTimerQueries;
-    LinkedList<WebGLTransformFeedback> mTransformFeedbacks;
-    LinkedList<WebGLVertexArray> mVertexArrays;
+    WebGLRefPtr<WebGLTimerQuery> mActiveQuery;
 
     WebGLRefPtr<WebGLTransformFeedback> mDefaultTransformFeedback;
     WebGLRefPtr<WebGLVertexArray> mDefaultVertexArray;

@@ -16,7 +16,6 @@ namespace mozilla {
 class WebGLTimerQuery final
   : public nsWrapperCache
   , public WebGLRefCountedObject<WebGLTimerQuery>
-  , public LinkedListElement<WebGLTimerQuery>
 {
 public:
   static WebGLTimerQuery* Create(WebGLContext* webgl);

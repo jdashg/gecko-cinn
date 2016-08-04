@@ -6,7 +6,6 @@
 #ifndef WEBGL_TRANSFORM_FEEDBACK_H_
 #define WEBGL_TRANSFORM_FEEDBACK_H_
 
-#include "mozilla/LinkedList.h"
 #include "nsWrapperCache.h"
 #include "WebGLObjectModel.h"
 
@@ -15,7 +14,6 @@ namespace mozilla {
 class WebGLTransformFeedback final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLTransformFeedback>
-    , public LinkedListElement<WebGLTransformFeedback>
 {
     friend class WebGLContext;
     friend class WebGL2Context;

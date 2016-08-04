@@ -23,28 +23,13 @@ WebGLSampler::WebGLSampler(WebGLContext* webgl, GLuint sampler)
     , mMaxLod(1000)
     , mCompareMode(LOCAL_GL_NONE)
     , mCompareFunc(LOCAL_GL_LEQUAL)
-{
-    mContext->mSamplers.insertBack(this);
-}
-
-WebGLSampler::~WebGLSampler()
-{
-    DetachOnce();
-}
+{ }
 
 void
 WebGLSampler::Delete()
 {
     mContext->MakeContextCurrent();
     mContext->gl->fDeleteSamplers(1, &mGLName);
-
-    removeFrom(mContext->mSamplers);
-}
-
-WebGLContext*
-WebGLSampler::GetParentObject() const
-{
-    return mContext;
 }
 
 JSObject*

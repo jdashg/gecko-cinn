@@ -7,7 +7,6 @@
 #define WEBGL_VERTEX_ARRAY_H_
 
 #include "nsTArray.h"
-#include "mozilla/LinkedList.h"
 #include "nsWrapperCache.h"
 
 #include "WebGLBuffer.h"
@@ -22,7 +21,6 @@ class WebGLVertexArrayFake;
 class WebGLVertexArray
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLVertexArray>
-    , public LinkedListElement<WebGLVertexArray>
 {
 public:
     static WebGLVertexArray* Create(WebGLContext* webgl);

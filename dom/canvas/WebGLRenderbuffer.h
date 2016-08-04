@@ -6,7 +6,6 @@
 #ifndef WEBGL_RENDERBUFFER_H_
 #define WEBGL_RENDERBUFFER_H_
 
-#include "mozilla/LinkedList.h"
 #include "nsWrapperCache.h"
 
 #include "WebGLFramebufferAttachable.h"
@@ -21,7 +20,6 @@ struct FormatUsageInfo;
 class WebGLRenderbuffer final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLRenderbuffer>
-    , public LinkedListElement<WebGLRenderbuffer>
     , public WebGLRectangleObject
     , public WebGLFramebufferAttachable
 {

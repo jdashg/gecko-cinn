@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "mozilla/LinkedList.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/WeakPtr.h"
 #include "nsString.h"
@@ -120,7 +119,6 @@ struct LinkedProgramInfo final
 class WebGLProgram final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLProgram>
-    , public LinkedListElement<WebGLProgram>
 {
 public:
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgram)

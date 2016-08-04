@@ -640,13 +640,14 @@ WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
 #ifdef ANDROID
     , mIsFB(false)
 #endif
-{
-    mContext->mFramebuffers.insertBack(this);
-}
+{ }
 
 void
 WebGLFramebuffer::Delete()
 {
+    mContext->MakeContextCurrent();
+    mContext->gl->fDeleteFramebuffers(1, &mGLName);
+
     mColorAttachment0.Clear();
     mDepthAttachment.Clear();
     mStencilAttachment.Clear();
@@ -655,11 +656,6 @@ WebGLFramebuffer::Delete()
     for (auto& cur : mMoreColorAttachments) {
         cur.Clear();
     }
-
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteFramebuffers(1, &mGLName);
-
-    LinkedListElement<WebGLFramebuffer>::removeFrom(mContext->mFramebuffers);
 
 #ifdef ANDROID
     mIsFB = false;

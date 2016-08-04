@@ -17,9 +17,7 @@ WebGLBuffer::WebGLBuffer(WebGLContext* webgl, GLuint buf)
     , mGLName(buf)
     , mContent(Kind::Undefined)
     , mByteLength(0)
-{
-    mContext->mBuffers.insertBack(this);
-}
+{ }
 
 WebGLBuffer::~WebGLBuffer()
 {
@@ -59,11 +57,11 @@ WebGLBuffer::BindTo(GLenum target)
 void
 WebGLBuffer::Delete()
 {
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteBuffers(1, &mGLName);
     mByteLength = 0;
     mCache = nullptr;
-    LinkedListElement<WebGLBuffer>::remove(); // remove from mContext->mBuffers
+
+    mContext->MakeContextCurrent();
+    mContext->gl->fDeleteBuffers(1, &mGLName);
 }
 
 bool

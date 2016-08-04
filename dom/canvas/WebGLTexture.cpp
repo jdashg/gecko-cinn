@@ -143,7 +143,6 @@ WebGLTexture::WebGLTexture(WebGLContext* webgl, GLuint tex)
     , mIsResolved(false)
     , mResolved_Swizzle(nullptr)
 {
-    mContext->mTextures.insertBack(this);
 }
 
 void
@@ -155,8 +154,6 @@ WebGLTexture::Delete()
 
     mContext->MakeContextCurrent();
     mContext->gl->fDeleteTextures(1, &mGLName);
-
-    LinkedListElement<WebGLTexture>::removeFrom(mContext->mTextures);
 }
 
 size_t

@@ -6,18 +6,15 @@
 #ifndef WEBGL_QUERY_H_
 #define WEBGL_QUERY_H_
 
-#include "mozilla/LinkedList.h"
-#include "nsWrapperCache.h"
-
-#include "WebGLObjectModel.h"
 #include "nsThreadUtils.h"
+#include "nsWrapperCache.h"
+#include "WebGLObjectModel.h"
 
 namespace mozilla {
 
 class WebGLQuery final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLQuery>
-    , public LinkedListElement<WebGLQuery>
 {
 public:
     explicit WebGLQuery(WebGLContext* webgl);
