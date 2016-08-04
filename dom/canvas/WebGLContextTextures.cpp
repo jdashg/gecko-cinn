@@ -214,7 +214,7 @@ WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex)
 
     // Need to check rawTarget first before comparing against newTex->Target() as
     // newTex->Target() returns a TexTarget, which will assert on invalid value.
-    WebGLRefPtr<WebGLTexture>* currentTexPtr = nullptr;
+    decltype(&mBound2DTextures[0]) currentTexPtr = nullptr;
     switch (rawTarget) {
     case LOCAL_GL_TEXTURE_2D:
         currentTexPtr = &mBound2DTextures[mActiveTexture];

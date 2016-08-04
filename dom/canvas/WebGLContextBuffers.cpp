@@ -14,7 +14,7 @@ namespace mozilla {
 void
 WebGLContext::UpdateBoundBuffer(GLenum target, WebGLBuffer* buffer)
 {
-    WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    auto& bufferSlot = GetBufferSlotByTarget(target);
     bufferSlot = buffer;
 
     if (!buffer)
@@ -28,8 +28,7 @@ WebGLContext::UpdateBoundBufferIndexed(GLenum target, GLuint index, WebGLBuffer*
 {
     UpdateBoundBuffer(target, buffer);
 
-    WebGLRefPtr<WebGLBuffer>& bufferIndexSlot =
-        GetBufferSlotByTargetIndexed(target, index);
+    auto& bufferIndexSlot = GetBufferSlotByTargetIndexed(target, index);
     bufferIndexSlot = buffer;
 }
 
@@ -145,7 +144,7 @@ WebGLContext::BufferData(GLenum target, WebGLsizeiptr size, GLenum usage)
     if (!ValidateBufferTarget(target, "bufferData"))
         return;
 
-    WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    auto& bufferSlot = GetBufferSlotByTarget(target);
 
     if (size < 0)
         return ErrorInvalidValue("bufferData: negative size");
@@ -200,7 +199,7 @@ WebGLContext::BufferDataT(GLenum target,
     if (!ValidateBufferTarget(target, "bufferData"))
         return;
 
-    const WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    const auto& bufferSlot = GetBufferSlotByTarget(target);
 
     data.ComputeLengthAndData();
 
@@ -280,7 +279,7 @@ WebGLContext::BufferSubDataT(GLenum target,
     if (!ValidateBufferTarget(target, "bufferSubData"))
         return;
 
-    WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    auto& bufferSlot = GetBufferSlotByTarget(target);
 
     if (byteOffset < 0)
         return ErrorInvalidValue("bufferSubData: negative offset");
@@ -532,7 +531,7 @@ WebGLContext::ValidateBufferUsageEnum(GLenum target, const char* info)
     return false;
 }
 
-WebGLRefPtr<WebGLBuffer>&
+decltype(WebGLContext::mBoundArrayBuffer)&
 WebGLContext::GetBufferSlotByTarget(GLenum target)
 {
     /* This function assumes that target has been validated for either
@@ -568,7 +567,7 @@ WebGLContext::GetBufferSlotByTarget(GLenum target)
     }
 }
 
-WebGLRefPtr<WebGLBuffer>&
+decltype(WebGLContext::mBoundTransformFeedbackBuffers[0])&
 WebGLContext::GetBufferSlotByTargetIndexed(GLenum target, GLuint index)
 {
     /* This function assumes that target has been validated for either WebGL1 or WebGL. */
@@ -632,7 +631,7 @@ WebGLContext::CheckedBufferData(GLenum target, GLsizeiptr size,
     }
 #endif
 
-    WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    auto& bufferSlot = GetBufferSlotByTarget(target);
     WebGLBuffer* boundBuffer = bufferSlot.get();
     MOZ_ASSERT(boundBuffer, "No buffer bound for this target.");
 

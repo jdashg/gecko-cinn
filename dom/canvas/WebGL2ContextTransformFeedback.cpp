@@ -74,8 +74,10 @@ WebGL2Context::BindTransformFeedback(GLenum target, WebGLTransformFeedback* tf)
     if (target != LOCAL_GL_TRANSFORM_FEEDBACK)
         return ErrorInvalidEnum("bindTransformFeedback: target must be TRANSFORM_FEEDBACK");
 
-    WebGLRefPtr<WebGLTransformFeedback> currentTF = mBoundTransformFeedback;
-    if (currentTF && currentTF->mIsActive && !currentTF->mIsPaused) {
+    if (mBoundTransformFeedback &&
+        mBoundTransformFeedback->mIsActive &&
+        !mBoundTransformFeedback->mIsPaused)
+    {
         return ErrorInvalidOperation("bindTransformFeedback: Currently bound transform "
                                      "feedback is active and not paused");
     }

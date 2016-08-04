@@ -771,19 +771,19 @@ protected:
     nsTArray<WebGLRefPtr<WebGLBuffer>> mBoundUniformBuffers;
     nsTArray<WebGLRefPtr<WebGLBuffer>> mBoundTransformFeedbackBuffers;
 
-    WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTarget(GLenum target);
-    WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTargetIndexed(GLenum target,
-                                                           GLuint index);
+    decltype(mBoundArrayBuffer)& GetBufferSlotByTarget(GLenum target);
+    decltype(mBoundUniformBuffers[0])& GetBufferSlotByTargetIndexed(GLenum target,
+                                                                    GLuint index);
 
     GLenum GetCurrentBinding(WebGLBuffer* buffer) const;
 
 // -----------------------------------------------------------------------------
 // Queries (WebGL2ContextQueries.cpp)
 protected:
-    WebGLRefPtr<WebGLQuery>& GetQuerySlotByTarget(GLenum target);
-
     WebGLRefPtr<WebGLQuery> mActiveOcclusionQuery;
     WebGLRefPtr<WebGLQuery> mActiveTransformFeedbackQuery;
+
+    decltype(mActiveOcclusionQuery)& GetQuerySlotByTarget(GLenum target);
 
 // -----------------------------------------------------------------------------
 // State and State Requests (WebGLContextState.cpp)

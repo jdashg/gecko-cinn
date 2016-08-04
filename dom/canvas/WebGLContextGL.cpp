@@ -687,8 +687,7 @@ WebGLContext::GetBufferParameter(GLenum target, GLenum pname)
     if (!ValidateBufferTarget(target, "getBufferParameter"))
         return JS::NullValue();
 
-    WebGLRefPtr<WebGLBuffer>& slot = GetBufferSlotByTarget(target);
-    if (!slot) {
+    if (!GetBufferSlotByTarget(target)) {
         ErrorInvalidOperation("No buffer bound to `target` (0x%4x).", target);
         return JS::NullValue();
     }

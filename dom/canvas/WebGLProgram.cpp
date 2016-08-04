@@ -464,7 +464,7 @@ WebGLProgram::Delete()
 void
 WebGLProgram::AttachShader(WebGLShader* shader)
 {
-    WebGLRefPtr<WebGLShader>* shaderSlot;
+    decltype(mVertShader)* shaderSlot;
     switch (shader->mType) {
     case LOCAL_GL_VERTEX_SHADER:
         shaderSlot = &mVertShader;
@@ -527,7 +527,7 @@ WebGLProgram::DetachShader(WebGLShader* shader)
 {
     MOZ_ASSERT(shader);
 
-    WebGLRefPtr<WebGLShader>* shaderSlot;
+    decltype(mVertShader)* shaderSlot;
     switch (shader->mType) {
     case LOCAL_GL_VERTEX_SHADER:
         shaderSlot = &mVertShader;

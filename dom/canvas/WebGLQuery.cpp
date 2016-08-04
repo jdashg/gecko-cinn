@@ -44,8 +44,7 @@ WebGLQuery::IsActive() const
     if (!HasEverBeenActive())
         return false;
 
-    WebGLRefPtr<WebGLQuery>& targetSlot = mContext->GetQuerySlotByTarget(mType);
-
+    const auto& targetSlot = mContext->GetQuerySlotByTarget(mType);
     return targetSlot.get() == this;
 }
 

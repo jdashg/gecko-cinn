@@ -57,7 +57,7 @@ SimulateOcclusionQueryTarget(const gl::GLContext* gl, GLenum target)
     return LOCAL_GL_SAMPLES_PASSED;
 }
 
-WebGLRefPtr<WebGLQuery>&
+decltype(WebGLContext::mActiveOcclusionQuery)&
 WebGLContext::GetQuerySlotByTarget(GLenum target)
 {
     /* This function assumes that target has been validated for either
@@ -195,7 +195,7 @@ WebGL2Context::BeginQuery(GLenum target, WebGLQuery* query)
         return;
     }
 
-    WebGLRefPtr<WebGLQuery>& querySlot = GetQuerySlotByTarget(target);
+    auto& querySlot = GetQuerySlotByTarget(target);
     WebGLQuery* activeQuery = querySlot.get();
     if (activeQuery)
         return ErrorInvalidOperation("beginQuery: An other query already active.");
@@ -225,7 +225,7 @@ WebGL2Context::EndQuery(GLenum target)
     if (!ValidateQueryTarget(target, "endQuery"))
         return;
 
-    WebGLRefPtr<WebGLQuery>& querySlot = GetQuerySlotByTarget(target);
+    auto& querySlot = GetQuerySlotByTarget(target);
     WebGLQuery* activeQuery = querySlot.get();
 
     if (!activeQuery || target != activeQuery->mType)
@@ -277,7 +277,7 @@ WebGL2Context::GetQuery(GLenum target, GLenum pname)
         return nullptr;
     }
 
-    WebGLRefPtr<WebGLQuery>& targetSlot = GetQuerySlotByTarget(target);
+    auto& targetSlot = GetQuerySlotByTarget(target);
     RefPtr<WebGLQuery> tmp = targetSlot.get();
     if (tmp && tmp->mType != target) {
         // Query in slot doesn't match target
@@ -387,7 +387,7 @@ WebGL2Context::GetQueryParameter(JSContext*, WebGLQuery* query, GLenum pname,
 void
 WebGL2Context::UpdateBoundQuery(GLenum target, WebGLQuery* query)
 {
-    WebGLRefPtr<WebGLQuery>& querySlot = GetQuerySlotByTarget(target);
+    auto& querySlot = GetQuerySlotByTarget(target);
     querySlot = query;
 }
 

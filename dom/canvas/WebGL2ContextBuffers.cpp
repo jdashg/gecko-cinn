@@ -85,8 +85,8 @@ WebGL2Context::CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
         return;
     }
 
-    const WebGLRefPtr<WebGLBuffer>& readBufferSlot = GetBufferSlotByTarget(readTarget);
-    const WebGLRefPtr<WebGLBuffer>& writeBufferSlot = GetBufferSlotByTarget(writeTarget);
+    const auto& readBufferSlot = GetBufferSlotByTarget(readTarget);
+    const auto& writeBufferSlot = GetBufferSlotByTarget(writeTarget);
     if (!readBufferSlot || !writeBufferSlot)
         return;
 
@@ -164,7 +164,7 @@ WebGL2Context::GetBufferSubData(GLenum target, GLintptr offset,
         return;
     }
 
-    WebGLRefPtr<WebGLBuffer>& bufferSlot = GetBufferSlotByTarget(target);
+    auto& bufferSlot = GetBufferSlotByTarget(target);
     WebGLBuffer* boundBuffer = bufferSlot.get();
     if (!boundBuffer) {
         ErrorInvalidOperation("%s: No buffer bound.", funcName);
