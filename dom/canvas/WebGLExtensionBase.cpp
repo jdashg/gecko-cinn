@@ -5,7 +5,15 @@
 
 #include "WebGLExtensions.h"
 
+#include "WebGLContext.h"
+
 namespace mozilla {
+
+void
+WebGLExtensionBase::OnDetach()
+{
+    mContext->mExtensions[mExtID] = nullptr;
+}
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLExtensionBase)
 
