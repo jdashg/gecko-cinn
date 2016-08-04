@@ -309,10 +309,8 @@ public:
     // may have to resize the tree storage.
     bool Update(size_t firstByte, size_t lastByte);
 
-    size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const
-    {
-        return mallocSizeOf(this) +
-               mTreeData.ShallowSizeOfExcludingThis(mallocSizeOf);
+    uint64_t HeapMemory() const {
+        return mTreeData.Length() * sizeof(mTreeData[0]);
     }
 };
 
@@ -615,23 +613,15 @@ WebGLElementArrayCache::Validate(GLenum type, uint32_t maxAllowed,
     return false;
 }
 
-template<typename T>
-static size_t
-SizeOfNullable(mozilla::MallocSizeOf mallocSizeOf, const T& obj)
+uint64_t
+WebGLElementArrayCache::HeapMemory() const
 {
-    if (!obj)
-        return 0;
-    return obj->SizeOfIncludingThis(mallocSizeOf);
-}
-
-size_t
-WebGLElementArrayCache::SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const
-{
-    return mallocSizeOf(this) +
-           mBytes.ShallowSizeOfExcludingThis(mallocSizeOf) +
-           SizeOfNullable(mallocSizeOf, mUint8Tree) +
-           SizeOfNullable(mallocSizeOf, mUint16Tree) +
-           SizeOfNullable(mallocSizeOf, mUint32Tree);
+    uint64_t ret = 0;
+    ret += mBytes.Length();
+    ret += (mUint8Tree ? mUint8Tree->HeapMemory() : 0);
+    ret += (mUint16Tree ? mUint16Tree->HeapMemory() : 0);
+    ret += (mUint32Tree ? mUint32Tree->HeapMemory() : 0);
+    return ret;
 }
 
 bool

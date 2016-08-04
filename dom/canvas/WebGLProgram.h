@@ -182,7 +182,6 @@ public:
     }
 
     virtual JSObject* WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto) override;
-
 private:
     ~WebGLProgram();
 

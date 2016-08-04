@@ -46,7 +46,7 @@ public:
     WebGLElementArrayCache();
     ~WebGLElementArrayCache();
 
-    size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
+    uint64_t HeapMemory() const;
     bool BeenUsedWithMultipleTypes() const;
 
 private:

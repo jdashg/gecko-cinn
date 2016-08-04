@@ -83,12 +83,10 @@ WebGLBuffer::ElementArrayCacheBufferSubData(size_t pos, const void* ptr,
         mCache->BufferSubData(pos, ptr, updateSizeInBytes);
 }
 
-size_t
-WebGLBuffer::SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const
+uint64_t
+WebGLBuffer::HeapMemory() const
 {
-    size_t sizeOfCache = mCache ? mCache->SizeOfIncludingThis(mallocSizeOf)
-                                : 0;
-    return mallocSizeOf(this) + sizeOfCache;
+    return (mCache ? mCache->HeapMemory() : 0);
 }
 
 bool

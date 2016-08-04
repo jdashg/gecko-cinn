@@ -451,20 +451,6 @@ WebGLShader::WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto)
     return dom::WebGLShaderBinding::Wrap(js, this, givenProto);
 }
 
-size_t
-WebGLShader::SizeOfIncludingThis(MallocSizeOf mallocSizeOf) const
-{
-    size_t validatorSize = mValidator ? mallocSizeOf(mValidator.get())
-                                      : 0;
-    return mallocSizeOf(this) +
-           mSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
-           mCleanSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
-           validatorSize +
-           mValidationLog.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
-           mTranslatedSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
-           mCompilationLog.SizeOfExcludingThisIfUnshared(mallocSizeOf);
-}
-
 void
 WebGLShader::Delete()
 {

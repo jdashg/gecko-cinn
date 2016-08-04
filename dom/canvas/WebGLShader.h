@@ -74,7 +74,13 @@ public:
                                         std::vector<std::string>* out_mappedVaryings) const;
 
     // Other funcs
-    size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
+    virtual uint64_t HeapMemory() const override {
+        return mSource.Length() * 2 +
+               mCleanSource.Length() +
+               mValidationLog.Length() +
+               mTranslatedSource.Length() +
+               mCompilationLog.Length();
+    }
     void Delete();
 
     virtual JSObject* WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto) override;

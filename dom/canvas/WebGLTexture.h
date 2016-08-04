@@ -175,7 +175,7 @@ public:
         void RemoveAttachPoint(WebGLFBAttachPoint* attachPoint);
         void OnRespecify() const;
 
-        size_t MemoryUsage() const;
+        uint64_t GPUMemory() const;
 
         bool IsDefined() const {
             if (mFormat == LOCAL_GL_NONE) {
@@ -352,7 +352,7 @@ public:
         return ImageInfoAtFace(0, mBaseMipmapLevel);
     }
 
-    size_t MemoryUsage() const;
+    virtual uint64_t GPUMemory() const override;
 
     bool InitializeImageData(const char* funcName, TexImageTarget target, uint32_t level);
 protected:

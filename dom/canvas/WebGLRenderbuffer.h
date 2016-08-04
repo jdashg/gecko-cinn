@@ -65,6 +65,7 @@ public:
     const webgl::FormatUsageInfo* Format() const { return mFormat; }
 
     int64_t MemoryUsage() const;
+    virtual uint64_t GPUMemory() const override;
 
     void RenderbufferStorage(const char* funcName, uint32_t samples,
                              GLenum internalFormat, uint32_t width, uint32_t height);

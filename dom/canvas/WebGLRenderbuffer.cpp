@@ -68,17 +68,18 @@ WebGLRenderbuffer::Delete()
     }
 }
 
-int64_t
-WebGLRenderbuffer::MemoryUsage() const
+uint64_t
+WebGLRenderbuffer::GPUMemory() const
 {
     // If there is no defined format, we're not taking up any memory
     if (!mFormat)
         return 0;
 
-    const auto bytesPerPixel = mFormat->format->estimatedBytesPerPixel;
-    const int64_t pixels = int64_t(mWidth) * int64_t(mHeight);
+    const uint64_t sampleCount = (mSamples ? mSamples : 1);
+    const uint64_t bytesPerPixel = mFormat->format->estimatedBytesPerPixel * sampleCount;
+    const uint64_t pixels = uint64_t(mWidth) * mHeight;
 
-    const int64_t totalSize = pixels * bytesPerPixel;
+    const uint64_t totalSize = pixels * bytesPerPixel;
     return totalSize;
 }
 

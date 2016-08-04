@@ -98,14 +98,31 @@ WebGLTexture::ImageInfo::OnRespecify() const
     }
 }
 
-size_t
-WebGLTexture::ImageInfo::MemoryUsage() const
+static uint64_t
+DivCeil(uint64_t a, uint64_t b)
+{
+    return (a + b - 1) / b;
+}
+
+uint64_t
+WebGLTexture::ImageInfo::GPUMemory() const
 {
     if (!IsDefined())
         return 0;
 
-    const auto bytesPerTexel = mFormat->format->estimatedBytesPerPixel;
-    return size_t(mWidth) * size_t(mHeight) * size_t(mDepth) * bytesPerTexel;
+    const auto& format = mFormat->format;
+    const auto& compression = format->compression;
+    uint64_t bytesPerImage;
+    if (compression) {
+        const auto blocks = DivCeil(mWidth, compression->blockWidth) *
+                            DivCeil(mHeight, compression->blockHeight);
+        bytesPerImage = blocks * compression->bytesPerBlock;
+    } else {
+        const auto bytesPerTexel = mFormat->format->estimatedBytesPerPixel;
+        bytesPerImage = bytesPerTexel * uint64_t(mWidth) * uint64_t(mHeight);
+    }
+
+    return bytesPerImage * uint64_t(mDepth);
 }
 
 void
@@ -156,15 +173,15 @@ WebGLTexture::Delete()
     mContext->gl->fDeleteTextures(1, &mGLName);
 }
 
-size_t
-WebGLTexture::MemoryUsage() const
+uint64_t
+WebGLTexture::GPUMemory() const
 {
     if (IsDeleted())
         return 0;
 
-    size_t accum = 0;
+    uint64_t accum = 0;
     for (const auto& cur : mImageInfoArr) {
-        accum += cur.MemoryUsage();
+        accum += cur.GPUMemory();
     }
     return accum;
 }

@@ -37,7 +37,9 @@ public:
 
     void Delete();
 
-    size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
+    virtual uint64_t GPUMemory() const override { return mByteLength; }
+
+    virtual uint64_t HeapMemory() const override;
 
     WebGLsizeiptr ByteLength() const { return mByteLength; }
     void SetByteLength(WebGLsizeiptr byteLength) { mByteLength = byteLength; }
