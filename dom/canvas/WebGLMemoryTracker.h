@@ -51,28 +51,6 @@ class WebGLMemoryTracker : public nsIMemoryReporter
 
   private:
     virtual ~WebGLMemoryTracker();
-
-    static int64_t GetTextureMemoryUsed();
-
-    static int64_t GetTextureCount();
-
-    static int64_t GetBufferMemoryUsed();
-
-    static int64_t GetBufferCacheMemoryUsed();
-
-    static int64_t GetBufferCount();
-
-    static int64_t GetRenderbufferMemoryUsed();
-
-    static int64_t GetRenderbufferCount();
-
-    static int64_t GetShaderSize();
-
-    static int64_t GetShaderCount();
-
-    static int64_t GetContextCount() {
-        return Contexts().Length();
-    }
 };
 
 } // namespace mozilla

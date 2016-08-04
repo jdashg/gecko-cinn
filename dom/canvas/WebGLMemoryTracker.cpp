@@ -5,21 +5,46 @@
 
 #include "WebGLMemoryTracker.h"
 
-#include "WebGLBuffer.h"
 #include "WebGLContext.h"
-#include "WebGLVertexAttribData.h"
-#include "WebGLProgram.h"
-#include "WebGLRenderbuffer.h"
-#include "WebGLShader.h"
-#include "WebGLTexture.h"
-#include "WebGLUniformLocation.h"
 
 namespace mozilla {
+
+struct Accum
+{
+    uint64_t contexts;
+    uint64_t objects;
+    uint64_t heapMemory;
+    uint64_t gpuMemory;
+
+    Accum() {
+        memset(this, 0, sizeof(*this));
+    }
+};
 
 NS_IMETHODIMP
 WebGLMemoryTracker::CollectReports(nsIHandleReportCallback* handleReport,
                                    nsISupports* data, bool)
 {
+    Accum living, dead;
+
+    for (const auto& context : Contexts()) {
+        auto& accum = (context->IsContextLost() ? dead : living);
+        accum.contexts++;
+
+        const auto fnCollectObj = [&](WebGLContextBoundObject* cur) {
+            accum.objects++;
+            accum.heapMemory += cur->HeapMemory();
+            accum.gpuMemory += cur->GPUMemory();
+        };
+
+        for (const auto& cur : context->mGenerationObjects) {
+            fnCollectObj(cur);
+        }
+        for (const auto& cur : context->mPermanentObjects) {
+            fnCollectObj(cur);
+        }
+    }
+
 #define REPORT(_path, _kind, _units, _amount, _desc)                         \
     do {                                                                     \
       nsresult rv;                                                           \
@@ -29,62 +54,30 @@ WebGLMemoryTracker::CollectReports(nsIHandleReportCallback* handleReport,
       NS_ENSURE_SUCCESS(rv, rv);                                             \
     } while (0)
 
-    REPORT("webgl-texture-memory",
-           KIND_OTHER, UNITS_BYTES, GetTextureMemoryUsed(),
-           "Memory used by WebGL textures.The OpenGL"
-           " implementation is free to store these textures in either video"
-           " memory or main memory. This measurement is only a lower bound,"
-           " actual memory usage may be higher for example if the storage"
-           " is strided.");
+    REPORT("webgl-living-context-count", KIND_OTHER, UNITS_COUNT, living.contexts,
+           "Number of living (non-lost) WebGL contexts.");
 
-    REPORT("webgl-texture-count",
-           KIND_OTHER, UNITS_COUNT, GetTextureCount(),
-           "Number of WebGL textures.");
+    REPORT("webgl-living-object-count", KIND_OTHER, UNITS_COUNT, living.objects,
+           "Number of objects attached to living (non-lost) WebGL contexts.");
 
-    REPORT("webgl-buffer-memory",
-           KIND_OTHER, UNITS_BYTES, GetBufferMemoryUsed(),
-           "Memory used by WebGL buffers. The OpenGL"
-           " implementation is free to store these buffers in either video"
-           " memory or main memory. This measurement is only a lower bound,"
-           " actual memory usage may be higher for example if the storage"
-           " is strided.");
+    REPORT("webgl-living-heap-memory", KIND_HEAP, UNITS_BYTES, living.heapMemory,
+           "Heap memory used by living (non-lost) WebGL contexts.");
 
-    REPORT("explicit/webgl/buffer-cache-memory",
-           KIND_HEAP, UNITS_BYTES, GetBufferCacheMemoryUsed(),
-           "Memory used by WebGL buffer caches. The WebGL"
-           " implementation caches the contents of element array buffers"
-           " only.This adds up with the webgl-buffer-memory value, but"
-           " contrary to it, this one represents bytes on the heap,"
-           " not managed by OpenGL.");
+    REPORT("webgl-living-gpu-memory", KIND_OTHER, UNITS_BYTES, living.gpuMemory,
+           "Estimate of GPU memory used by living (non-lost) WebGL contexts.");
 
-    REPORT("webgl-buffer-count",
-           KIND_OTHER, UNITS_COUNT, GetBufferCount(),
-           "Number of WebGL buffers.");
 
-    REPORT("webgl-renderbuffer-memory",
-           KIND_OTHER, UNITS_BYTES, GetRenderbufferMemoryUsed(),
-           "Memory used by WebGL renderbuffers. The OpenGL"
-           " implementation is free to store these renderbuffers in either"
-           " video memory or main memory. This measurement is only a lower"
-           " bound, actual memory usage may be higher for example if the"
-           " storage is strided.");
+    REPORT("webgl-dead-context-count", KIND_OTHER, UNITS_COUNT, dead.contexts,
+           "Number of dead (lost) WebGL contexts.");
 
-    REPORT("webgl-renderbuffer-count",
-           KIND_OTHER, UNITS_COUNT, GetRenderbufferCount(),
-           "Number of WebGL renderbuffers.");
+    REPORT("webgl-dead-object-count", KIND_OTHER, UNITS_COUNT, dead.objects,
+           "Number of objects attached to dead (lost) WebGL contexts.");
 
-    REPORT("explicit/webgl/shader",
-           KIND_HEAP, UNITS_BYTES, GetShaderSize(),
-           "Combined size of WebGL shader ASCII sources and translation"
-           " logs cached on the heap.");
+    REPORT("webgl-dead-heap-memory", KIND_HEAP, UNITS_BYTES, dead.heapMemory,
+           "Heap memory used by dead (lost) WebGL contexts.");
 
-    REPORT("webgl-shader-count",
-           KIND_OTHER, UNITS_COUNT, GetShaderCount(),
-           "Number of WebGL shaders.");
-
-    REPORT("webgl-context-count",
-           KIND_OTHER, UNITS_COUNT, GetContextCount(),
-           "Number of WebGL contexts.");
+    REPORT("webgl-dead-gpu-memory", KIND_OTHER, UNITS_BYTES, dead.gpuMemory,
+           "Estimate of GPU memory used by dead (lost) WebGL contexts.");
 
 #undef REPORT
 
@@ -118,156 +111,6 @@ WebGLMemoryTracker::InitMemoryReporter()
 WebGLMemoryTracker::~WebGLMemoryTracker()
 {
     UnregisterWeakMemoryReporter(this);
-}
-
-MOZ_DEFINE_MALLOC_SIZE_OF(WebGLBufferMallocSizeOf)
-
-int64_t
-WebGLMemoryTracker::GetBufferCacheMemoryUsed()
-{
-    const ContextsArrayType& contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLBuffer* buffer = contexts[i]->mBuffers.getFirst();
-             buffer;
-             buffer = buffer->getNext())
-        {
-            if (buffer->Content() == WebGLBuffer::Kind::ElementArray) {
-                result += buffer->SizeOfIncludingThis(WebGLBufferMallocSizeOf);
-            }
-        }
-    }
-    return result;
-}
-
-MOZ_DEFINE_MALLOC_SIZE_OF(WebGLShaderMallocSizeOf)
-
-int64_t
-WebGLMemoryTracker::GetShaderSize()
-{
-    const ContextsArrayType& contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLShader* shader = contexts[i]->mShaders.getFirst();
-             shader;
-             shader = shader->getNext())
-        {
-            result += shader->SizeOfIncludingThis(WebGLShaderMallocSizeOf);
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetTextureMemoryUsed()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLTexture* texture = contexts[i]->mTextures.getFirst();
-             texture;
-             texture = texture->getNext())
-        {
-            result += texture->MemoryUsage();
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetTextureCount()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLTexture* texture = contexts[i]->mTextures.getFirst();
-             texture;
-             texture = texture->getNext())
-        {
-            result++;
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetBufferMemoryUsed()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLBuffer* buffer = contexts[i]->mBuffers.getFirst();
-             buffer;
-             buffer = buffer->getNext())
-        {
-            result += buffer->ByteLength();
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetBufferCount()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLBuffer* buffer = contexts[i]->mBuffers.getFirst();
-             buffer;
-             buffer = buffer->getNext())
-        {
-            result++;
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetRenderbufferMemoryUsed()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLRenderbuffer* rb = contexts[i]->mRenderbuffers.getFirst();
-             rb;
-             rb = rb->getNext())
-        {
-            result += rb->MemoryUsage();
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetRenderbufferCount()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLRenderbuffer* rb = contexts[i]->mRenderbuffers.getFirst();
-             rb;
-             rb = rb->getNext())
-        {
-            result++;
-        }
-    }
-    return result;
-}
-
-/*static*/ int64_t
-WebGLMemoryTracker::GetShaderCount()
-{
-    const ContextsArrayType & contexts = Contexts();
-    int64_t result = 0;
-    for(size_t i = 0; i < contexts.Length(); ++i) {
-        for (const WebGLShader* shader = contexts[i]->mShaders.getFirst();
-             shader;
-             shader = shader->getNext())
-        {
-            result++;
-        }
-    }
-    return result;
 }
 
 } // namespace mozilla
