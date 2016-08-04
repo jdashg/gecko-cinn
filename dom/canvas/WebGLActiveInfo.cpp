@@ -81,7 +81,7 @@ ElemSizeFromType(GLenum elemType)
 WebGLActiveInfo::WebGLActiveInfo(WebGLContext* webgl, GLint elemCount, GLenum elemType,
                                  bool isArray, const nsACString& baseUserName,
                                  const nsACString& baseMappedName)
-    : mWebGL(webgl)
+    : WebGLContextBoundObject(webgl)
     , mElemCount(elemCount)
     , mElemType(elemType)
     , mBaseUserName(baseUserName)

@@ -12,25 +12,21 @@
 #include "nsISupportsImpl.h" // NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING
 #include "nsString.h"
 #include "nsWrapperCache.h"
+#include "WebGLObjectModel.h"
 
 namespace mozilla {
 
 class WebGLContext;
 
 class WebGLActiveInfo final
-    : public nsWrapperCache
+    : public WebGLContextBoundObject
+    , public nsWrapperCache
 {
 public:
     NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLActiveInfo)
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLActiveInfo)
 
     virtual JSObject* WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto) override;
-
-    WebGLContext* GetParentObject() const {
-        return mWebGL;
-    }
-
-    WebGLContext* const mWebGL;
 
     // ActiveInfo state:
     const uint32_t mElemCount; // `size`
@@ -76,7 +72,7 @@ public:
 
 private:
     explicit WebGLActiveInfo(WebGLContext* webgl)
-        : mWebGL(webgl)
+        : WebGLContextBoundObject(webgl)
         , mElemCount(0)
         , mElemType(0)
         , mBaseUserName("")

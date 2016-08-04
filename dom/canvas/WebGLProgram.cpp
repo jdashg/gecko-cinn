@@ -74,7 +74,7 @@ ParseName(const nsCString& name, nsCString* const out_baseName,
 /*static*/ const webgl::UniformInfo::TexListT*
 webgl::UniformInfo::GetTexList(WebGLActiveInfo* activeInfo)
 {
-    const auto& webgl = activeInfo->mWebGL;
+    const auto& webgl = activeInfo->mContext;
 
     switch (activeInfo->mElemType) {
     case LOCAL_GL_SAMPLER_2D:
