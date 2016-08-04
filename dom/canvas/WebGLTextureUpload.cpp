@@ -19,6 +19,7 @@
 #include "mozilla/unused.h"
 #include "ScopedGLHelpers.h"
 #include "TexUnpackBlob.h"
+#include "WebGLBuffer.h"
 #include "WebGLContext.h"
 #include "WebGLContextUtils.h"
 #include "WebGLFramebuffer.h"

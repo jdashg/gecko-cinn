@@ -30,8 +30,9 @@ WebGLBuffer::BindTo(GLenum target)
     switch (target) {
     case LOCAL_GL_ELEMENT_ARRAY_BUFFER:
         mContent = Kind::ElementArray;
-        if (!mCache)
-            mCache = new WebGLElementArrayCache;
+        if (!mCache) {
+            mCache.reset(new WebGLElementArrayCache);
+        }
         break;
 
     case LOCAL_GL_ARRAY_BUFFER:

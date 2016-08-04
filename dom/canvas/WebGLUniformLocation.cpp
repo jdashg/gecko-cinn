@@ -25,9 +25,6 @@ WebGLUniformLocation::WebGLUniformLocation(WebGLContext* webgl,
     , mArrayIndex(arrayIndex)
 { }
 
-WebGLUniformLocation::~WebGLUniformLocation()
-{ }
-
 bool
 WebGLUniformLocation::ValidateForProgram(WebGLProgram* prog, const char* funcName) const
 {

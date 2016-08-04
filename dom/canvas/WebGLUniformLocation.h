@@ -61,10 +61,9 @@ public:
     bool IsDeleted() const { return false; }
 
 protected:
-    ~WebGLUniformLocation();
-
-private:
-    virtual void DetachImpl() override { }
+    ~WebGLUniformLocation() {
+        DetachOnce();
+    }
 };
 
 } // namespace mozilla

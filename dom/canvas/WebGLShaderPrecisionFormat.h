@@ -41,9 +41,9 @@ public:
 
 private:
     // Private destructor, to discourage deletion outside of Release():
-    ~WebGLShaderPrecisionFormat() { }
-
-    virtual void DetachImpl() override { }
+    ~WebGLShaderPrecisionFormat() {
+        DetachOnce();
+    }
 
     GLint mRangeMin;
     GLint mRangeMax;

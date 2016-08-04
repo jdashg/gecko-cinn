@@ -16,14 +16,20 @@ class WebGLSampler final
     : public nsWrapperCache
     , public WebGLRefCountedObject<WebGLSampler>
 {
-    friend class WebGLContext2;
     friend class WebGLTexture;
 
 public:
+    NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLSampler)
+    NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLSampler)
+
     WebGLSampler(WebGLContext* webgl, GLuint sampler);
 
-    const GLuint mGLName;
+private:
+    ~WebGLSampler() {
+        DetachOnce();
+    }
 
+public:
     void Delete();
 
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
@@ -31,11 +37,9 @@ public:
     void SamplerParameter1i(GLenum pname, GLint param);
     void SamplerParameter1f(GLenum pname, GLfloat param);
 
+public:
+    const GLuint mGLName;
 private:
-
-    NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLSampler)
-    NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLSampler)
-
     TexMinFilter mMinFilter;
     TexMagFilter mMagFilter;
     TexWrap mWrapS;
@@ -45,9 +49,6 @@ private:
     GLint mMaxLod;
     TexCompareMode mCompareMode;
     TexCompareFunc mCompareFunc;
-
-private:
-    ~WebGLSampler();
 };
 
 } // namespace mozilla

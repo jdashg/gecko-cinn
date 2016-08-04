@@ -30,6 +30,8 @@ public:
 
     WebGLBuffer(WebGLContext* webgl, GLuint buf);
 
+    ~WebGLBuffer();
+
     void BindTo(GLenum target);
     Kind Content() const { return mContent; }
 
@@ -52,17 +54,15 @@ public:
 
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
-    const GLenum mGLName;
-
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLBuffer)
     NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLBuffer)
 
+public:
+    const GLuint mGLName;
 protected:
-    ~WebGLBuffer();
-
     Kind mContent;
     WebGLsizeiptr mByteLength;
-    nsAutoPtr<WebGLElementArrayCache> mCache;
+    UniquePtr<WebGLElementArrayCache> mCache;
 };
 
 } // namespace mozilla

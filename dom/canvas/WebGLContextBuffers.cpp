@@ -233,7 +233,7 @@ WebGLContext::BufferDataT(GLenum target,
     if (!boundBuffer->ElementArrayCacheBufferData(data.DataAllowShared(), data.LengthAllowShared())) {
         boundBuffer->SetByteLength(0);
         return ErrorOutOfMemory("bufferData: out of memory");
-	}
+    }
 }
 
 void

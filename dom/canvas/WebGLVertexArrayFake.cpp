@@ -23,7 +23,6 @@ WebGLVertexArrayFake::BindVertexArrayImpl()
     gl::GLContext* gl = mContext->gl;
 
     WebGLRefPtr<WebGLVertexArray> prevVertexArray = mContext->mBoundVertexArray;
-
     mContext->mBoundVertexArray = this;
 
     WebGLRefPtr<WebGLBuffer> prevBuffer = mContext->mBoundArrayBuffer;

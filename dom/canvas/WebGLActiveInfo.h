@@ -82,7 +82,9 @@ private:
     { }
 
     // Private destructor, to discourage deletion outside of Release():
-    ~WebGLActiveInfo() { }
+    ~WebGLActiveInfo() {
+        DetachOnce();
+    }
 };
 
 //////////

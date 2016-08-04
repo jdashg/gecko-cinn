@@ -24,14 +24,15 @@ public:
     void Delete();
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
-    const GLuint mGLName;
-
     NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLTransformFeedback)
     NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLTransformFeedback)
 
 private:
-    ~WebGLTransformFeedback();
+    ~WebGLTransformFeedback() {
+        DetachOnce();
+    }
 
+    const GLuint mGLName;
     GLenum mMode;
     bool mIsActive;
     bool mIsPaused;
