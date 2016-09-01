@@ -13,17 +13,6 @@
 
 namespace mozilla {
 
-static void
-GetAttachmentInfo(const WebGLFBAttachPoint* cur,
-                  const WebGLFBAttachPoint** const out_defined,
-                  const webgl::FormatInfo** const out_format)
-{
-    if (cur->IsDefined()) {
-        *out_defined = cur;
-        *out_format = cur->Format()->format;
-    }
-}
-
 void
 WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
                                GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
@@ -71,25 +60,6 @@ WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY
                                       readFB, srcX0, srcY0, srcX1, srcY1,
                                       drawFB, dstX0, dstY0, dstX1, dstY1,
                                       mask, filter);
-}
-
-static bool
-ValidateTextureLayerAttachment(GLenum attachment)
-{
-    if (LOCAL_GL_COLOR_ATTACHMENT0 <= attachment &&
-        attachment <= LOCAL_GL_COLOR_ATTACHMENT15)
-    {
-        return true;
-    }
-
-    switch (attachment) {
-    case LOCAL_GL_DEPTH_ATTACHMENT:
-    case LOCAL_GL_DEPTH_STENCIL_ATTACHMENT:
-    case LOCAL_GL_STENCIL_ATTACHMENT:
-        return true;
-    }
-
-    return false;
 }
 
 void

@@ -232,12 +232,16 @@ public:
     ////////////////
     // Getters
 
-    const auto& DepthAttachment() const { return mDepthAttachment; }
-    const auto& StencilAttachment() const { return mStencilAttachment; }
-    const auto& DepthStencilAttachment() const { return mDepthStencilAttachment; }
-    const auto& ColorDrawBuffers() const { return mColorDrawBuffers; }
-    const auto& ColorReadBuffer() const { return mColorReadBuffer; }
-    const auto& ResolvedCompleteData() const { return mResolvedCompleteData; }
+#define GETTER(X) const decltype(m##X)& X() const { return m##X; }
+
+    GETTER(DepthAttachment)
+    GETTER(StencilAttachment)
+    GETTER(DepthStencilAttachment)
+    GETTER(ColorDrawBuffers)
+    GETTER(ColorReadBuffer)
+    GETTER(ResolvedCompleteData)
+
+#undef GETTER
 
     ////////////////
     // Invalidation
