@@ -246,7 +246,6 @@ WebGLContext::DestroyResourcesAndContext()
     mBoundCopyWriteBuffer = nullptr;
     mBoundPixelPackBuffer = nullptr;
     mBoundPixelUnpackBuffer = nullptr;
-    mBoundTransformFeedbackBuffer = nullptr;
     mBoundUniformBuffer = nullptr;
     mCurrentProgram = nullptr;
     mActiveProgramLinkInfo = nullptr;
@@ -259,8 +258,7 @@ WebGLContext::DestroyResourcesAndContext()
     mBoundTransformFeedback = nullptr;
     mDefaultTransformFeedback = nullptr;
 
-    mBoundTransformFeedbackBuffers.Clear();
-    mBoundUniformBuffers.Clear();
+    mIndexedUniformBufferBindings.clear();
 
     //////
 
@@ -2073,6 +2071,30 @@ WebGLContext::ScopedMaskWorkaround::HasDepthButNoStencil(const WebGLFramebuffer*
 
 ////////////////////////////////////////
 
+IndexedBufferBinding::IndexedBufferBinding()
+    : mRangeStart(0)
+    , mRangeSize(0)
+{ }
+
+uint64_t
+IndexedBufferBinding::ByteCount() const
+{
+    if (!mBufferBinding)
+        return 0;
+
+    uint64_t bufferSize = mBufferBinding->ByteLength();
+    if (!mRangeSize) // BindBufferBase
+        return bufferSize;
+
+    if (mRangeStart >= bufferSize)
+        return 0;
+    bufferSize -= mRangeStart;
+
+    return std::min(bufferSize, mRangeSize);
+}
+
+////////////////////////////////////////
+
 ScopedUnpackReset::ScopedUnpackReset(WebGLContext* webgl)
     : ScopedGLWrapper<ScopedUnpackReset>(webgl->gl)
     , mWebGL(webgl)
@@ -2422,6 +2444,23 @@ WebGLContext::StartVRPresentation()
 ////////////////////////////////////////////////////////////////////////////////
 // XPCOM goop
 
+inline void
+ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                            const decltype(WebGLContext::mIndexedUniformBufferBindings)& field,
+                            const char* name,
+                            uint32_t flags = 0)
+{
+    for (const auto& cur : field) {
+        ImplCycleCollectionTraverse(callback, cur.mBufferBinding, name, flags);
+    }
+}
+
+inline void
+ImplCycleCollectionUnlink(decltype(WebGLContext::mIndexedUniformBufferBindings)& field)
+{
+    field.clear();
+}
+
 NS_IMPL_CYCLE_COLLECTING_ADDREF(WebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(WebGLContext)
 
@@ -2439,7 +2478,7 @@ NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLContext,
   mBoundCopyWriteBuffer,
   mBoundPixelPackBuffer,
   mBoundPixelUnpackBuffer,
-  mBoundTransformFeedbackBuffer,
+  mBoundTransformFeedback,
   mBoundUniformBuffer,
   mCurrentProgram,
   mBoundDrawFramebuffer,

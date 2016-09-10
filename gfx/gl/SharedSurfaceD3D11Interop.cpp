@@ -297,6 +297,7 @@ SharedSurface_D3D11Interop::Create(DXInterop2Device* interop,
 
     GLuint rbGL = 0;
     gl->fGenRenderbuffers(1, &rbGL);
+    ScopedBindRenderbuffer ensureCreated(gl, rbGL);
     const auto lockHandle = interop->RegisterObject(texD3D, rbGL, LOCAL_GL_RENDERBUFFER,
                                                     LOCAL_WGL_ACCESS_WRITE_DISCARD_NV);
     if (!lockHandle) {

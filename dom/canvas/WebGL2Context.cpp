@@ -158,8 +158,7 @@ WebGLContext::InitWebGL2(FailureReason* const out_failReason)
     gl->GetUIntegerv(LOCAL_GL_MAX_UNIFORM_BUFFER_BINDINGS,
                      &mGLMaxUniformBufferBindings);
 
-    mBoundTransformFeedbackBuffers.SetLength(mGLMaxTransformFeedbackSeparateAttribs);
-    mBoundUniformBuffers.SetLength(mGLMaxUniformBufferBindings);
+    mIndexedUniformBufferBindings.resize(mGLMaxUniformBufferBindings);
 
     mDefaultTransformFeedback = new WebGLTransformFeedback(this, 0);
     mBoundTransformFeedback = mDefaultTransformFeedback;
@@ -198,6 +197,26 @@ WebGLContext::InitWebGL2(FailureReason* const out_failReason)
                                              MOZ_ARRAY_LENGTH(kWebGL2_CompressedFormats));
 
     //////
+    /*
+    GLuint vbo = 0;
+    gl->fGenBuffers(1, &vbo);
+    gl->fGenBuffers(1, &vbo);
+    gl->fBindBuffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER, vbo);
+
+    GLuint tfo = 0;
+    gl->fGenTransformFeedbacks(1, &tfo);
+    gl->fBindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, tfo);
+
+    GLuint boundVBO = 0;
+    gl->fGetIntegerv(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING, (GLint*)&boundVBO);
+    MOZ_ASSERT(boundVBO == 0);
+
+    ////
+
+    gl->fBindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, 0);
+    gl->fBindBuffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    */
+    ////
 
     return true;
 }
