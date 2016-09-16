@@ -1167,7 +1167,8 @@ WebGLFramebuffer::CheckFramebufferStatus(const char* funcName)
 void
 WebGLFramebuffer::RefreshDrawBuffers() const
 {
-    if (!mContext->HasDrawBuffers())
+	const auto& gl = mContext->gl;
+    if (!gl->IsSupported(gl::GLFeature::draw_buffers))
         return;
 
     // Prior to GL4.1, having a no-image FB attachment that's selected by DrawBuffers
@@ -1182,13 +1183,14 @@ WebGLFramebuffer::RefreshDrawBuffers() const
         }
     }
 
-    mContext->gl->fDrawBuffers(driverBuffers.size(), driverBuffers.data());
+    gl->fDrawBuffers(driverBuffers.size(), driverBuffers.data());
 }
 
 void
 WebGLFramebuffer::RefreshReadBuffer() const
 {
-    if (!mContext->IsWebGL2())
+	const auto& gl = mContext->gl;
+    if (!gl->IsSupported(gl::GLFeature::read_buffer))
         return;
 
     // Prior to GL4.1, having a no-image FB attachment that's selected by ReadBuffer
@@ -1200,7 +1202,7 @@ WebGLFramebuffer::RefreshReadBuffer() const
         driverBuffer = mColorReadBuffer->mAttachmentPoint;
     }
 
-    mContext->gl->fReadBuffer(driverBuffer);
+    gl->fReadBuffer(driverBuffer);
 }
 
 ////
