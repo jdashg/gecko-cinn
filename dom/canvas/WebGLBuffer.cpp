@@ -97,7 +97,7 @@ ValidateBufferUsageEnum(WebGLContext* webgl, const char* funcName, GLenum usage)
 }
 
 void
-WebGLBuffer::BufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage)
+WebGLBuffer::BufferData(GLenum target, size_t size, const void* data, GLenum usage)
 {
     const char funcName[] = "bufferData";
 

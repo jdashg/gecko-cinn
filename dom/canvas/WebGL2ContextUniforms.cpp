@@ -99,8 +99,8 @@ WebGL2Context::GetIndexedParameter(GLenum target, GLuint index,
         return;
     }
 
-    if (index < 0 || index >= bindings->size()) {
-        ErrorInvalidValue("%s: `index` must in range [0, %s].", funcName,
+    if (index >= bindings->size()) {
+        ErrorInvalidValue("%s: `index` must be < %s.", funcName,
                           "MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS");
         return;
     }

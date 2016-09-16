@@ -2444,22 +2444,23 @@ WebGLContext::StartVRPresentation()
 ////////////////////////////////////////////////////////////////////////////////
 // XPCOM goop
 
-inline void
+void
 ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                            const decltype(WebGLContext::mIndexedUniformBufferBindings)& field,
-                            const char* name,
-                            uint32_t flags = 0)
+                            const std::vector<IndexedBufferBinding>& field,
+                            const char* name, uint32_t flags)
 {
     for (const auto& cur : field) {
         ImplCycleCollectionTraverse(callback, cur.mBufferBinding, name, flags);
     }
 }
 
-inline void
-ImplCycleCollectionUnlink(decltype(WebGLContext::mIndexedUniformBufferBindings)& field)
+void
+ImplCycleCollectionUnlink(std::vector<IndexedBufferBinding>& field)
 {
     field.clear();
 }
+
+////
 
 NS_IMPL_CYCLE_COLLECTING_ADDREF(WebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(WebGLContext)

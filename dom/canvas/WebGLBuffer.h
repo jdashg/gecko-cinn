@@ -62,7 +62,7 @@ public:
 
     virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) override;
 
-    void BufferData(GLenum target, GLsizeiptr size, const void* data, GLenum usage);
+    void BufferData(GLenum target, size_t size, const void* data, GLenum usage);
 
     const GLenum mGLName;
 

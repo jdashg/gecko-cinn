@@ -1823,6 +1823,16 @@ ZeroTextureData(WebGLContext* webgl, const char* funcName, GLuint tex,
                 const webgl::FormatUsageInfo* usage, uint32_t xOffset, uint32_t yOffset,
                 uint32_t zOffset, uint32_t width, uint32_t height, uint32_t depth);
 
+////
+
+void
+ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                            const std::vector<IndexedBufferBinding>& field,
+                            const char* name, uint32_t flags = 0);
+
+void
+ImplCycleCollectionUnlink(std::vector<IndexedBufferBinding>& field);
+
 } // namespace mozilla
 
 #endif

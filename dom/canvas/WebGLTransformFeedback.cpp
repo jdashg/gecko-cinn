@@ -202,23 +202,6 @@ WebGLTransformFeedback::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenPro
     return dom::WebGLTransformFeedbackBinding::Wrap(cx, this, givenProto);
 }
 
-inline void
-ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                            const decltype(WebGLTransformFeedback::mIndexedBindings)& field,
-                            const char* name,
-                            uint32_t flags = 0)
-{
-    for (const auto& cur : field) {
-        ImplCycleCollectionTraverse(callback, cur.mBufferBinding, name, flags);
-    }
-}
-
-inline void
-ImplCycleCollectionUnlink(decltype(WebGLTransformFeedback::mIndexedBindings)& field)
-{
-    field.clear();
-}
-
 NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLTransformFeedback, AddRef)
 NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLTransformFeedback, Release)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedback,

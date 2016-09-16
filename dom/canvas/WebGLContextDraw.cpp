@@ -294,14 +294,12 @@ WebGLContext::DrawArrays_check(const char* funcName, GLenum mode, GLint first,
 class ScopedDrawHelper final
 {
     WebGLContext* const mWebGL;
-    const char* const mFuncName;
     bool mDidFake;
 
 public:
     ScopedDrawHelper(WebGLContext* webgl, const char* funcName, uint32_t firstVertex,
                      uint32_t vertCount, uint32_t instanceCount, bool* const out_error)
         : mWebGL(webgl)
-        , mFuncName(funcName)
         , mDidFake(false)
     {
         if (instanceCount > mWebGL->mMaxFetchedInstances) {
