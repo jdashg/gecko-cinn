@@ -216,6 +216,8 @@ WebGLShader::CompileShader()
     if (mValidator) {
         success = Translate(mCleanSource, mValidator.get(), &mValidationLog,
                             &mTranslatedSource);
+        printf_stderr("WebGLSL:\n%s\n", mCleanSource.BeginReading());
+        printf_stderr("GLSL:\n%s\n", mTranslatedSource.BeginReading());
     } else {
         success = TranslateWithoutValidation(mCleanSource, mContext->IsWebGL2(),
                                              &mValidationLog, &mTranslatedSource);
