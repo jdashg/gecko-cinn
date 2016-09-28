@@ -2179,6 +2179,9 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
     ////////////////////////////////////
     // Check that source and dest info are compatible
 
+    if (!ValidateCopyDestUsage(funcName, mContext, srcFormat, dstFormat->sizedFormat))
+        return;
+
     if (!ValidateCopyTexImageFormats(mContext, funcName, srcFormat, dstFormat))
         return;
 
