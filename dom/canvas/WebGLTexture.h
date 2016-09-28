@@ -125,6 +125,11 @@ public:
         // 126 and below.
         const webgl::FormatUsageInfo* const mFormat;
 
+        // We need a separate `internalFormat` member, unfortunately. It's needed for
+        // CopyTexSubImage validation, and is explicitly mentioned as separate from
+        // effective internal format on GLES 3.0.4 p160.
+        const GLenum mInternalFormat;
+
         const uint32_t mWidth;
         const uint32_t mHeight;
         const uint32_t mDepth;
@@ -136,16 +141,18 @@ public:
 
     public:
         ImageInfo()
-            : mFormat(LOCAL_GL_NONE)
+            : mFormat(nullptr)
+            , mInternalFormat(0)
             , mWidth(0)
             , mHeight(0)
             , mDepth(0)
             , mIsDataInitialized(false)
         { }
 
-        ImageInfo(const webgl::FormatUsageInfo* format, uint32_t width, uint32_t height,
-                  uint32_t depth, bool isDataInitialized)
+        ImageInfo(const webgl::FormatUsageInfo* format, GLenum internalFormat,
+                  uint32_t width, uint32_t height, uint32_t depth, bool isDataInitialized)
             : mFormat(format)
+            , mInternalFormat(internalFormat)
             , mWidth(width)
             , mHeight(height)
             , mDepth(depth)

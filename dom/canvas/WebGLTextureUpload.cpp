@@ -1225,7 +1225,7 @@ WebGLTexture::TexStorage(const char* funcName, TexTarget target, GLsizei levels,
     // Update our specification data.
 
     const bool isDataInitialized = false;
-    const WebGLTexture::ImageInfo newInfo(dstUsage, width, height, depth,
+    const WebGLTexture::ImageInfo newInfo(dstUsage, sizedFormat, width, height, depth,
                                           isDataInitialized);
     SetImageInfosAtLevel(0, newInfo);
 
@@ -1322,8 +1322,8 @@ WebGLTexture::TexImage(const char* funcName, TexImageTarget target, GLint level,
     // It's tempting to do allocation first, and TexSubImage second, but this is generally
     // slower.
 
-    const ImageInfo newImageInfo(dstUsage, blob->mWidth, blob->mHeight, blob->mDepth,
-                                 blob->HasData());
+    const ImageInfo newImageInfo(dstUsage, internalFormat, blob->mWidth, blob->mHeight,
+                                 blob->mDepth, blob->HasData());
 
     const bool isSubImage = false;
     const bool needsRespec = (imageInfo->mWidth  != newImageInfo.mWidth ||
@@ -1535,7 +1535,8 @@ WebGLTexture::CompressedTexImage(const char* funcName, TexImageTarget target, GL
     // Update our specification data.
 
     const bool isDataInitialized = true;
-    const ImageInfo newImageInfo(usage, width, height, depth, isDataInitialized);
+    const ImageInfo newImageInfo(usage, internalFormat, width, height, depth,
+                                 isDataInitialized);
     SetImageInfo(imageInfo, newImageInfo);
 }
 
@@ -2125,7 +2126,8 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
     // Update our specification data.
 
     const bool isDataInitialized = true;
-    const ImageInfo newImageInfo(dstUsage, width, height, depth, isDataInitialized);
+    const ImageInfo newImageInfo(dstUsage, internalFormat, width, height, depth,
+                                 isDataInitialized);
     SetImageInfo(imageInfo, newImageInfo);
 }
 
@@ -2179,7 +2181,7 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
     ////////////////////////////////////
     // Check that source and dest info are compatible
 
-    if (!ValidateCopyDestUsage(funcName, mContext, srcFormat, dstFormat->sizedFormat))
+    if (!ValidateCopyDestUsage(funcName, mContext, srcFormat, imageInfo->mInternalFormat))
         return;
 
     if (!ValidateCopyTexImageFormats(mContext, funcName, srcFormat, dstFormat))

@@ -40,7 +40,8 @@ WebGLTexture::ImageInfo::Clear()
 
     OnRespecify();
 
-    Mutable(mFormat) = LOCAL_GL_NONE;
+    Mutable(mFormat) = nullptr;
+    Mutable(mInternalFormat) = 0;
     Mutable(mWidth) = 0;
     Mutable(mHeight) = 0;
     Mutable(mDepth) = 0;
@@ -54,6 +55,7 @@ WebGLTexture::ImageInfo::operator =(const ImageInfo& a)
     MOZ_ASSERT(a.IsDefined());
 
     Mutable(mFormat) = a.mFormat;
+    Mutable(mInternalFormat) = a.mInternalFormat;
     Mutable(mWidth) = a.mWidth;
     Mutable(mHeight) = a.mHeight;
     Mutable(mDepth) = a.mDepth;
@@ -651,7 +653,8 @@ WebGLTexture::PopulateMipChain(uint32_t firstLevel, uint32_t lastLevel)
             refDepth = std::max(uint32_t(1), refDepth / 2);
         }
 
-        const ImageInfo cur(baseImageInfo.mFormat, refWidth, refHeight, refDepth,
+        const ImageInfo cur(baseImageInfo.mFormat, baseImageInfo.mInternalFormat,
+                            refWidth, refHeight, refDepth,
                             baseImageInfo.IsDataInitialized());
 
         SetImageInfosAtLevel(level, cur);
