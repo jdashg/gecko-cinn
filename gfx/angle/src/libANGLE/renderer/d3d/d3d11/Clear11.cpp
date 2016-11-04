@@ -383,7 +383,10 @@ gl::Error Clear11::clearFramebuffer(const ClearParameters &clearParams,
     if (clearParams.clearDepth || clearParams.clearStencil)
     {
         const gl::FramebufferAttachment *attachment = (depthAttachment != nullptr) ? depthAttachment : stencilAttachment;
-        ASSERT(attachment != nullptr);
+        if (!attachment)
+        {
+            return gl::NoError();
+        }
 
         RenderTarget11 *renderTarget = nullptr;
         gl::Error error = attachment->getRenderTarget(&renderTarget);
