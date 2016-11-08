@@ -119,8 +119,11 @@ WebGLContext::BeginQuery(GLenum target, WebGLQuery* query, const char* funcName)
     if (IsContextLost())
         return;
 
-    if (!ValidateObject(funcName, query))
+    if (!ValidateObjectAllowDeleted(funcName, query))
         return;
+
+    if (query->IsDeleted())
+        return ErrorInvalidOperation("%s: Cannot begin a deleted query.", funcName);
 
     const auto& slot = ValidateQuerySlotByTarget(funcName, target);
     if (!slot)
