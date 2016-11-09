@@ -1954,7 +1954,7 @@ WebGLContext::ValidateObjectAssumeNonNull(const char* info, const ObjectType* ob
         return false;
 
     if (object->IsDeleted()) {
-        ErrorInvalidValue("%s: Deleted object passed as argument.", info);
+        ErrorInvalidOperation("%s: Deleted object passed as argument.", info);
         return false;
     }
 
