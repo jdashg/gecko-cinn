@@ -118,6 +118,9 @@ WebGL2Context::GetBufferSubData(GLenum target, GLintptr srcByteOffset,
         return;
     }
 
+    if (!byteLen)
+        return; // For MapBufferRange this is InvalidOp, but getBufferSubData is no error.
+
     ////
 
     const auto& buffer = ValidateBufferSelection(funcName, target);
