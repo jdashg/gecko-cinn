@@ -1194,8 +1194,8 @@ protected:
     // WebGLTextureUpload.cpp
 public:
     UniquePtr<webgl::TexUnpackBlob>
-    From(const char* funcName, TexImageTarget target, GLsizei rawWidth, GLsizei rawHeight,
-         GLsizei rawDepth, GLint border, const TexImageSource& src,
+    From(const char* funcName, bool isSubImage, TexImageTarget target, GLsizei rawWidth,
+         GLsizei rawHeight, GLsizei rawDepth, GLint border, const TexImageSource& src,
          dom::Uint8ClampedArray* const scopedArr);
 
 protected:
@@ -1222,8 +1222,8 @@ protected:
                 ErrorResult* const out_error);
 
     UniquePtr<webgl::TexUnpackBytes>
-    FromCompressed(const char* funcName, TexImageTarget target, GLsizei rawWidth,
-                   GLsizei rawHeight, GLsizei rawDepth, GLint border,
+    FromCompressed(const char* funcName, bool isSubImage, TexImageTarget target,
+                   GLsizei rawWidth, GLsizei rawHeight, GLsizei rawDepth, GLint border,
                    const TexImageSource& src);
 
 // -----------------------------------------------------------------------------
