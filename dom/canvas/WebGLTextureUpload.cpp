@@ -162,8 +162,8 @@ ValidateUnpackInfo(WebGLContext* webgl, const char* funcName,
 ////////////////////////////////////////////////////////////////////////////////
 
 static UniquePtr<webgl::TexUnpackBytes>
-FromView(WebGLContext* webgl, const char* funcName, TexImageTarget target,
-         uint32_t width, uint32_t height, uint32_t depth,
+FromView(WebGLContext* webgl, const char* funcName, bool isSubImage,
+         TexImageTarget target, uint32_t width, uint32_t height, uint32_t depth,
          const dom::ArrayBufferView* view, GLuint viewElemOffset,
          GLuint viewElemLengthOverride)
 {
@@ -178,6 +178,9 @@ FromView(WebGLContext* webgl, const char* funcName, TexImageTarget target,
         {
             return nullptr;
         }
+    } else if (isSubImage) {
+        webgl->ErrorInvalidValue("%s: ArrayBufferView must not be null.", funcName);
+        return nullptr;
     }
     return MakeUnique<webgl::TexUnpackBytes>(webgl, target, width, height, depth,
                                              isClientData, bytes, availByteCount);
@@ -354,8 +357,8 @@ WebGLContext::FromDomElem(const char* funcName, TexImageTarget target, uint32_t 
 ////////////////////////////////////////
 
 UniquePtr<webgl::TexUnpackBlob>
-WebGLContext::From(const char* funcName, TexImageTarget target, GLsizei rawWidth,
-                   GLsizei rawHeight, GLsizei rawDepth, GLint border,
+WebGLContext::From(const char* funcName, bool isSubImage, TexImageTarget target,
+                   GLsizei rawWidth, GLsizei rawHeight, GLsizei rawDepth, GLint border,
                    const TexImageSource& src, dom::Uint8ClampedArray* const scopedArr)
 {
     uint32_t width, height, depth;
@@ -398,16 +401,16 @@ WebGLContext::From(const char* funcName, TexImageTarget target, GLsizei rawWidth
                            src.mOut_error);
     }
 
-    return FromView(this, funcName, target, width, height, depth, src.mView,
+    return FromView(this, funcName, isSubImage, target, width, height, depth, src.mView,
                     src.mViewElemOffset, src.mViewElemLengthOverride);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 static UniquePtr<webgl::TexUnpackBlob>
-ValidateTexOrSubImage(WebGLContext* webgl, const char* funcName, TexImageTarget target,
-                      GLsizei rawWidth, GLsizei rawHeight, GLsizei rawDepth,
-                      GLint border, const webgl::PackingInfo& pi,
+ValidateTexOrSubImage(WebGLContext* webgl, const char* funcName, bool isSubImage,
+                      TexImageTarget target, GLsizei rawWidth, GLsizei rawHeight,
+                      GLsizei rawDepth, GLint border, const webgl::PackingInfo& pi,
                       const TexImageSource& src, dom::Uint8ClampedArray* const scopedArr)
 {
     if (!ValidateUnpackInfo(webgl, funcName, pi))
@@ -416,8 +419,8 @@ ValidateTexOrSubImage(WebGLContext* webgl, const char* funcName, TexImageTarget 
     if (!ValidateViewType(webgl, funcName, pi.type, src))
         return nullptr;
 
-    auto blob = webgl->From(funcName, target, rawWidth, rawHeight, rawDepth, border, src,
-                            scopedArr);
+    auto blob = webgl->From(funcName, isSubImage, target, rawWidth, rawHeight, rawDepth,
+                            border, src, scopedArr);
     if (!blob || !blob->Validate(webgl, funcName, pi))
         return nullptr;
 
@@ -430,9 +433,10 @@ WebGLTexture::TexImage(const char* funcName, TexImageTarget target, GLint level,
                        GLsizei depth, GLint border, const webgl::PackingInfo& pi,
                        const TexImageSource& src)
 {
+    const bool isSubImage = false;
     dom::RootedTypedArray<dom::Uint8ClampedArray> scopedArr(dom::RootingCx());
-    const auto blob = ValidateTexOrSubImage(mContext, funcName, target, width, height,
-                                            depth, border, pi, src, &scopedArr);
+    const auto blob = ValidateTexOrSubImage(mContext, funcName, isSubImage, target, width,
+                                            height, depth, border, pi, src, &scopedArr);
     if (!blob)
         return;
 
@@ -445,10 +449,11 @@ WebGLTexture::TexSubImage(const char* funcName, TexImageTarget target, GLint lev
                           GLsizei height, GLsizei depth,
                           const webgl::PackingInfo& pi, const TexImageSource& src)
 {
+    const bool isSubImage = true;
     const GLint border = 0;
     dom::RootedTypedArray<dom::Uint8ClampedArray> scopedArr(dom::RootingCx());
-    const auto blob = ValidateTexOrSubImage(mContext, funcName, target, width, height,
-                                            depth, border, pi, src, &scopedArr);
+    const auto blob = ValidateTexOrSubImage(mContext, funcName, isSubImage, target, width,
+                                            height, depth, border, pi, src, &scopedArr);
     if (!blob)
         return;
 
@@ -1358,7 +1363,7 @@ WebGLTexture::TexSubImage(const char* funcName, TexImageTarget target, GLint lev
 // CompressedTex(Sub)Image
 
 UniquePtr<webgl::TexUnpackBytes>
-WebGLContext::FromCompressed(const char* funcName, TexImageTarget target,
+WebGLContext::FromCompressed(const char* funcName, bool isSubImage, TexImageTarget target,
                              GLsizei rawWidth, GLsizei rawHeight, GLsizei rawDepth,
                              GLint border, const TexImageSource& src)
 {
@@ -1392,7 +1397,7 @@ WebGLContext::FromCompressed(const char* funcName, TexImageTarget target,
         return nullptr;
     }
 
-    return FromView(this, funcName, target, width, height, depth, src.mView,
+    return FromView(this, funcName, isSubImage, target, width, height, depth, src.mView,
                     src.mViewElemOffset, src.mViewElemLengthOverride);
 }
 
@@ -1402,8 +1407,9 @@ WebGLTexture::CompressedTexImage(const char* funcName, TexImageTarget target, GL
                                  GLsizei rawHeight, GLsizei rawDepth, GLint border,
                                  const TexImageSource& src)
 {
-    const auto blob = mContext->FromCompressed(funcName, target, rawWidth, rawHeight,
-                                               rawDepth, border, src);
+    const bool isSubImage = false;
+    const auto blob = mContext->FromCompressed(funcName, isSubImage, target, rawWidth,
+                                               rawHeight, rawDepth, border, src);
     if (!blob)
         return;
 
@@ -1512,9 +1518,10 @@ WebGLTexture::CompressedTexSubImage(const char* funcName, TexImageTarget target,
                                     GLsizei rawDepth, GLenum sizedUnpackFormat,
                                     const TexImageSource& src)
 {
+    const bool isSubImage = true;
     const GLint border = 0;
-    const auto blob = mContext->FromCompressed(funcName, target, rawWidth, rawHeight,
-                                               rawDepth, border, src);
+    const auto blob = mContext->FromCompressed(funcName, isSubImage, target, rawWidth,
+                                               rawHeight, rawDepth, border, src);
     if (!blob)
         return;
 

@@ -1150,22 +1150,22 @@ protected:
     ////
 
 public:
-    template<typename T>
-    void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                       GLsizei width, GLsizei height, GLenum unpackFormat,
-                       GLenum unpackType, const T& anySrc, ErrorResult& out_error)
-    {
-        const TexImageSourceAdapter src(anySrc, &out_error);
-        TexSubImage2D(target, level, xOffset, yOffset, width, height, unpackFormat,
-                      unpackType, src);
-    }
-
     void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
                        GLsizei width, GLsizei height, GLenum unpackFormat,
                        GLenum unpackType, const dom::ArrayBufferView& view,
                        GLuint viewElemOffset, ErrorResult&)
     {
         const TexImageSourceAdapter src(view, viewElemOffset);
+        TexSubImage2D(target, level, xOffset, yOffset, width, height, unpackFormat,
+                      unpackType, src);
+    }
+
+    template<typename T>
+    void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                       GLsizei width, GLsizei height, GLenum unpackFormat,
+                       GLenum unpackType, const T& anySrc, ErrorResult& out_error)
+    {
+        const TexImageSourceAdapter src(anySrc, &out_error);
         TexSubImage2D(target, level, xOffset, yOffset, width, height, unpackFormat,
                       unpackType, src);
     }
@@ -1192,8 +1192,8 @@ protected:
     // WebGLTextureUpload.cpp
 public:
     UniquePtr<webgl::TexUnpackBlob>
-    From(const char* funcName, TexImageTarget target, GLsizei rawWidth, GLsizei rawHeight,
-         GLsizei rawDepth, GLint border, const TexImageSource& src,
+    From(const char* funcName, bool isSubImage, TexImageTarget target, GLsizei rawWidth,
+         GLsizei rawHeight, GLsizei rawDepth, GLint border, const TexImageSource& src,
          dom::Uint8ClampedArray* const scopedArr);
 
 protected:
@@ -1220,8 +1220,8 @@ protected:
                 ErrorResult* const out_error);
 
     UniquePtr<webgl::TexUnpackBytes>
-    FromCompressed(const char* funcName, TexImageTarget target, GLsizei rawWidth,
-                   GLsizei rawHeight, GLsizei rawDepth, GLint border,
+    FromCompressed(const char* funcName, bool isSubImage, TexImageTarget target,
+                   GLsizei rawWidth, GLsizei rawHeight, GLsizei rawDepth, GLint border,
                    const TexImageSource& src);
 
 // -----------------------------------------------------------------------------
