@@ -143,7 +143,7 @@ template<typename Derived>
 class WebGLRefCountedObject : public WebGLDeletableObject
 {
     friend class WebGLContext;
-    template<typename T> friend static void ClearLinkedList(LinkedList<T>& list);
+    template<typename T> friend void ClearLinkedList(LinkedList<T>& list);
 
 private:
     nsAutoRefCnt mWebGLRefCnt;

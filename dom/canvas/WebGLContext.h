@@ -1682,8 +1682,8 @@ public:
 
     ////
 
-    bool ValidateObject(const char* funcName, const WebGLProgram& object);
-    bool ValidateObject(const char* funcName, const WebGLShader& object);
+    inline bool ValidateObject(const char* funcName, const WebGLProgram& object);
+    inline bool ValidateObject(const char* funcName, const WebGLShader& object);
 
     ////
 
