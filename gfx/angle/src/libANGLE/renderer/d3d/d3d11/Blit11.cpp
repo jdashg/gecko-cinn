@@ -2012,6 +2012,7 @@ gl::ErrorOrResult<TextureHelper11> Blit11::resolveDepth(RenderTarget11 *depth)
     ID3D11Device *device         = mRenderer->getDevice();
     ID3D11DeviceContext *context = mRenderer->getDeviceContext();
 
+    /*
     ANGLE_TRY(initResolveDepthStencil(extents));
 
     // Notify the Renderer that all state should be invalidated.
@@ -2047,10 +2048,11 @@ gl::ErrorOrResult<TextureHelper11> Blit11::resolveDepth(RenderTarget11 *depth)
     context->Draw(6, 0);
 
     gl::Box copyBox(0, 0, 0, extents.width, extents.height, 1);
+    */
 
-    const auto &copyFunction = GetCopyDepthStencilFunction(depth->getInternalFormat());
+    //const auto &copyFunction = GetCopyDepthStencilFunction(depth->getInternalFormat());
     const auto &dsFormatSet  = depth->getFormatSet();
-    const auto &dsDxgiInfo   = d3d11::GetDXGIFormatSizeInfo(dsFormatSet.texFormat);
+    //const auto &dsDxgiInfo   = d3d11::GetDXGIFormatSizeInfo(dsFormatSet.texFormat);
 
     ID3D11Texture2D *destTex = nullptr;
 
@@ -2059,7 +2061,7 @@ gl::ErrorOrResult<TextureHelper11> Blit11::resolveDepth(RenderTarget11 *depth)
     destDesc.Height             = extents.height;
     destDesc.MipLevels          = 1;
     destDesc.ArraySize          = 1;
-    destDesc.Format             = dsFormatSet.texFormat;
+    destDesc.Format             = dsFormatSet.dsvFormat;
     destDesc.SampleDesc.Count   = 1;
     destDesc.SampleDesc.Quality = 0;
     destDesc.Usage              = D3D11_USAGE_DEFAULT;
@@ -2074,9 +2076,13 @@ gl::ErrorOrResult<TextureHelper11> Blit11::resolveDepth(RenderTarget11 *depth)
     }
     d3d11::SetDebugName(destTex, "resolveDepthDest");
 
-    TextureHelper11 dest = TextureHelper11::MakeAndPossess2D(destTex, depth->getFormatSet());
-    ANGLE_TRY(copyAndConvert(mResolvedDepthStencil, 0, copyBox, extents, dest, 0, copyBox, extents,
-                             nullptr, 0, 0, 0, 8, dsDxgiInfo.pixelBytes, copyFunction));
+    TextureHelper11 dest = TextureHelper11::MakeAndPossess2D(destTex, dsFormatSet);
+    //ANGLE_TRY(copyAndConvert(mResolvedDepthStencil, 0, copyBox, extents, dest, 0, copyBox, extents,
+    //                         nullptr, 0, 0, 0, 8, dsDxgiInfo.pixelBytes, copyFunction));
+    const auto& msRes = depth->getTexture();
+    ASSERT(msRes);
+    context->ResolveSubresource(destTex, 0, msRes, depth->getSubresourceIndex(),
+                                destDesc.Format);
     return dest;
 }
 
