@@ -112,8 +112,7 @@ bool RemoveInvariant(sh::GLenum shaderType,
         shaderType == GL_FRAGMENT_SHADER && IsGLSL420OrNewer(outputType))
         return true;
 
-    if ((compileOptions & SH_REMOVE_INVARIANT_AND_CENTROID_FOR_ESSL3) != 0 &&
-        shaderVersion >= 300 && shaderType == GL_VERTEX_SHADER && IsGLSL410OrOlder(outputType))
+    if ((compileOptions & SH_REMOVE_INVARIANT_AND_CENTROID) != 0)
         return true;
 
     return false;

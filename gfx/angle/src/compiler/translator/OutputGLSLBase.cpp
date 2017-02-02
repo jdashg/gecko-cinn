@@ -162,8 +162,7 @@ void TOutputGLSLBase::writeLayoutQualifier(const TType &type)
 
 const char *TOutputGLSLBase::mapQualifierToString(TQualifier qualifier)
 {
-    if (sh::IsGLSL410OrOlder(mOutput) && mShaderVersion >= 300 &&
-        (mCompileOptions & SH_REMOVE_INVARIANT_AND_CENTROID_FOR_ESSL3) != 0)
+    if ((mCompileOptions & SH_REMOVE_INVARIANT_AND_CENTROID) != 0)
     {
         switch (qualifier)
         {

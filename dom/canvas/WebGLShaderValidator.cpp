@@ -59,6 +59,10 @@ ChooseValidatorCompileOptions(const ShBuiltInResources& resources,
         // Work around that Mac drivers handle struct scopes incorrectly.
         options |= SH_REGENERATE_STRUCT_NAMES;
         options |= SH_INIT_OUTPUT_VARIABLES;
+        options |= SH_FLATTEN_PRAGMA_STDGL_INVARIANT_ALL;
+        if (gl->IsCompatibilityProfile()) {
+            options |= SH_REMOVE_INVARIANT_AND_CENTROID;
+        }
     }
 #endif
 
@@ -71,12 +75,6 @@ ChooseValidatorCompileOptions(const ShBuiltInResources& resources,
 
         options ^= SH_LIMIT_EXPRESSION_COMPLEXITY;
         options ^= SH_LIMIT_CALL_STACK_DEPTH;
-
-        options ^= SH_EXPAND_SELECT_HLSL_INTEGER_POW_EXPRESSIONS;
-        options ^= SH_HLSL_GET_DIMENSIONS_IGNORES_BASE_LEVEL;
-
-        options ^= SH_DONT_REMOVE_INVARIANT_FOR_FRAGMENT_INPUT;
-        options ^= SH_REMOVE_INVARIANT_AND_CENTROID_FOR_ESSL3;
     }
 
     if (resources.MaxExpressionComplexity > 0) {
