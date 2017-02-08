@@ -27,15 +27,16 @@ namespace gl {
 
 class GLContext;
 
-/** Buffer blitting helper */
 class GLBlitHelper final
 {
-    enum Channel
-    {
-        Channel_Y = 0,
-        Channel_Cb,
-        Channel_Cr,
-        Channel_Max,
+    friend class GLContext;
+
+    enum class Channel {
+        Y = 0,
+        Cb,
+        Cr,
+
+        SIZE
     };
 
     /**
@@ -49,57 +50,49 @@ class GLBlitHelper final
      * convert it in GPU.
      * Convert type is created for canvas.
      */
-    enum BlitType
-    {
-        BlitTex2D,
+    enum class BlitType {
+        BlitTex2D = 0,
         BlitTexRect,
         ConvertPlanarYCbCr,
         ConvertSurfaceTexture,
         ConvertEGLImage,
-        ConvertMacIOSurfaceImage
+        ConvertMacIOSurfaceImage,
+
+        SIZE
     };
+
     // The GLContext is the sole owner of the GLBlitHelper.
-    GLContext* mGL;
+    GLContext* const mGL;
 
     GLuint mTexBlit_Buffer;
-    GLuint mTexBlit_VertShader;
-    GLuint mTex2DBlit_FragShader;
-    GLuint mTex2DRectBlit_FragShader;
-    GLuint mTex2DBlit_Program;
-    GLuint mTex2DRectBlit_Program;
+    GLuint mTexBlit_Programs[size_t(BlitType::SIZE)];
+    GLint mTexBlit_uYFlip[size_t(BlitType::SIZE)];
 
-    GLint mYFlipLoc;
+    GLint mBlitTexRect_uTexCoordMult;
 
-    GLint mTextureTransformLoc;
+    GLint mConvertSurfaceTexture_uTextureTransform;
+
+    GLint mConvertPlanarYCbCr_uYTexScale;
+    GLint mConvertPlanarYCbCr_uCbCrTexScale;
+    GLint mConvertPlanarYCbCr_uYuvColorMatrix;
+
+    GLint mConvertMacIOSurfaceImage_uYTexScale;
+    GLint mConvertMacIOSurfaceImage_uCbCrTexScale;
 
     // Data for image blit path
-    GLuint mTexExternalBlit_FragShader;
-    GLuint mTexYUVPlanarBlit_FragShader;
-    GLuint mTexNV12PlanarBlit_FragShader;
-    GLuint mTexExternalBlit_Program;
-    GLuint mTexYUVPlanarBlit_Program;
-    GLuint mTexNV12PlanarBlit_Program;
+    GLuint mYUVTextures[size_t(Channel::SIZE)];
+    int32_t mYUVTexture_Y_Width;
+    int32_t mYUVTexture_Y_Height;
+
     GLuint mFBO;
-    GLuint mSrcTexY;
-    GLuint mSrcTexCb;
-    GLuint mSrcTexCr;
     GLuint mSrcTexEGL;
-    GLint mYTexScaleLoc;
-    GLint mCbCrTexScaleLoc;
-    GLint mYuvColorMatrixLoc;
-    int mTexWidth;
-    int mTexHeight;
 
-    // Cache some uniform values
-    float mCurYScale;
-    float mCurCbCrScale;
+    ////////////////
 
-    void UseBlitProgram();
     void SetBlitFramebufferForDestTexture(GLuint aTexture);
 
-    bool UseTexQuadProgram(BlitType target, const gfx::IntSize& srcSize);
-    bool InitTexQuadProgram(BlitType target = BlitTex2D);
-    void DeleteTexBlitProgram();
+    bool UseTexQuadProgram(BlitType type);
+    void InitTexQuadPrograms();
     void BindAndUploadYUVTexture(Channel which, uint32_t width, uint32_t height, void* data, bool allocation);
     void BindAndUploadEGLImage(EGLImage image, GLuint target);
 
@@ -115,8 +108,6 @@ class GLBlitHelper final
 
     explicit GLBlitHelper(GLContext* gl);
 
-    friend class GLContext;
-
 public:
     ~GLBlitHelper();
 
@@ -126,7 +117,7 @@ public:
     void BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                       const gfx::IntSize& srcSize,
                                       const gfx::IntSize& destSize,
-                                      bool internalFBs = false);
+                                      bool internalFBs = false) const;
     void BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                       const gfx::IntSize& srcSize,
                                       const gfx::IntSize& destSize,
@@ -146,12 +137,12 @@ public:
                                   const gfx::IntSize& srcSize,
                                   const gfx::IntSize& destSize,
                                   GLenum destTarget = LOCAL_GL_TEXTURE_2D,
-                                  bool internalFBs = false);
+                                  bool internalFBs = false) const;
     void BlitTextureToTexture(GLuint srcTex, GLuint destTex,
                               const gfx::IntSize& srcSize,
                               const gfx::IntSize& destSize,
                               GLenum srcTarget = LOCAL_GL_TEXTURE_2D,
-                              GLenum destTarget = LOCAL_GL_TEXTURE_2D);
+                              GLenum destTarget = LOCAL_GL_TEXTURE_2D) const;
     bool BlitImageToFramebuffer(layers::Image* srcImage, const gfx::IntSize& destSize,
                                 GLuint destFB, OriginPos destOrigin);
     bool BlitImageToTexture(layers::Image* srcImage, const gfx::IntSize& destSize,

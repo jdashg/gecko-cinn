@@ -35,31 +35,20 @@ namespace gl {
 GLBlitHelper::GLBlitHelper(GLContext* gl)
     : mGL(gl)
     , mTexBlit_Buffer(0)
-    , mTexBlit_VertShader(0)
-    , mTex2DBlit_FragShader(0)
-    , mTex2DRectBlit_FragShader(0)
-    , mTex2DBlit_Program(0)
-    , mTex2DRectBlit_Program(0)
-    , mYFlipLoc(-1)
-    , mTextureTransformLoc(-1)
-    , mTexExternalBlit_FragShader(0)
-    , mTexYUVPlanarBlit_FragShader(0)
-    , mTexNV12PlanarBlit_FragShader(0)
-    , mTexExternalBlit_Program(0)
-    , mTexYUVPlanarBlit_Program(0)
-    , mTexNV12PlanarBlit_Program(0)
+    , mTexBlit_Programs{0}
+    , mTexBlit_uYFlip{0}
+    , mBlitTexRect_uTexCoordMult(0)
+    , mConvertSurfaceTexture_uTextureTransform(0)
+    , mConvertPlanarYCbCr_uYTexScale(0)
+    , mConvertPlanarYCbCr_uCbCrTexScale(0)
+    , mConvertPlanarYCbCr_uYuvColorMatrix(0)
+    , mConvertMacIOSurfaceImage_uYTexScale(0)
+    , mConvertMacIOSurfaceImage_uCbCrTexScale(0)
+    , mYUVTextures{0}
+    , mYUVTexture_Y_Width(0)
+    , mYUVTexture_Y_Height(0)
     , mFBO(0)
-    , mSrcTexY(0)
-    , mSrcTexCb(0)
-    , mSrcTexCr(0)
     , mSrcTexEGL(0)
-    , mYTexScaleLoc(-1)
-    , mCbCrTexScaleLoc(-1)
-    , mYuvColorMatrixLoc(-1)
-    , mTexWidth(0)
-    , mTexHeight(0)
-    , mCurYScale(1.0f)
-    , mCurCbCrScale(1.0f)
 {
 }
 
@@ -68,29 +57,83 @@ GLBlitHelper::~GLBlitHelper()
     if (!mGL->MakeCurrent())
         return;
 
-    DeleteTexBlitProgram();
+    mGL->fDeleteBuffers(1, &mTexBlit_Buffer);
 
-    GLuint tex[] = {
-        mSrcTexY,
-        mSrcTexCb,
-        mSrcTexCr,
-        mSrcTexEGL,
-    };
+    for (auto& cur : mTexBlit_Programs) {
+        if (!cur)
+            continue;
 
-    mSrcTexY = mSrcTexCb = mSrcTexCr = mSrcTexEGL = 0;
-    mGL->fDeleteTextures(ArrayLength(tex), tex);
-
-    if (mFBO) {
-        mGL->fDeleteFramebuffers(1, &mFBO);
+        mGL->fDeleteProgram(cur);
     }
-    mFBO = 0;
+
+    mGL->fDeleteTextures(ArrayLength(mYUVTextures), mYUVTextures);
+
+    mGL->fDeleteFramebuffers(1, &mFBO);
+    mGL->fDeleteTextures(1, &mSrcTexEGL);
+}
+
+static GLuint
+CreateShader(GLContext* gl, GLenum shaderType, const char* sourceString)
+{
+    const GLuint shader = gl->fCreateShader(shaderType);
+    gl->fShaderSource(shader, 1, &sourceString, nullptr);
+    gl->fCompileShader(shader);
+
+    GLint status = 0;
+    gl->fGetShaderiv(shader, LOCAL_GL_COMPILE_STATUS, &status);
+    if (status == LOCAL_GL_TRUE)
+        return shader;
+
+    if (GLContext::ShouldSpew()) {
+        GLint reqBufferSize = 0;
+        gl->fGetShaderiv(shader, LOCAL_GL_INFO_LOG_LENGTH, &reqBufferSize);
+        if (!reqBufferSize) {
+            reqBufferSize = 1;
+        }
+
+        auto buffer = MakeUnique<char[]>(reqBufferSize);
+        gl->fGetShaderInfoLog(shader, reqBufferSize, nullptr, buffer.get());
+
+        printf_stderr("Failed shader info log (%i bytes): %s\n", reqBufferSize,
+                      buffer.get());
+        printf_stderr("Failed shader source: %s\n", sourceString);
+    }
+
+    gl->fDeleteShader(shader);
+    return 0;
 }
 
 // Allowed to be destructive of state we restore in functions below.
-bool
-GLBlitHelper::InitTexQuadProgram(BlitType target)
+void
+GLBlitHelper::InitTexQuadPrograms()
 {
-    const char kTexBlit_VertShaderSource[] = "\
+    if (mTexBlit_Buffer)
+        return; // Already initialized.
+
+    /* CCW tri-strip:
+     * 2---3
+     * | \ |
+     * 0---1
+     */
+    GLfloat verts[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f
+    };
+    HeapCopyOfStackArray<GLfloat> vertsOnHeap(verts);
+
+    MOZ_ASSERT(!mTexBlit_Buffer);
+    mGL->fGenBuffers(1, &mTexBlit_Buffer);
+    mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mTexBlit_Buffer);
+
+    // Make sure we have a sane size.
+    mGL->fBufferData(LOCAL_GL_ARRAY_BUFFER, vertsOnHeap.ByteLength(), vertsOnHeap.Data(),
+                     LOCAL_GL_STATIC_DRAW);
+
+    ////////////////
+
+    const char kSource_VertShader[] = "\
         #version 100                                  \n\
         #ifdef GL_ES                                  \n\
         precision mediump float;                      \n\
@@ -109,7 +152,17 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
         }                                             \n\
     ";
 
-    const char kTex2DBlit_FragShaderSource[] = "\
+    const GLuint vertShader = CreateShader(mGL, LOCAL_GL_VERTEX_SHADER,
+                                           kSource_VertShader);
+    MOZ_ASSERT(vertShader);
+    if (!vertShader)
+        return;
+
+    ////////////////
+
+    const char* fragSources[size_t(BlitType::SIZE)] = { nullptr };
+
+    const char kFragSource_Tex2D[] = "\
         #version 100                                        \n\
         #ifdef GL_ES                                        \n\
         #ifdef GL_FRAGMENT_PRECISION_HIGH                   \n\
@@ -127,8 +180,10 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
             gl_FragColor = texture2D(uTexUnit, vTexCoord);  \n\
         }                                                   \n\
     ";
+    fragSources[size_t(BlitType::BlitTex2D)] = kFragSource_Tex2D;
+    fragSources[size_t(BlitType::ConvertEGLImage)] = kFragSource_Tex2D;
 
-    const char kTex2DRectBlit_FragShaderSource[] = "\
+    const char kFragSource_TexRect[] = "\
         #version 100                                                  \n\
         #ifdef GL_FRAGMENT_PRECISION_HIGH                             \n\
             precision highp float;                                    \n\
@@ -147,8 +202,10 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
                                          vTexCoord * uTexCoordMult);  \n\
         }                                                             \n\
     ";
+    fragSources[size_t(BlitType::BlitTexRect)] = kFragSource_TexRect;
+
 #ifdef ANDROID /* MOZ_WIDGET_ANDROID */
-    const char kTexExternalBlit_FragShaderSource[] = "\
+    const char kFragSource_TexExternal[] = "\
         #version 100                                                    \n\
         #extension GL_OES_EGL_image_external : require                  \n\
         #ifdef GL_FRAGMENT_PRECISION_HIGH                               \n\
@@ -166,7 +223,9 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
                 (uTextureTransform * vec4(vTexCoord, 0.0, 1.0)).xy);    \n\
         }                                                               \n\
     ";
+    fragSources[size_t(BlitType::ConvertSurfaceTexture)] = kFragSource_TexExternal;
 #endif
+
     /* From Rec601:
     [R]   [1.1643835616438356,  0.0,                 1.5960267857142858]      [ Y -  16]
     [G] = [1.1643835616438358, -0.3917622900949137, -0.8129676472377708]    x [Cb - 128]
@@ -187,7 +246,7 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
     [G] = [1.16438, -0.21325, -0.53291] x [Cb - 0.50196]
     [B]   [1.16438,  2.11240,  0.00000]   [Cr - 0.50196]
     */
-    const char kTexYUVPlanarBlit_FragShaderSource[] = "\
+    const char kFragSource_YCbCr[] = "\
         #version 100                                                        \n\
         #ifdef GL_ES                                                        \n\
         precision mediump float;                                            \n\
@@ -212,9 +271,10 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
             gl_FragColor.a = 1.0;                                           \n\
         }                                                                   \n\
     ";
+    fragSources[size_t(BlitType::ConvertPlanarYCbCr)] = kFragSource_YCbCr;
 
 #ifdef XP_MACOSX
-    const char kTexNV12PlanarBlit_FragShaderSource[] = "\
+    const char kFragSource_NV12[] = "\
         #version 100                                                             \n\
         #extension GL_ARB_texture_rectangle : require                            \n\
         #ifdef GL_ES                                                             \n\
@@ -239,322 +299,139 @@ GLBlitHelper::InitTexQuadProgram(BlitType target)
             gl_FragColor.a = 1.0;                                                \n\
         }                                                                        \n\
     ";
+    fragSources[size_t(BlitType::ConvertMacIOSurfaceImage)] = kFragSource_NV12;
 #endif
 
-    bool success = false;
+    ////////////////
 
-    GLuint* programPtr;
-    GLuint* fragShaderPtr;
-    const char* fragShaderSource;
-    switch (target) {
-    case ConvertEGLImage:
-    case BlitTex2D:
-        programPtr = &mTex2DBlit_Program;
-        fragShaderPtr = &mTex2DBlit_FragShader;
-        fragShaderSource = kTex2DBlit_FragShaderSource;
-        break;
-    case BlitTexRect:
-        programPtr = &mTex2DRectBlit_Program;
-        fragShaderPtr = &mTex2DRectBlit_FragShader;
-        fragShaderSource = kTex2DRectBlit_FragShaderSource;
-        break;
-#ifdef ANDROID
-    case ConvertSurfaceTexture:
-        programPtr = &mTexExternalBlit_Program;
-        fragShaderPtr = &mTexExternalBlit_FragShader;
-        fragShaderSource = kTexExternalBlit_FragShaderSource;
-        break;
-#endif
-    case ConvertPlanarYCbCr:
-        programPtr = &mTexYUVPlanarBlit_Program;
-        fragShaderPtr = &mTexYUVPlanarBlit_FragShader;
-        fragShaderSource = kTexYUVPlanarBlit_FragShaderSource;
-        break;
-#ifdef XP_MACOSX
-    case ConvertMacIOSurfaceImage:
-        programPtr = &mTexNV12PlanarBlit_Program;
-        fragShaderPtr = &mTexNV12PlanarBlit_FragShader;
-        fragShaderSource = kTexNV12PlanarBlit_FragShaderSource;
-        break;
-#endif
-    default:
-        return false;
-    }
+    const auto fnGetUniformLoc = [&](GLuint program, const char* name) {
+        const auto loc = mGL->fGetUniformLocation(program, name);
+        MOZ_ASSERT(loc != -1);
+        return loc;
+    };
 
-    GLuint& program = *programPtr;
-    GLuint& fragShader = *fragShaderPtr;
+    for (size_t i = 0; i < size_t(BlitType::SIZE); i++) {
+        const auto& fragSource = fragSources[i];
+        if (!fragSource)
+            continue;
 
-    // Use do-while(false) to let us break on failure
-    do {
-        if (program) {
-            // Already have it...
-            success = true;
-            break;
-        }
+        const GLuint fragShader = CreateShader(mGL, LOCAL_GL_FRAGMENT_SHADER,
+                                               fragSources[i]);
+        MOZ_ASSERT(fragShader);
+        if (!fragShader)
+            continue;
 
-        if (!mTexBlit_Buffer) {
-
-            /* CCW tri-strip:
-             * 2---3
-             * | \ |
-             * 0---1
-             */
-            GLfloat verts[] = {
-                0.0f, 0.0f,
-                1.0f, 0.0f,
-                0.0f, 1.0f,
-                1.0f, 1.0f
-            };
-            HeapCopyOfStackArray<GLfloat> vertsOnHeap(verts);
-
-            MOZ_ASSERT(!mTexBlit_Buffer);
-            mGL->fGenBuffers(1, &mTexBlit_Buffer);
-            mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mTexBlit_Buffer);
-
-            // Make sure we have a sane size.
-            mGL->fBufferData(LOCAL_GL_ARRAY_BUFFER, vertsOnHeap.ByteLength(), vertsOnHeap.Data(), LOCAL_GL_STATIC_DRAW);
-        }
-
-        if (!mTexBlit_VertShader) {
-
-            const char* vertShaderSource = kTexBlit_VertShaderSource;
-
-            mTexBlit_VertShader = mGL->fCreateShader(LOCAL_GL_VERTEX_SHADER);
-            mGL->fShaderSource(mTexBlit_VertShader, 1, &vertShaderSource, nullptr);
-            mGL->fCompileShader(mTexBlit_VertShader);
-        }
-
-        MOZ_ASSERT(!fragShader);
-        fragShader = mGL->fCreateShader(LOCAL_GL_FRAGMENT_SHADER);
-        mGL->fShaderSource(fragShader, 1, &fragShaderSource, nullptr);
-        mGL->fCompileShader(fragShader);
-
-        program = mGL->fCreateProgram();
-        mGL->fAttachShader(program, mTexBlit_VertShader);
+        const GLuint program = mGL->fCreateProgram();
+        mGL->fAttachShader(program, vertShader);
         mGL->fAttachShader(program, fragShader);
         mGL->fBindAttribLocation(program, 0, "aPosition");
         mGL->fLinkProgram(program);
 
-        if (GLContext::ShouldSpew()) {
-            GLint status = 0;
-            mGL->fGetShaderiv(mTexBlit_VertShader, LOCAL_GL_COMPILE_STATUS, &status);
-            if (status != LOCAL_GL_TRUE) {
-                NS_ERROR("Vert shader compilation failed.");
-
-                GLint length = 0;
-                mGL->fGetShaderiv(mTexBlit_VertShader, LOCAL_GL_INFO_LOG_LENGTH, &length);
-                if (!length) {
-                    printf_stderr("No shader info log available.\n");
-                    break;
-                }
-
-                auto buffer = MakeUnique<char[]>(length);
-                mGL->fGetShaderInfoLog(mTexBlit_VertShader, length, nullptr, buffer.get());
-
-                printf_stderr("Shader info log (%d bytes): %s\n", length, buffer.get());
-                break;
-            }
-
-            status = 0;
-            mGL->fGetShaderiv(fragShader, LOCAL_GL_COMPILE_STATUS, &status);
-            if (status != LOCAL_GL_TRUE) {
-                NS_ERROR("Frag shader compilation failed.");
-
-                GLint length = 0;
-                mGL->fGetShaderiv(fragShader, LOCAL_GL_INFO_LOG_LENGTH, &length);
-                if (!length) {
-                    printf_stderr("No shader info log available.\n");
-                    break;
-                }
-
-                auto buffer = MakeUnique<char[]>(length);
-                mGL->fGetShaderInfoLog(fragShader, length, nullptr, buffer.get());
-
-                printf_stderr("Shader info log (%d bytes): %s\n", length, buffer.get());
-                break;
-            }
-        }
+        mGL->fDeleteShader(fragShader);
 
         GLint status = 0;
         mGL->fGetProgramiv(program, LOCAL_GL_LINK_STATUS, &status);
-        if (status != LOCAL_GL_TRUE) {
-            if (GLContext::ShouldSpew()) {
-                NS_ERROR("Linking blit program failed.");
-                GLint length = 0;
-                mGL->fGetProgramiv(program, LOCAL_GL_INFO_LOG_LENGTH, &length);
-                if (!length) {
-                    printf_stderr("No program info log available.\n");
-                    break;
-                }
-
-                auto buffer = MakeUnique<char[]>(length);
-                mGL->fGetProgramInfoLog(program, length, nullptr, buffer.get());
-
-                printf_stderr("Program info log (%d bytes): %s\n", length, buffer.get());
-            }
-            break;
+        if (status == LOCAL_GL_TRUE) {
+            MOZ_ASSERT(mGL->fGetAttribLocation(program, "aPosition") == 0);
+            mTexBlit_uYFlip[i] = fnGetUniformLoc(program, "uYFlip");
+            mTexBlit_Programs[i] = program;
+            continue;
         }
 
-        // Cache and set attribute and uniform
-        mGL->fUseProgram(program);
-        switch (target) {
-#ifdef ANDROID
-            case ConvertSurfaceTexture:
-#endif
-            case BlitTex2D:
-            case BlitTexRect:
-            case ConvertEGLImage: {
-                GLint texUnitLoc = mGL->fGetUniformLocation(program, "uTexUnit");
-                MOZ_ASSERT(texUnitLoc != -1, "uniform uTexUnit not found");
-                mGL->fUniform1i(texUnitLoc, 0);
-                break;
+        if (GLContext::ShouldSpew()) {
+            GLint reqBufferSize = 0;
+            mGL->fGetProgramiv(program, LOCAL_GL_INFO_LOG_LENGTH, &reqBufferSize);
+            if (!reqBufferSize) {
+                reqBufferSize = 1;
             }
-            case ConvertPlanarYCbCr: {
-                GLint texY = mGL->fGetUniformLocation(program, "uYTexture");
-                GLint texCb = mGL->fGetUniformLocation(program, "uCbTexture");
-                GLint texCr = mGL->fGetUniformLocation(program, "uCrTexture");
-                mYTexScaleLoc = mGL->fGetUniformLocation(program, "uYTexScale");
-                mCbCrTexScaleLoc = mGL->fGetUniformLocation(program, "uCbCrTexScale");
-                mYuvColorMatrixLoc = mGL->fGetUniformLocation(program, "uYuvColorMatrix");
 
-                DebugOnly<bool> hasUniformLocations = texY != -1 &&
-                                                      texCb != -1 &&
-                                                      texCr != -1 &&
-                                                      mYTexScaleLoc != -1 &&
-                                                      mCbCrTexScaleLoc != -1 &&
-                                                      mYuvColorMatrixLoc != -1;
-                MOZ_ASSERT(hasUniformLocations, "uniforms not found");
+            auto buffer = MakeUnique<char[]>(reqBufferSize);
+            mGL->fGetProgramInfoLog(program, reqBufferSize, nullptr, buffer.get());
 
-                mGL->fUniform1i(texY, Channel_Y);
-                mGL->fUniform1i(texCb, Channel_Cb);
-                mGL->fUniform1i(texCr, Channel_Cr);
-                break;
-            }
-            case ConvertMacIOSurfaceImage: {
-#ifdef XP_MACOSX
-                GLint texY = mGL->fGetUniformLocation(program, "uYTexture");
-                GLint texCbCr = mGL->fGetUniformLocation(program, "uCbCrTexture");
-                mYTexScaleLoc = mGL->fGetUniformLocation(program, "uYTexScale");
-                mCbCrTexScaleLoc= mGL->fGetUniformLocation(program, "uCbCrTexScale");
-
-                DebugOnly<bool> hasUniformLocations = texY != -1 &&
-                                                      texCbCr != -1 &&
-                                                      mYTexScaleLoc != -1 &&
-                                                      mCbCrTexScaleLoc != -1;
-                MOZ_ASSERT(hasUniformLocations, "uniforms not found");
-
-                mGL->fUniform1i(texY, Channel_Y);
-                mGL->fUniform1i(texCbCr, Channel_Cb);
-#endif
-                break;
-            }
-            default:
-                return false;
+            printf_stderr("Program info log (%d bytes): %s\n", reqBufferSize,
+                          buffer.get());
         }
-        MOZ_ASSERT(mGL->fGetAttribLocation(program, "aPosition") == 0);
-        mYFlipLoc = mGL->fGetUniformLocation(program, "uYflip");
-        MOZ_ASSERT(mYFlipLoc != -1, "uniform: uYflip not found");
-        mTextureTransformLoc = mGL->fGetUniformLocation(program, "uTextureTransform");
-        if (mTextureTransformLoc >= 0) {
-            // Set identity matrix as default
-            gfx::Matrix4x4 identity;
-            mGL->fUniformMatrix4fv(mTextureTransformLoc, 1, false, &identity._11);
-        }
-        success = true;
-    } while (false);
-
-    if (!success) {
-        // Clean up:
-        DeleteTexBlitProgram();
-        return false;
+        mGL->fDeleteProgram(program);
+        MOZ_ASSERT(false, "program failed to link");
     }
+
+    mGL->fDeleteShader(vertShader);
+
+    ////////////////
+
+    const GLuint oldProgram = mGL->GetIntAs<GLuint>(LOCAL_GL_CURRENT_PROGRAM);
+    GLuint program;
+
+    program = mTexBlit_Programs[size_t(BlitType::BlitTexRect)];
+    if (program) {
+        mBlitTexRect_uTexCoordMult = fnGetUniformLoc(program, "uTextureTransform");
+    }
+
+    program = mTexBlit_Programs[size_t(BlitType::ConvertSurfaceTexture)];
+    if (program) {
+        mConvertSurfaceTexture_uTextureTransform = fnGetUniformLoc(program, "uTextureTransform");
+
+        mGL->fUseProgram(program);
+
+        // Set identity matrix as default
+        gfx::Matrix4x4 identity;
+        mGL->fUniformMatrix4fv(mConvertSurfaceTexture_uTextureTransform, 1, false, &identity._11);
+    }
+
+    program = mTexBlit_Programs[size_t(BlitType::ConvertPlanarYCbCr)];
+    if (program) {
+        const auto texY = fnGetUniformLoc(program, "uYTexture");
+        const auto texCb = fnGetUniformLoc(program, "uCbTexture");
+        const auto texCr = fnGetUniformLoc(program, "uCrTexture");
+        mConvertPlanarYCbCr_uYTexScale = fnGetUniformLoc(program, "uYTexScale");
+        mConvertPlanarYCbCr_uCbCrTexScale = fnGetUniformLoc(program, "uCbCrTexScale");
+        mConvertPlanarYCbCr_uYuvColorMatrix = fnGetUniformLoc(program, "uYuvColorMatrix");
+
+        mGL->fUseProgram(program);
+
+        mGL->fUniform1i(texY, GLint(Channel::Y));
+        mGL->fUniform1i(texCb, GLint(Channel::Cb));
+        mGL->fUniform1i(texCr, GLint(Channel::Cr));
+    }
+
+    program = mTexBlit_Programs[size_t(BlitType::ConvertMacIOSurfaceImage)];
+    if (program) {
+        const auto texY = fnGetUniformLoc(program, "uYTexture");
+        const auto texCbCr = fnGetUniformLoc(program, "uCbCrTexture");
+        mConvertMacIOSurfaceImage_uYTexScale = fnGetUniformLoc(program, "uYTexScale");
+        mConvertMacIOSurfaceImage_uCbCrTexScale = fnGetUniformLoc(program, "uCbCrTexScale");
+
+        mGL->fUseProgram(program);
+
+        mGL->fUniform1i(texY, GLint(Channel::Y));
+        mGL->fUniform1i(texCbCr, GLint(Channel::Cb));
+    }
+
+    mGL->fUseProgram(oldProgram);
+}
+
+bool
+GLBlitHelper::UseTexQuadProgram(BlitType target)
+{
+    InitTexQuadPrograms();
+
+    const GLuint program = mTexBlit_Programs[size_t(target)];
+    if (!program)
+        return false;
 
     mGL->fUseProgram(program);
     mGL->fEnableVertexAttribArray(0);
     mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mTexBlit_Buffer);
-    mGL->fVertexAttribPointer(0,
-                              2,
-                              LOCAL_GL_FLOAT,
-                              false,
-                              0,
-                              nullptr);
-    return true;
-}
-
-bool
-GLBlitHelper::UseTexQuadProgram(BlitType target, const gfx::IntSize& srcSize)
-{
-    if (!InitTexQuadProgram(target)) {
-        return false;
-    }
-
-    if (target == BlitTexRect) {
-        GLint texCoordMultLoc = mGL->fGetUniformLocation(mTex2DRectBlit_Program, "uTexCoordMult");
-        MOZ_ASSERT(texCoordMultLoc != -1, "uniform not found");
-        mGL->fUniform2f(texCoordMultLoc, srcSize.width, srcSize.height);
-    }
+    mGL->fVertexAttribPointer(0, 2, LOCAL_GL_FLOAT, false, 0, nullptr);
 
     return true;
-}
-
-void
-GLBlitHelper::DeleteTexBlitProgram()
-{
-    if (mTexBlit_Buffer) {
-        mGL->fDeleteBuffers(1, &mTexBlit_Buffer);
-        mTexBlit_Buffer = 0;
-    }
-    if (mTexBlit_VertShader) {
-        mGL->fDeleteShader(mTexBlit_VertShader);
-        mTexBlit_VertShader = 0;
-    }
-    if (mTex2DBlit_FragShader) {
-        mGL->fDeleteShader(mTex2DBlit_FragShader);
-        mTex2DBlit_FragShader = 0;
-    }
-    if (mTex2DRectBlit_FragShader) {
-        mGL->fDeleteShader(mTex2DRectBlit_FragShader);
-        mTex2DRectBlit_FragShader = 0;
-    }
-    if (mTex2DBlit_Program) {
-        mGL->fDeleteProgram(mTex2DBlit_Program);
-        mTex2DBlit_Program = 0;
-    }
-    if (mTex2DRectBlit_Program) {
-        mGL->fDeleteProgram(mTex2DRectBlit_Program);
-        mTex2DRectBlit_Program = 0;
-    }
-    if (mTexExternalBlit_FragShader) {
-        mGL->fDeleteShader(mTexExternalBlit_FragShader);
-        mTexExternalBlit_FragShader = 0;
-    }
-    if (mTexYUVPlanarBlit_FragShader) {
-        mGL->fDeleteShader(mTexYUVPlanarBlit_FragShader);
-        mTexYUVPlanarBlit_FragShader = 0;
-    }
-    if (mTexNV12PlanarBlit_FragShader) {
-        mGL->fDeleteShader(mTexNV12PlanarBlit_FragShader);
-        mTexNV12PlanarBlit_FragShader = 0;
-    }
-    if (mTexExternalBlit_Program) {
-        mGL->fDeleteProgram(mTexExternalBlit_Program);
-        mTexExternalBlit_Program = 0;
-    }
-    if (mTexYUVPlanarBlit_Program) {
-        mGL->fDeleteProgram(mTexYUVPlanarBlit_Program);
-        mTexYUVPlanarBlit_Program = 0;
-    }
-    if (mTexNV12PlanarBlit_Program) {
-        mGL->fDeleteProgram(mTexNV12PlanarBlit_Program);
-        mTexNV12PlanarBlit_Program = 0;
-    }
 }
 
 void
 GLBlitHelper::BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                            const gfx::IntSize& srcSize,
                                            const gfx::IntSize& destSize,
-                                           bool internalFBs)
+                                           bool internalFBs) const
 {
     MOZ_ASSERT(!srcFB || mGL->fIsFramebuffer(srcFB));
     MOZ_ASSERT(!destFB || mGL->fIsFramebuffer(destFB));
@@ -611,9 +488,8 @@ GLBlitHelper::BindAndUploadYUVTexture(Channel which,
                                       void* data,
                                       bool needsAllocation)
 {
-    MOZ_ASSERT(which < Channel_Max, "Invalid channel!");
-    GLuint* srcTexArr[3] = {&mSrcTexY, &mSrcTexCb, &mSrcTexCr};
-    GLuint& tex = *srcTexArr[which];
+    MOZ_ASSERT(which < Channel::SIZE, "Invalid channel!");
+    auto& tex = mYUVTextures[size_t(which)];
 
     // RED textures aren't valid in GLES2, and ALPHA textures are not valid in desktop GL Core Profiles.
     // So use R8 textures on GL3.0+ and GLES3.0+, but LUMINANCE/LUMINANCE/UNSIGNED_BYTE otherwise.
@@ -633,7 +509,7 @@ GLBlitHelper::BindAndUploadYUVTexture(Channel which,
         tex = CreateTexture(mGL, internalFormat, format, LOCAL_GL_UNSIGNED_BYTE,
                             gfx::IntSize(width, height), false);
     }
-    mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + which);
+    mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + GLenum(which));
 
     mGL->fBindTexture(LOCAL_GL_TEXTURE_2D, tex);
     if (!needsAllocation) {
@@ -700,8 +576,9 @@ GLBlitHelper::BlitSurfaceTextureImage(layers::SurfaceTextureImage* stImage)
 
     gfx::Matrix4x4 transform;
     surfaceTexture->GetTransformMatrix(transform);
+    mGL->fUniformMatrix4fv(mConvertSurfaceTexture_uTextureTransform, 1, false,
+                           &transform._11);
 
-    mGL->fUniformMatrix4fv(mTextureTransformLoc, 1, false, &transform._11);
     mGL->fDrawArrays(LOCAL_GL_TRIANGLE_STRIP, 0, 4);
 
     surfaceTexture->Detach();
@@ -725,7 +602,7 @@ GLBlitHelper::BlitEGLImageImage(layers::EGLImageImage* image)
 
     ScopedBindTextureUnit boundTU(mGL, LOCAL_GL_TEXTURE0);
 
-    int oldBinding = 0;
+    GLint oldBinding = 0;
     mGL->fGetIntegerv(LOCAL_GL_TEXTURE_BINDING_2D, &oldBinding);
 
     BindAndUploadEGLImage(eglImage, LOCAL_GL_TEXTURE_2D);
@@ -745,31 +622,39 @@ GLBlitHelper::BlitPlanarYCbCrImage(layers::PlanarYCbCrImage* yuvImage)
     const PlanarYCbCrData* yuvData = yuvImage->GetData();
 
     bool needsAllocation = false;
-    if (mTexWidth != yuvData->mYStride || mTexHeight != yuvData->mYSize.height) {
-        mTexWidth = yuvData->mYStride;
-        mTexHeight = yuvData->mYSize.height;
+    if (mYUVTexture_Y_Width != yuvData->mYStride ||
+        mYUVTexture_Y_Height != yuvData->mYSize.height)
+    {
+        mYUVTexture_Y_Width = yuvData->mYStride;
+        mYUVTexture_Y_Height = yuvData->mYSize.height;
         needsAllocation = true;
     }
 
-    GLint oldTex[3];
-    for (int i = 0; i < 3; i++) {
+    GLuint oldTex[size_t(Channel::SIZE)];
+    for (size_t i = 0; i < size_t(Channel::SIZE); i++) {
         mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + i);
-        mGL->fGetIntegerv(LOCAL_GL_TEXTURE_BINDING_2D, &oldTex[i]);
+        oldTex[i] = mGL->GetIntAs<GLuint>(LOCAL_GL_TEXTURE_BINDING_2D);
     }
-    BindAndUploadYUVTexture(Channel_Y, yuvData->mYStride, yuvData->mYSize.height, yuvData->mYChannel, needsAllocation);
-    BindAndUploadYUVTexture(Channel_Cb, yuvData->mCbCrStride, yuvData->mCbCrSize.height, yuvData->mCbChannel, needsAllocation);
-    BindAndUploadYUVTexture(Channel_Cr, yuvData->mCbCrStride, yuvData->mCbCrSize.height, yuvData->mCrChannel, needsAllocation);
+    const auto saved = mGL->GetIntAs<GLint>(LOCAL_GL_UNPACK_ALIGNMENT);
+    mGL->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, 1);
 
-    if (needsAllocation) {
-        mGL->fUniform2f(mYTexScaleLoc, (float)yuvData->mYSize.width/yuvData->mYStride, 1.0f);
-        mGL->fUniform2f(mCbCrTexScaleLoc, (float)yuvData->mCbCrSize.width/yuvData->mCbCrStride, 1.0f);
-    }
+    BindAndUploadYUVTexture(Channel::Y, yuvData->mYStride, yuvData->mYSize.height, yuvData->mYChannel, needsAllocation);
+    BindAndUploadYUVTexture(Channel::Cb, yuvData->mCbCrStride, yuvData->mCbCrSize.height, yuvData->mCbChannel, needsAllocation);
+    BindAndUploadYUVTexture(Channel::Cr, yuvData->mCbCrStride, yuvData->mCbCrSize.height, yuvData->mCrChannel, needsAllocation);
 
-    float* yuvToRgb = gfxUtils::Get3x3YuvColorMatrix(yuvData->mYUVColorSpace);
-    mGL->fUniformMatrix3fv(mYuvColorMatrixLoc, 1, 0, yuvToRgb);
+    mGL->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, saved);
+
+    mGL->fUniform2f(mConvertPlanarYCbCr_uYTexScale,
+                    (float)yuvData->mYSize.width / yuvData->mYStride, 1.0f);
+    mGL->fUniform2f(mConvertPlanarYCbCr_uCbCrTexScale,
+                    (float)yuvData->mCbCrSize.width / yuvData->mCbCrStride, 1.0f);
+
+    const auto& yuvToRgb = gfxUtils::Get3x3YuvColorMatrix(yuvData->mYUVColorSpace);
+    mGL->fUniformMatrix3fv(mConvertPlanarYCbCr_uYuvColorMatrix, 1, false, yuvToRgb);
 
     mGL->fDrawArrays(LOCAL_GL_TRIANGLE_STRIP, 0, 4);
-    for (int i = 0; i < 3; i++) {
+
+    for (size_t i = 0; i < size_t(Channel::SIZE); i++) {
         mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + i);
         mGL->fBindTexture(LOCAL_GL_TEXTURE_2D, oldTex[i]);
     }
@@ -786,7 +671,7 @@ GLBlitHelper::BlitMacIOSurfaceImage(layers::MacIOSurfaceImage* ioImage)
     GLint oldTex[2];
     for (int i = 0; i < 2; i++) {
         mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + i);
-        mGL->fGetIntegerv(LOCAL_GL_TEXTURE_BINDING_2D, &oldTex[i]);
+        mGL->fGetIntegerv(LOCAL_GL_TEXTURE_BINDING_RECTANGLE, &oldTex[i]);
     }
 
     GLuint textures[2];
@@ -797,19 +682,22 @@ GLBlitHelper::BlitMacIOSurfaceImage(layers::MacIOSurfaceImage* ioImage)
     mGL->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB, LOCAL_GL_TEXTURE_WRAP_T, LOCAL_GL_CLAMP_TO_EDGE);
     mGL->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB, LOCAL_GL_TEXTURE_WRAP_S, LOCAL_GL_CLAMP_TO_EDGE);
     surf->CGLTexImageIOSurface2D(gl::GLContextCGL::Cast(mGL)->GetCGLContext(), 0);
-    mGL->fUniform2f(mYTexScaleLoc, surf->GetWidth(0), surf->GetHeight(0));
+    mGL->fUniform2f(mConvertMacIOSurfaceImage_uYTexScale, surf->GetWidth(0),
+                    surf->GetHeight(0));
 
     mGL->fActiveTexture(LOCAL_GL_TEXTURE1);
     mGL->fBindTexture(LOCAL_GL_TEXTURE_RECTANGLE_ARB, textures[1]);
     mGL->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB, LOCAL_GL_TEXTURE_WRAP_T, LOCAL_GL_CLAMP_TO_EDGE);
     mGL->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB, LOCAL_GL_TEXTURE_WRAP_S, LOCAL_GL_CLAMP_TO_EDGE);
     surf->CGLTexImageIOSurface2D(gl::GLContextCGL::Cast(mGL)->GetCGLContext(), 1);
-    mGL->fUniform2f(mCbCrTexScaleLoc, surf->GetWidth(1), surf->GetHeight(1));
+    mGL->fUniform2f(mConvertMacIOSurfaceImage_uCbCrTexScale, surf->GetWidth(1),
+                    surf->GetHeight(1));
 
     mGL->fDrawArrays(LOCAL_GL_TRIANGLE_STRIP, 0, 4);
+
     for (int i = 0; i < 2; i++) {
         mGL->fActiveTexture(LOCAL_GL_TEXTURE0 + i);
-        mGL->fBindTexture(LOCAL_GL_TEXTURE_2D, oldTex[i]);
+        mGL->fBindTexture(LOCAL_GL_TEXTURE_RECTANGLE_ARB, oldTex[i]);
     }
 
     mGL->fDeleteTextures(2, textures);
@@ -823,30 +711,28 @@ GLBlitHelper::BlitImageToFramebuffer(layers::Image* srcImage,
                                      GLuint destFB,
                                      OriginPos destOrigin)
 {
-    ScopedGLDrawState autoStates(mGL);
-
     BlitType type;
     OriginPos srcOrigin;
 
     switch (srcImage->GetFormat()) {
     case ImageFormat::PLANAR_YCBCR:
-        type = ConvertPlanarYCbCr;
+        type = BlitType::ConvertPlanarYCbCr;
         srcOrigin = OriginPos::BottomLeft;
         break;
 
 #ifdef MOZ_WIDGET_ANDROID
     case ImageFormat::SURFACE_TEXTURE:
-        type = ConvertSurfaceTexture;
+        type = BlitType::ConvertSurfaceTexture;
         srcOrigin = srcImage->AsSurfaceTextureImage()->GetOriginPos();
         break;
     case ImageFormat::EGLIMAGE:
-        type = ConvertEGLImage;
+        type = BlitType::ConvertEGLImage;
         srcOrigin = srcImage->AsEGLImageImage()->GetOriginPos();
         break;
 #endif
 #ifdef XP_MACOSX
     case ImageFormat::MAC_IOSURFACE:
-        type = ConvertMacIOSurfaceImage;
+        type = BlitType::ConvertMacIOSurfaceImage;
         srcOrigin = OriginPos::TopLeft;
         break;
 #endif
@@ -855,42 +741,38 @@ GLBlitHelper::BlitImageToFramebuffer(layers::Image* srcImage,
         return false;
     }
 
-    bool init = InitTexQuadProgram(type);
-    if (!init) {
-        return false;
-    }
+    ScopedGLDrawState autoStates(mGL);
 
+    if (!UseTexQuadProgram(type))
+        return false;
+
+    const auto& uYFlip = mTexBlit_uYFlip[size_t(type)];
     const bool needsYFlip = (srcOrigin != destOrigin);
-    mGL->fUniform1f(mYFlipLoc, needsYFlip ? (float)1.0 : (float)0.0);
+    mGL->fUniform1f(uYFlip, needsYFlip ? (float)1.0 : (float)0.0);
 
     ScopedBindFramebuffer boundFB(mGL, destFB);
     mGL->fColorMask(LOCAL_GL_TRUE, LOCAL_GL_TRUE, LOCAL_GL_TRUE, LOCAL_GL_TRUE);
     mGL->fViewport(0, 0, destSize.width, destSize.height);
 
     switch (type) {
-    case ConvertPlanarYCbCr: {
-            const auto saved = mGL->GetIntAs<GLint>(LOCAL_GL_UNPACK_ALIGNMENT);
-            mGL->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, 1);
-            const auto ret = BlitPlanarYCbCrImage(static_cast<PlanarYCbCrImage*>(srcImage));
-            mGL->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, saved);
-            return ret;
-        }
+    case BlitType::ConvertPlanarYCbCr:
+        return BlitPlanarYCbCrImage(static_cast<PlanarYCbCrImage*>(srcImage));
 
 #ifdef MOZ_WIDGET_ANDROID
-    case ConvertSurfaceTexture:
+    case BlitType::ConvertSurfaceTexture:
         return BlitSurfaceTextureImage(static_cast<layers::SurfaceTextureImage*>(srcImage));
 
-    case ConvertEGLImage:
+    case BlitType::ConvertEGLImage:
         return BlitEGLImageImage(static_cast<layers::EGLImageImage*>(srcImage));
 #endif
 
 #ifdef XP_MACOSX
-    case ConvertMacIOSurfaceImage:
+    case BlitType::ConvertMacIOSurfaceImage:
         return BlitMacIOSurfaceImage(srcImage->AsMacIOSurfaceImage());
 #endif
 
     default:
-        return false;
+        MOZ_CRASH();
     }
 }
 
@@ -943,10 +825,10 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
     BlitType type;
     switch (srcTarget) {
     case LOCAL_GL_TEXTURE_2D:
-        type = BlitTex2D;
+        type = BlitType::BlitTex2D;
         break;
     case LOCAL_GL_TEXTURE_RECTANGLE_ARB:
-        type = BlitTexRect;
+        type = BlitType::BlitTexRect;
         break;
     default:
         MOZ_CRASH("GFX: Fatal Error: Bad `srcTarget`.");
@@ -962,8 +844,7 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
     }
 
     // Does destructive things to (only!) what we just saved above.
-    bool good = UseTexQuadProgram(type, srcSize);
-    if (!good) {
+    if (!UseTexQuadProgram(type)) {
         // We're up against the wall, so bail.
         MOZ_DIAGNOSTIC_ASSERT(false,
                               "Error: Failed to prepare to blit texture->framebuffer.\n");
@@ -971,6 +852,10 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
         mGL->fColorMask(1, 1, 1, 1);
         mGL->fClear(LOCAL_GL_COLOR_BUFFER_BIT);
         return;
+    }
+
+    if (type == BlitType::BlitTexRect) {
+        mGL->fUniform2f(mBlitTexRect_uTexCoordMult, srcSize.width, srcSize.height);
     }
 
     const ScopedBindTexture bindTex(mGL, srcTex, srcTarget);
@@ -982,7 +867,7 @@ GLBlitHelper::BlitFramebufferToTexture(GLuint srcFB, GLuint destTex,
                                        const gfx::IntSize& srcSize,
                                        const gfx::IntSize& destSize,
                                        GLenum destTarget,
-                                       bool internalFBs)
+                                       bool internalFBs) const
 {
     // On the Android 4.3 emulator, IsFramebuffer may return false incorrectly.
     MOZ_ASSERT_IF(mGL->Renderer() != GLRenderer::AndroidEmulator, !srcFB || mGL->fIsFramebuffer(srcFB));
@@ -1017,7 +902,7 @@ void
 GLBlitHelper::BlitTextureToTexture(GLuint srcTex, GLuint destTex,
                                    const gfx::IntSize& srcSize,
                                    const gfx::IntSize& destSize,
-                                   GLenum srcTarget, GLenum destTarget)
+                                   GLenum srcTarget, GLenum destTarget) const
 {
     MOZ_ASSERT(mGL->fIsTexture(srcTex));
     MOZ_ASSERT(mGL->fIsTexture(destTex));
