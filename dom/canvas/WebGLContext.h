@@ -1955,6 +1955,8 @@ protected:
     bool mNeedsFakeNoStencil;
     bool mNeedsEmulatedLoneDepthStencil;
 
+    bool mNeedsIndexValidation;
+
     const bool mAllowFBInvalidation;
 
     bool Has64BitTimestamps() const;

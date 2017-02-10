@@ -50,7 +50,8 @@ static const char* sEGLExtensionNames[] = {
     "EGL_ANDROID_native_fence_sync",
     "EGL_ANDROID_image_crop",
     "EGL_ANGLE_platform_angle",
-    "EGL_ANGLE_platform_angle_d3d"
+    "EGL_ANGLE_platform_angle_d3d",
+    "EGL_KHR_create_context",
 };
 
 #if defined(ANDROID)
