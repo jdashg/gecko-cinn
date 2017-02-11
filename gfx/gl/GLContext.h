@@ -580,7 +580,16 @@ private:
      */
     virtual bool SupportsRobustness() const = 0;
 
+// -----------------------------------------------------------------------------
 public:
+    bool CanDisableAttrib0() const {
+#ifdef XP_MACOSX
+        return IsCompatibilityProfile(); // Fails in Core, not in Compat.
+#else
+        return !IsCompatibilityProfile(); // Not valid in Compat spec, valid elsewhere.
+#endif
+    }
+
 // -----------------------------------------------------------------------------
 // Error handling
     static const char* GLErrorToString(GLenum aError) {
@@ -1134,6 +1143,9 @@ public:
     }
 
     void fDisableVertexAttribArray(GLuint index) {
+        if (!CanDisableAttrib0()) {
+            MOZ_ASSERT(index != 0);
+        }
         BEFORE_GL_CALL;
         mSymbols.fDisableVertexAttribArray(index);
         AFTER_GL_CALL;

@@ -29,8 +29,6 @@ class GLContext;
 
 class GLBlitHelper final
 {
-    friend class GLContext;
-
     enum class Channel {
         Y = 0,
         Cb,
@@ -40,10 +38,7 @@ class GLBlitHelper final
     };
 
     /**
-     * BlitTex2D is used to copy blit the content of a GL_TEXTURE_2D object,
-     * BlitTexRect is used to copy blit the content of a GL_TEXTURE_RECT object,
-     * The difference between BlitTex2D and BlitTexRect is the texture type, which affect
-     * the fragment shader a bit.
+     * BlitTex2D is used to copy blit the content of a GL_TEXTURE_2D object.
      *
      * ConvertPlnarYcbCr is used to color convert copy blit the PlanarYCbCrImage
      * into a normal RGB texture by create textures of each color channel, and
@@ -52,7 +47,6 @@ class GLBlitHelper final
      */
     enum class BlitType {
         BlitTex2D = 0,
-        BlitTexRect,
         ConvertPlanarYCbCr,
         ConvertSurfaceTexture,
         ConvertEGLImage,
@@ -65,10 +59,9 @@ class GLBlitHelper final
     GLContext* const mGL;
 
     GLuint mTexBlit_Buffer;
+    GLuint mTexBlit_VAO;
     GLuint mTexBlit_Programs[size_t(BlitType::SIZE)];
     GLint mTexBlit_uYFlip[size_t(BlitType::SIZE)];
-
-    GLint mBlitTexRect_uTexCoordMult;
 
     GLint mConvertSurfaceTexture_uTextureTransform;
 
@@ -92,7 +85,9 @@ class GLBlitHelper final
     void SetBlitFramebufferForDestTexture(GLuint aTexture);
 
     bool UseTexQuadProgram(BlitType type);
+public:
     void InitTexQuadPrograms();
+private:
     void BindAndUploadYUVTexture(Channel which, uint32_t width, uint32_t height, void* data, bool allocation);
     void BindAndUploadEGLImage(EGLImage image, GLuint target);
 
@@ -106,9 +101,8 @@ class GLBlitHelper final
     bool BlitMacIOSurfaceImage(layers::MacIOSurfaceImage* ioImage);
 #endif
 
-    explicit GLBlitHelper(GLContext* gl);
-
 public:
+    explicit GLBlitHelper(GLContext* gl);
     ~GLBlitHelper();
 
     // If you don't have |srcFormats| for the 2nd definition,
@@ -131,7 +125,6 @@ public:
     void DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
                                       const gfx::IntSize& srcSize,
                                       const gfx::IntSize& destSize,
-                                      GLenum srcTarget = LOCAL_GL_TEXTURE_2D,
                                       bool internalFBs = false);
     void BlitFramebufferToTexture(GLuint srcFB, GLuint destTex,
                                   const gfx::IntSize& srcSize,

@@ -35,9 +35,9 @@ namespace gl {
 GLBlitHelper::GLBlitHelper(GLContext* gl)
     : mGL(gl)
     , mTexBlit_Buffer(0)
+    , mTexBlit_VAO(0)
     , mTexBlit_Programs{0}
     , mTexBlit_uYFlip{0}
-    , mBlitTexRect_uTexCoordMult(0)
     , mConvertSurfaceTexture_uTextureTransform(0)
     , mConvertPlanarYCbCr_uYTexScale(0)
     , mConvertPlanarYCbCr_uCbCrTexScale(0)
@@ -54,10 +54,14 @@ GLBlitHelper::GLBlitHelper(GLContext* gl)
 
 GLBlitHelper::~GLBlitHelper()
 {
+    if (!mTexBlit_Buffer)
+        return;
+
     if (!mGL->MakeCurrent())
         return;
 
     mGL->fDeleteBuffers(1, &mTexBlit_Buffer);
+    mGL->fDeleteVertexArrays(1, &mTexBlit_VAO);
 
     for (auto& cur : mTexBlit_Programs) {
         if (!cur)
@@ -73,10 +77,14 @@ GLBlitHelper::~GLBlitHelper()
 }
 
 static GLuint
-CreateShader(GLContext* gl, GLenum shaderType, const char* sourceString)
+CreateShader(GLContext* gl, GLenum shaderType, const char* versionLine, const char* body)
 {
+    const char* const parts[2] = {
+        versionLine,
+        body,
+    };
     const GLuint shader = gl->fCreateShader(shaderType);
-    gl->fShaderSource(shader, 1, &sourceString, nullptr);
+    gl->fShaderSource(shader, 2, parts, nullptr);
     gl->fCompileShader(shader);
 
     GLint status = 0;
@@ -96,7 +104,7 @@ CreateShader(GLContext* gl, GLenum shaderType, const char* sourceString)
 
         printf_stderr("Failed shader info log (%i bytes): %s\n", reqBufferSize,
                       buffer.get());
-        printf_stderr("Failed shader source: %s\n", sourceString);
+        printf_stderr("Failed shader source: %s%s\n", versionLine, body);
     }
 
     gl->fDeleteShader(shader);
@@ -109,6 +117,11 @@ GLBlitHelper::InitTexQuadPrograms()
 {
     if (mTexBlit_Buffer)
         return; // Already initialized.
+
+    if (!mGL->IsSupported(GLFeature::vertex_array_object))
+        return; // Require this for efficiency and simplicity.
+
+    ////////////////
 
     /* CCW tri-strip:
      * 2---3
@@ -123,6 +136,8 @@ GLBlitHelper::InitTexQuadPrograms()
     };
     HeapCopyOfStackArray<GLfloat> vertsOnHeap(verts);
 
+    const GLuint oldVBO = mGL->GetIntAs<GLuint>(LOCAL_GL_ARRAY_BUFFER_BINDING);
+
     MOZ_ASSERT(!mTexBlit_Buffer);
     mGL->fGenBuffers(1, &mTexBlit_Buffer);
     mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mTexBlit_Buffer);
@@ -133,27 +148,56 @@ GLBlitHelper::InitTexQuadPrograms()
 
     ////////////////
 
+    const GLuint oldVAO = mGL->GetIntAs<GLuint>(LOCAL_GL_VERTEX_ARRAY_BINDING);
+
+    mGL->fGenVertexArrays(1, &mTexBlit_VAO);
+    mGL->fBindVertexArray(mTexBlit_VAO);
+
+    mGL->fEnableVertexAttribArray(0);
+    mGL->fVertexAttribPointer(0, 2, LOCAL_GL_FLOAT, false, 0, nullptr);
+
+    mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, oldVBO);
+    mGL->fBindVertexArray(oldVAO);
+
+    ////////////////
+
+    const char* versionLine = "";
+    if (mGL->WorkAroundDriverBugs()) {
+#ifdef XP_MACOSX
+        if (mGL->IsCoreProfile()) {
+            // Use essl100 because otherwise we need to use glsl330+.
+            // OSX Core profiles don't support 110/120/130.
+            versionLine = "#version 100\n";
+        }
+#endif
+    }
+
+    const auto fnCreateShader = [&](GLenum type, const char* body) {
+        return CreateShader(mGL, type, versionLine, body);
+    };
+
+    ////////////////
+
     const char kSource_VertShader[] = "\
-        #version 100                                  \n\
         #ifdef GL_ES                                  \n\
         precision mediump float;                      \n\
         #endif                                        \n\
         attribute vec2 aPosition;                     \n\
                                                       \n\
-        uniform float uYflip;                         \n\
+        uniform float uYFlip;                         \n\
         varying vec2 vTexCoord;                       \n\
                                                       \n\
         void main(void)                               \n\
         {                                             \n\
             vTexCoord = aPosition;                    \n\
-            vTexCoord.y = abs(vTexCoord.y - uYflip);  \n\
+            vTexCoord.y = abs(vTexCoord.y - uYFlip);  \n\
             vec2 vertPos = aPosition * 2.0 - 1.0;     \n\
             gl_Position = vec4(vertPos, 0.0, 1.0);    \n\
         }                                             \n\
     ";
 
-    const GLuint vertShader = CreateShader(mGL, LOCAL_GL_VERTEX_SHADER,
-                                           kSource_VertShader);
+    const GLuint vertShader = fnCreateShader(LOCAL_GL_VERTEX_SHADER,
+                                             kSource_VertShader);
     MOZ_ASSERT(vertShader);
     if (!vertShader)
         return;
@@ -163,7 +207,6 @@ GLBlitHelper::InitTexQuadPrograms()
     const char* fragSources[size_t(BlitType::SIZE)] = { nullptr };
 
     const char kFragSource_Tex2D[] = "\
-        #version 100                                        \n\
         #ifdef GL_ES                                        \n\
         #ifdef GL_FRAGMENT_PRECISION_HIGH                   \n\
             precision highp float;                          \n\
@@ -183,30 +226,8 @@ GLBlitHelper::InitTexQuadPrograms()
     fragSources[size_t(BlitType::BlitTex2D)] = kFragSource_Tex2D;
     fragSources[size_t(BlitType::ConvertEGLImage)] = kFragSource_Tex2D;
 
-    const char kFragSource_TexRect[] = "\
-        #version 100                                                  \n\
-        #ifdef GL_FRAGMENT_PRECISION_HIGH                             \n\
-            precision highp float;                                    \n\
-        #else                                                         \n\
-            precision mediump float;                                  \n\
-        #endif                                                        \n\
-                                                                      \n\
-        uniform sampler2D uTexUnit;                                   \n\
-        uniform vec2 uTexCoordMult;                                   \n\
-                                                                      \n\
-        varying vec2 vTexCoord;                                       \n\
-                                                                      \n\
-        void main(void)                                               \n\
-        {                                                             \n\
-            gl_FragColor = texture2DRect(uTexUnit,                    \n\
-                                         vTexCoord * uTexCoordMult);  \n\
-        }                                                             \n\
-    ";
-    fragSources[size_t(BlitType::BlitTexRect)] = kFragSource_TexRect;
-
 #ifdef ANDROID /* MOZ_WIDGET_ANDROID */
     const char kFragSource_TexExternal[] = "\
-        #version 100                                                    \n\
         #extension GL_OES_EGL_image_external : require                  \n\
         #ifdef GL_FRAGMENT_PRECISION_HIGH                               \n\
             precision highp float;                                      \n\
@@ -247,7 +268,6 @@ GLBlitHelper::InitTexQuadPrograms()
     [B]   [1.16438,  2.11240,  0.00000]   [Cr - 0.50196]
     */
     const char kFragSource_YCbCr[] = "\
-        #version 100                                                        \n\
         #ifdef GL_ES                                                        \n\
         precision mediump float;                                            \n\
         #endif                                                              \n\
@@ -275,11 +295,6 @@ GLBlitHelper::InitTexQuadPrograms()
 
 #ifdef XP_MACOSX
     const char kFragSource_NV12[] = "\
-        #version 100                                                             \n\
-        #extension GL_ARB_texture_rectangle : require                            \n\
-        #ifdef GL_ES                                                             \n\
-        precision mediump float                                                  \n\
-        #endif                                                                   \n\
         varying vec2 vTexCoord;                                                  \n\
         uniform sampler2DRect uYTexture;                                         \n\
         uniform sampler2DRect uCbCrTexture;                                      \n\
@@ -299,7 +314,11 @@ GLBlitHelper::InitTexQuadPrograms()
             gl_FragColor.a = 1.0;                                                \n\
         }                                                                        \n\
     ";
-    fragSources[size_t(BlitType::ConvertMacIOSurfaceImage)] = kFragSource_NV12;
+    if (mGL->IsCompatibilityProfile()) {
+        // We'd need to use modern glsl (with in/out) to sample from sampler2DRect in
+        // Core profiles on OSX.
+        fragSources[size_t(BlitType::ConvertMacIOSurfaceImage)] = kFragSource_NV12;
+    }
 #endif
 
     ////////////////
@@ -315,8 +334,8 @@ GLBlitHelper::InitTexQuadPrograms()
         if (!fragSource)
             continue;
 
-        const GLuint fragShader = CreateShader(mGL, LOCAL_GL_FRAGMENT_SHADER,
-                                               fragSources[i]);
+        const GLuint fragShader = fnCreateShader(LOCAL_GL_FRAGMENT_SHADER,
+                                                 fragSources[i]);
         MOZ_ASSERT(fragShader);
         if (!fragShader)
             continue;
@@ -361,11 +380,6 @@ GLBlitHelper::InitTexQuadPrograms()
 
     const GLuint oldProgram = mGL->GetIntAs<GLuint>(LOCAL_GL_CURRENT_PROGRAM);
     GLuint program;
-
-    program = mTexBlit_Programs[size_t(BlitType::BlitTexRect)];
-    if (program) {
-        mBlitTexRect_uTexCoordMult = fnGetUniformLoc(program, "uTextureTransform");
-    }
 
     program = mTexBlit_Programs[size_t(BlitType::ConvertSurfaceTexture)];
     if (program) {
@@ -420,10 +434,6 @@ GLBlitHelper::UseTexQuadProgram(BlitType target)
         return false;
 
     mGL->fUseProgram(program);
-    mGL->fEnableVertexAttribArray(0);
-    mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mTexBlit_Buffer);
-    mGL->fVertexAttribPointer(0, 2, LOCAL_GL_FLOAT, false, 0, nullptr);
-
     return true;
 }
 
@@ -810,8 +820,8 @@ GLBlitHelper::BlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
         return;
     }
 
-    DrawBlitTextureToFramebuffer(srcTex, destFB, srcSize, destSize, srcTarget,
-                                 internalFBs);
+    MOZ_ASSERT(srcTarget == LOCAL_GL_TEXTURE_2D);
+    DrawBlitTextureToFramebuffer(srcTex, destFB, srcSize, destSize, internalFBs);
 }
 
 
@@ -819,22 +829,8 @@ void
 GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
                                            const gfx::IntSize& srcSize,
                                            const gfx::IntSize& destSize,
-                                           GLenum srcTarget,
                                            bool internalFBs)
 {
-    BlitType type;
-    switch (srcTarget) {
-    case LOCAL_GL_TEXTURE_2D:
-        type = BlitType::BlitTex2D;
-        break;
-    case LOCAL_GL_TEXTURE_RECTANGLE_ARB:
-        type = BlitType::BlitTexRect;
-        break;
-    default:
-        MOZ_CRASH("GFX: Fatal Error: Bad `srcTarget`.");
-        break;
-    }
-
     ScopedGLDrawState autoStates(mGL);
     const ScopedBindFramebuffer bindFB(mGL);
     if (internalFBs) {
@@ -844,7 +840,7 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
     }
 
     // Does destructive things to (only!) what we just saved above.
-    if (!UseTexQuadProgram(type)) {
+    if (!UseTexQuadProgram(BlitType::BlitTex2D)) {
         // We're up against the wall, so bail.
         MOZ_DIAGNOSTIC_ASSERT(false,
                               "Error: Failed to prepare to blit texture->framebuffer.\n");
@@ -854,11 +850,7 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
         return;
     }
 
-    if (type == BlitType::BlitTexRect) {
-        mGL->fUniform2f(mBlitTexRect_uTexCoordMult, srcSize.width, srcSize.height);
-    }
-
-    const ScopedBindTexture bindTex(mGL, srcTex, srcTarget);
+    const ScopedBindTexture bindTex(mGL, srcTex);
     mGL->fDrawArrays(LOCAL_GL_TRIANGLE_STRIP, 0, 4);
 }
 

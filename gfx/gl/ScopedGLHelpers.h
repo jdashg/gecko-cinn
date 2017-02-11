@@ -314,32 +314,23 @@ struct ScopedGLDrawState
     explicit ScopedGLDrawState(GLContext* gl);
     ~ScopedGLDrawState();
 
-    GLuint boundProgram;
-    GLuint boundBuffer;
+    GLContext* const mGL;
+    const GLuint boundProgram;
+    const GLuint boundVAO;
 
-    ScopedGLState blend;
-    ScopedGLState cullFace;
-    ScopedGLState depthTest;
-    ScopedGLState dither;
-    ScopedGLState polyOffsFill;
-    ScopedGLState sampleAToC;
-    ScopedGLState sampleCover;
-    ScopedGLState scissor;
-    ScopedGLState stencil;
-
-    GLuint maxAttrib;
-    UniquePtr<GLint[]> attrib_enabled;
-    GLint attrib0_size;
-    GLint attrib0_stride;
-    GLint attrib0_type;
-    GLint attrib0_normalized;
-    GLint attrib0_bufferBinding;
-    void* attrib0_pointer;
+    const ScopedGLState blend;
+    const ScopedGLState cullFace;
+    const ScopedGLState depthTest;
+    const ScopedGLState dither;
+    const ScopedGLState polyOffsFill;
+    const ScopedGLState sampleAToC;
+    const ScopedGLState sampleCover;
+    const ScopedGLState scissor;
+    const ScopedGLState stencil;
 
     realGLboolean colorMask[4];
     GLint viewport[4];
     GLint scissorBox[4];
-    GLContext* const mGL;
 };
 
 struct ScopedPackState

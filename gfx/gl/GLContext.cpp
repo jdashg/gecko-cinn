@@ -534,6 +534,14 @@ GLContext::InitWithPrefix(const char* prefix, bool trygl)
         return false;
     }
 
+#ifdef DEBUG
+    {
+        ScopedGLDrawState autoStates(this);
+        BlitHelper()->InitTexQuadPrograms();
+        mBlitHelper = nullptr;
+    }
+#endif
+
     reporter.SetSuccessful();
     return true;
 }
@@ -2621,7 +2629,7 @@ DoesStringMatch(const char* aString, const char* aWantedString)
 /*static*/ bool
 GLContext::ShouldSpew()
 {
-    return gfxEnv::GlSpew();
+    return true;//gfxEnv::GlSpew();
 }
 
 void

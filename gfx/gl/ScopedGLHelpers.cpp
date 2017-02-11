@@ -423,8 +423,15 @@ ScopedVertexAttribPointer::UnwrapImpl()
     mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, mBoundBuffer);
 }
 
+////////////////////////////////////////////////////////////////////////
+// ScopedGLDrawState
+
 ScopedGLDrawState::ScopedGLDrawState(GLContext* aGL)
-    : blend       (aGL, LOCAL_GL_BLEND,      false)
+    : mGL(aGL)
+    , boundProgram(aGL->GetIntAs<GLuint>(LOCAL_GL_CURRENT_PROGRAM))
+    , boundVAO(aGL->GetIntAs<GLuint>(LOCAL_GL_VERTEX_ARRAY_BINDING))
+
+    , blend       (aGL, LOCAL_GL_BLEND,      false)
     , cullFace    (aGL, LOCAL_GL_CULL_FACE,  false)
     , depthTest   (aGL, LOCAL_GL_DEPTH_TEST, false)
     , dither      (aGL, LOCAL_GL_DITHER,     false)
@@ -433,24 +440,7 @@ ScopedGLDrawState::ScopedGLDrawState(GLContext* aGL)
     , sampleCover (aGL, LOCAL_GL_SAMPLE_COVERAGE, false)
     , scissor     (aGL, LOCAL_GL_SCISSOR_TEST,    false)
     , stencil     (aGL, LOCAL_GL_STENCIL_TEST,    false)
-    , mGL(aGL)
 {
-    mGL->GetUIntegerv(LOCAL_GL_CURRENT_PROGRAM, &boundProgram);
-    mGL->GetUIntegerv(LOCAL_GL_ARRAY_BUFFER_BINDING, &boundBuffer);
-    mGL->GetUIntegerv(LOCAL_GL_MAX_VERTEX_ATTRIBS, &maxAttrib);
-    attrib_enabled = MakeUnique<GLint[]>(maxAttrib);
-
-    for (GLuint i = 0; i < maxAttrib; i++) {
-        mGL->fGetVertexAttribiv(i, LOCAL_GL_VERTEX_ATTRIB_ARRAY_ENABLED, &attrib_enabled[i]);
-        mGL->fDisableVertexAttribArray(i);
-    }
-    // Only Attrib0's client side state affected
-    mGL->fGetVertexAttribiv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_SIZE, &attrib0_size);
-    mGL->fGetVertexAttribiv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_STRIDE, &attrib0_stride);
-    mGL->fGetVertexAttribiv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_TYPE, &attrib0_type);
-    mGL->fGetVertexAttribiv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &attrib0_normalized);
-    mGL->fGetVertexAttribiv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &attrib0_bufferBinding);
-    mGL->fGetVertexAttribPointerv(0, LOCAL_GL_VERTEX_ATTRIB_ARRAY_POINTER, &attrib0_pointer);
     mGL->fGetBooleanv(LOCAL_GL_COLOR_WRITEMASK, colorMask);
     mGL->fGetIntegerv(LOCAL_GL_VIEWPORT, viewport);
     mGL->fGetIntegerv(LOCAL_GL_SCISSOR_BOX, scissorBox);
@@ -471,25 +461,8 @@ ScopedGLDrawState::~ScopedGLDrawState()
                     colorMask[2],
                     colorMask[3]);
 
-    for (unsigned int i = 0; i < maxAttrib; i++) {
-        if (attrib_enabled[i])
-            mGL->fEnableVertexAttribArray(i);
-        else
-            mGL->fDisableVertexAttribArray(i);
-    }
-
-
-    mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, attrib0_bufferBinding);
-    mGL->fVertexAttribPointer(0,
-                              attrib0_size,
-                              attrib0_type,
-                              attrib0_normalized,
-                              attrib0_stride,
-                              attrib0_pointer);
-
-    mGL->fBindBuffer(LOCAL_GL_ARRAY_BUFFER, boundBuffer);
-
     mGL->fUseProgram(boundProgram);
+    mGL->fBindVertexArray(boundVAO);
 }
 
 ////////////////////////////////////////////////////////////////////////
