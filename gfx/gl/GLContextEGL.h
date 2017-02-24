@@ -48,7 +48,7 @@ public:
         return static_cast<GLContextEGL*>(gl);
     }
 
-    bool Init() override;
+    virtual bool Init() override;
 
     virtual bool IsDoubleBuffered() const override {
         return mIsDoubleBuffered;
@@ -83,8 +83,6 @@ public:
     virtual bool RenewSurface(widget::CompositorWidget* aWidget) override;
 
     virtual void ReleaseSurface() override;
-
-    virtual bool SetupLookupFunction() override;
 
     virtual bool SwapBuffers() override;
 

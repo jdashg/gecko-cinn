@@ -206,7 +206,7 @@ GLContextEGLFactory::Create(EGLNativeWindowType aWindow,
 GLContextEGL::GLContextEGL(CreateContextFlags flags, const SurfaceCaps& caps,
                            GLContext* shareContext, bool isOffscreen, EGLConfig config,
                            EGLSurface surface, EGLContext context)
-    : GLContext(flags, caps, shareContext, isOffscreen)
+    : GLContext(sEGLLibrary.mGetProcAddress, flags, caps, shareContext, isOffscreen)
     , mConfig(config)
     , mSurface(surface)
     , mContext(context)
@@ -249,22 +249,7 @@ GLContextEGL::~GLContextEGL()
 bool
 GLContextEGL::Init()
 {
-#if defined(ANDROID)
-    // We can't use LoadApitraceLibrary here because the GLContext
-    // expects its own handle to the GL library
-    if (!OpenLibrary(APITRACE_LIB))
-#endif
-        if (!OpenLibrary(GLES2_LIB)) {
-#if defined(XP_UNIX)
-            if (!OpenLibrary(GLES2_LIB2)) {
-                NS_WARNING("Couldn't load GLES2 LIB.");
-                return false;
-            }
-#endif
-        }
-
-    SetupLookupFunction();
-    if (!InitWithPrefix("gl", true))
+    if (!GLContext::Init())
         return false;
 
     bool current = MakeCurrent();
@@ -417,13 +402,6 @@ GLContextEGL::ReleaseSurface() {
         mSurfaceOverride = EGL_NO_SURFACE;
     }
     mSurface = EGL_NO_SURFACE;
-}
-
-bool
-GLContextEGL::SetupLookupFunction()
-{
-    mLookupFunc = (PlatformLookupFunction)sEGLLibrary.mSymbols.fGetProcAddress;
-    return true;
 }
 
 bool

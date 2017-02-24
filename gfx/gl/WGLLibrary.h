@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "GLContextTypes.h"
+#include "LoadSymbols.h"
 #include <windows.h>
 
 struct PRLibrary;
@@ -16,7 +17,7 @@ class WGLLibrary
 public:
     WGLLibrary()
       : mInitialized(false)
-      , mOGLLibrary(nullptr)
+      , mLib(nullptr)
       , mHasRobustness(false)
       , mHasDXInterop(false)
       , mHasDXInterop2(false)
@@ -108,11 +109,12 @@ public:
     HDC GetWindowDC() const {return mWindowDC; }
     HGLRC GetWindowGLContext() const {return mWindowGLContext; }
     int GetWindowPixelFormat() const { return mWindowPixelFormat; }
-    PRLibrary* GetOGLLibrary() { return mOGLLibrary; }
+
+    PRFuncPtr GetProcAddress(const char* name) const;
 
 private:
     bool mInitialized;
-    PRLibrary* mOGLLibrary;
+    PRLibrary* mLib;
     bool mHasRobustness;
     bool mHasDXInterop;
     bool mHasDXInterop2;
@@ -121,7 +123,6 @@ private:
     HDC mWindowDC;
     HGLRC mWindowGLContext;
     int mWindowPixelFormat;
-
 };
 
 // a global WGLLibrary instance

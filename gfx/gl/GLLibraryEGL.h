@@ -9,11 +9,11 @@
 #include "mozilla/X11Util.h"
 #endif
 
-#include "GLLibraryLoader.h"
 #include "mozilla/StaticMutex.h"
 #include "mozilla/ThreadLocal.h"
-#include "nsIFile.h"
 #include "GeckoProfiler.h"
+#include "LoadSymbols.h"
+#include "nsIFile.h"
 
 #include <bitset>
 #include <vector>
@@ -111,7 +111,7 @@ class GLLibraryEGL
 public:
     GLLibraryEGL()
         : mInitialized(false),
-          mEGLLibrary(nullptr),
+          mGetProcAddress(nullptr),
           mEGLDisplay(EGL_NO_DISPLAY),
           mIsANGLE(false),
           mIsWARP(false)
@@ -141,7 +141,6 @@ public:
         mSymbols.fGetConfigAttrib = nullptr;
         mSymbols.fGetConfigs = nullptr;
         mSymbols.fWaitNative = nullptr;
-        mSymbols.fGetProcAddress = nullptr;
         mSymbols.fSwapBuffers = nullptr;
         mSymbols.fCopyBuffers = nullptr;
         mSymbols.fQueryString = nullptr;
@@ -351,14 +350,6 @@ public:
         EGLBoolean b = mSymbols.fWaitNative(engine);
         AFTER_GL_CALL;
         return b;
-    }
-
-    EGLCastToRelevantPtr fGetProcAddress(const char* procname)
-    {
-        BEFORE_GL_CALL;
-        EGLCastToRelevantPtr p = mSymbols.fGetProcAddress(procname);
-        AFTER_GL_CALL;
-        return p;
     }
 
     EGLBoolean fSwapBuffers(EGLDisplay dpy, EGLSurface surface)
@@ -601,8 +592,6 @@ public:
         pfnGetConfigs fGetConfigs;
         typedef EGLBoolean (GLAPIENTRY * pfnWaitNative)(EGLint engine);
         pfnWaitNative fWaitNative;
-        typedef EGLCastToRelevantPtr (GLAPIENTRY * pfnGetProcAddress)(const char* procname);
-        pfnGetProcAddress fGetProcAddress;
         typedef EGLBoolean (GLAPIENTRY * pfnSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
         pfnSwapBuffers fSwapBuffers;
         typedef EGLBoolean (GLAPIENTRY * pfnCopyBuffers)(EGLDisplay dpy, EGLSurface surface,
@@ -685,7 +674,9 @@ public:
 
 private:
     bool mInitialized;
-    PRLibrary* mEGLLibrary;
+public:
+    pfnGetProcAddressT mGetProcAddress;
+private:
     EGLDisplay mEGLDisplay;
     RefPtr<GLContext> mReadbackGL;
 

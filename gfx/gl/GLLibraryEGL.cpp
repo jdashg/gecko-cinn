@@ -319,75 +319,85 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
       MOZ_CRASH("GFX: Tls init failed");
 #endif
 
+    PRLibrary* lib = nullptr;
+
 #ifdef XP_WIN
-    if (!mEGLLibrary) {
-        // On Windows, the GLESv2, EGL and DXSDK libraries are shipped with libxul and
-        // we should look for them there. We have to load the libs in this
-        // order, because libEGL.dll depends on libGLESv2.dll which depends on the DXSDK
-        // libraries. This matters especially for WebRT apps which are in a different directory.
-        // See bug 760323 and bug 749459
+    // On Windows, the GLESv2, EGL and DXSDK libraries are shipped with libxul and
+    // we should look for them there. We have to load the libs in this
+    // order, because libEGL.dll depends on libGLESv2.dll which depends on the DXSDK
+    // libraries. This matters especially for WebRT apps which are in a different directory.
+    // See bug 760323 and bug 749459
 
-        // Also note that we intentionally leak the libs we load.
+    // Also note that we intentionally leak the libs we load.
 
-        do {
-            // Windows 8.1+ has d3dcompiler_47.dll in the system directory.
-            // Try it first. Note that _46 will never be in the system
-            // directory. So there is no point trying _46 in the system
-            // directory.
+    do {
+        // Windows 8.1+ has d3dcompiler_47.dll in the system directory.
+        // Try it first. Note that _46 will never be in the system
+        // directory. So there is no point trying _46 in the system
+        // directory.
 
-            if (LoadLibrarySystem32(L"d3dcompiler_47.dll"))
-                break;
+        if (LoadLibrarySystem32(L"d3dcompiler_47.dll"))
+            break;
 
 #ifdef MOZ_D3DCOMPILER_VISTA_DLL
-            if (LoadLibraryForEGLOnWindows(NS_LITERAL_STRING(NS_STRINGIFY(MOZ_D3DCOMPILER_VISTA_DLL))))
-                break;
+        if (LoadLibraryForEGLOnWindows(NS_LITERAL_STRING(NS_STRINGIFY(MOZ_D3DCOMPILER_VISTA_DLL))))
+            break;
 #endif
 
-            MOZ_ASSERT(false, "d3dcompiler DLL loading failed.");
-        } while (false);
+        MOZ_ASSERT(false, "d3dcompiler DLL loading failed.");
+    } while (false);
 
-        LoadLibraryForEGLOnWindows(NS_LITERAL_STRING("libGLESv2.dll"));
+    LoadLibraryForEGLOnWindows(NS_LITERAL_STRING("libGLESv2.dll"));
 
-        mEGLLibrary = LoadLibraryForEGLOnWindows(NS_LITERAL_STRING("libEGL.dll"));
-
-        if (!mEGLLibrary) {
-            *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_LOAD");
-            return false;
-        }
+    lib = LoadLibraryForEGLOnWindows(NS_LITERAL_STRING("libEGL.dll"));
+    if (!lib) {
+        *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_LOAD");
+        return false;
     }
-
 #else // !Windows
 
     // On non-Windows (Android) we use system copies of libEGL. We look for
     // the APITrace lib, libEGL.so, and libEGL.so.1 in that order.
-
+    do {
 #if defined(ANDROID)
-    if (!mEGLLibrary)
-        mEGLLibrary = LoadApitraceLibrary();
+        lib = LoadApitraceLibrary();
+        if (lib)
+            break;
 #endif
 
-    if (!mEGLLibrary) {
         printf_stderr("Attempting load of libEGL.so\n");
-        mEGLLibrary = PR_LoadLibrary("libEGL.so");
-    }
-#if defined(XP_UNIX)
-    if (!mEGLLibrary) {
-        mEGLLibrary = PR_LoadLibrary("libEGL.so.1");
-    }
-#endif
+        lib = PR_LoadLibrary("libEGL.so");
+        if (lib)
+            break;
 
-    if (!mEGLLibrary) {
+#if defined(XP_UNIX)
+        lib = PR_LoadLibrary("libEGL.so.1");
+        if (lib)
+            break;
+#endif
+    } while (false);
+
+    if (!lib) {
         NS_WARNING("Couldn't load EGL LIB.");
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_LOAD_2");
         return false;
     }
-
 #endif // !Windows
 
-#define SYMBOL(name) \
-{ (PRFuncPtr*) &mSymbols.f##name, { "egl" #name, nullptr } }
+    mGetProcAddress = (pfnGetProcAddressT)PR_FindFunctionSymbol(lib, "eglGetProcAddress");
+    if (!mGetProcAddress) {
+        NS_WARNING("Couldn't load eglGetProcAddress.");
+        *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_SYM");
+        return false;
+    }
 
-    GLLibraryLoader::SymLoadStruct earlySymbols[] = {
+    const auto fnLoadSymbols = [&](const SymLoadStruct* list) {
+        return LoadSymbols(mGetProcAddress, list, true);
+    };
+
+#define SYMBOL(name) { (PRFuncPtr*)&mSymbols.f##name, { "egl" #name, nullptr } }
+
+    const SymLoadStruct earlySymbols[] = {
         SYMBOL(GetDisplay),
         SYMBOL(Terminate),
         SYMBOL(GetCurrentSurface),
@@ -406,7 +416,6 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
         SYMBOL(GetConfigs),
         SYMBOL(GetConfigAttrib),
         SYMBOL(WaitNative),
-        SYMBOL(GetProcAddress),
         SYMBOL(SwapBuffers),
         SYMBOL(CopyBuffers),
         SYMBOL(QueryString),
@@ -417,42 +426,29 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
         { nullptr, { nullptr } }
     };
 
-    if (!GLLibraryLoader::LoadSymbols(mEGLLibrary, &earlySymbols[0])) {
+    if (!fnLoadSymbols(earlySymbols)) {
         NS_WARNING("Couldn't find required entry points in EGL library (early init)");
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_EGL_SYM");
         return false;
     }
 
-    GLLibraryLoader::SymLoadStruct optionalSymbols[] = {
-        // On Android 4.3 and up, certain features like ANDROID_native_fence_sync
-        // can only be queried by using a special eglQueryString.
-        { (PRFuncPtr*) &mSymbols.fQueryStringImplementationANDROID,
-          { "_Z35eglQueryStringImplementationANDROIDPvi", nullptr } },
-        { nullptr, { nullptr } }
-    };
-
-    // Do not warn about the failure to load this - see bug 1092191
-    Unused << GLLibraryLoader::LoadSymbols(mEGLLibrary, &optionalSymbols[0],
-                                           nullptr, nullptr, false);
+    // On Android 4.3 and up, certain features like ANDROID_native_fence_sync
+    // can only be queried by using a special eglQueryString.
+    const auto special = PR_FindFunctionSymbol(lib, "_Z35eglQueryStringImplementationANDROIDPvi");
+    mSymbols.fQueryStringImplementationANDROID = (decltype(mSymbols.fQueryStringImplementationANDROID))special;
 
     InitClientExtensions();
 
-    const auto lookupFunction =
-        (GLLibraryLoader::PlatformLookupFunction)mSymbols.fGetProcAddress;
-
     // Client exts are ready. (But not display exts!)
     if (IsExtensionSupported(ANGLE_platform_angle_d3d)) {
-        GLLibraryLoader::SymLoadStruct d3dSymbols[] = {
+        const SymLoadStruct d3dSymbols[] = {
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformInitialize, { "ANGLEPlatformInitialize", nullptr } },
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformShutdown,   { "ANGLEPlatformShutdown", nullptr } },
             { (PRFuncPtr*)&mSymbols.fGetPlatformDisplayEXT,   { "eglGetPlatformDisplayEXT", nullptr } },
             { nullptr, { nullptr } }
         };
 
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &d3dSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(d3dSymbols)) {
             NS_ERROR("EGL supports ANGLE_platform_angle_d3d without exposing its functions!");
 
             MarkExtensionUnsupported(ANGLE_platform_angle_d3d);
@@ -532,16 +528,12 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
     // Alright, load display exts.
 
     if (IsExtensionSupported(KHR_lock_surface)) {
-        GLLibraryLoader::SymLoadStruct lockSymbols[] = {
+        const SymLoadStruct lockSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fLockSurface,   { "eglLockSurfaceKHR",   nullptr } },
             { (PRFuncPtr*) &mSymbols.fUnlockSurface, { "eglUnlockSurfaceKHR", nullptr } },
             { nullptr, { nullptr } }
         };
-
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &lockSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(lockSymbols)) {
             NS_ERROR("EGL supports KHR_lock_surface without exposing its functions!");
 
             MarkExtensionUnsupported(KHR_lock_surface);
@@ -552,15 +544,11 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
     }
 
     if (IsExtensionSupported(ANGLE_surface_d3d_texture_2d_share_handle)) {
-        GLLibraryLoader::SymLoadStruct d3dSymbols[] = {
+        const SymLoadStruct d3dSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fQuerySurfacePointerANGLE, { "eglQuerySurfacePointerANGLE", nullptr } },
             { nullptr, { nullptr } }
         };
-
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &d3dSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(d3dSymbols)) {
             NS_ERROR("EGL supports ANGLE_surface_d3d_texture_2d_share_handle without exposing its functions!");
 
             MarkExtensionUnsupported(ANGLE_surface_d3d_texture_2d_share_handle);
@@ -570,18 +558,14 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
     }
 
     if (IsExtensionSupported(KHR_fence_sync)) {
-        GLLibraryLoader::SymLoadStruct syncSymbols[] = {
+        const SymLoadStruct syncSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fCreateSync,     { "eglCreateSyncKHR",     nullptr } },
             { (PRFuncPtr*) &mSymbols.fDestroySync,    { "eglDestroySyncKHR",    nullptr } },
             { (PRFuncPtr*) &mSymbols.fClientWaitSync, { "eglClientWaitSyncKHR", nullptr } },
             { (PRFuncPtr*) &mSymbols.fGetSyncAttrib,  { "eglGetSyncAttribKHR",  nullptr } },
             { nullptr, { nullptr } }
         };
-
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &syncSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(syncSymbols)) {
             NS_ERROR("EGL supports KHR_fence_sync without exposing its functions!");
 
             MarkExtensionUnsupported(KHR_fence_sync);
@@ -594,16 +578,12 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
     }
 
     if (IsExtensionSupported(KHR_image) || IsExtensionSupported(KHR_image_base)) {
-        GLLibraryLoader::SymLoadStruct imageSymbols[] = {
+        const SymLoadStruct imageSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fCreateImage,  { "eglCreateImageKHR",  nullptr } },
             { (PRFuncPtr*) &mSymbols.fDestroyImage, { "eglDestroyImageKHR", nullptr } },
             { nullptr, { nullptr } }
         };
-
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &imageSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(imageSymbols)) {
             NS_ERROR("EGL supports KHR_image(_base) without exposing its functions!");
 
             MarkExtensionUnsupported(KHR_image);
@@ -618,15 +598,11 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
     }
 
     if (IsExtensionSupported(ANDROID_native_fence_sync)) {
-        GLLibraryLoader::SymLoadStruct nativeFenceSymbols[] = {
+        const SymLoadStruct nativeFenceSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fDupNativeFenceFDANDROID, { "eglDupNativeFenceFDANDROID", nullptr } },
             { nullptr, { nullptr } }
         };
-
-        bool success = GLLibraryLoader::LoadSymbols(mEGLLibrary,
-                                                    &nativeFenceSymbols[0],
-                                                    lookupFunction);
-        if (!success) {
+        if (!fnLoadSymbols(nativeFenceSymbols)) {
             NS_ERROR("EGL supports ANDROID_native_fence_sync without exposing its functions!");
 
             MarkExtensionUnsupported(ANDROID_native_fence_sync);

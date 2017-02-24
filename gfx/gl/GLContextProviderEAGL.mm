@@ -22,10 +22,28 @@ namespace gl {
 
 using namespace mozilla::widget;
 
+PRLibrary*
+GetGLLib()
+{
+    PRLibrary* ret;
+    if (PR_FindFunctionSymbolAndLibrary("glBindTexture", &ret))
+        return ret;
+
+    MOZ_CRASH("failed to find OpenGL library");
+}
+
+PRFuncPtr GLAPIENTRY
+eaglGetProcAddress(const char* name)
+{
+    static PRLibrary* const sLib = GetGLLib();
+    return PR_FindFunctionSymbol(sLib, name);
+}
+
 GLContextEAGL::GLContextEAGL(CreateContextFlags flags, const SurfaceCaps& caps,
                              EAGLContext* context, GLContext* sharedContext,
                              bool isOffscreen, ContextProfile profile)
-    : GLContext(flags, caps, sharedContext, isOffscreen)
+    : GLContext((pfnGetProcAddressT)&eaglGetProcAddress, flags, caps, sharedContext,
+                isOffscreen)
     , mContext(context)
     , mBackbufferRB(0)
     , mBackbufferFB(0)
@@ -57,15 +75,6 @@ GLContextEAGL::~GLContextEAGL()
       [EAGLContext setCurrentContext:nil];
       [mContext release];
     }
-}
-
-bool
-GLContextEAGL::Init()
-{
-    if (!InitWithPrefix("gl", true))
-        return false;
-
-    return true;
 }
 
 bool
@@ -132,12 +141,6 @@ GLContextEAGL::MakeCurrentImpl(bool aForce)
 bool
 GLContextEAGL::IsCurrent() {
     return [EAGLContext currentContext] == mContext;
-}
-
-bool
-GLContextEAGL::SetupLookupFunction()
-{
-    return false;
 }
 
 bool

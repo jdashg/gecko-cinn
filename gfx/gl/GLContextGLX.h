@@ -46,13 +46,11 @@ public:
         return static_cast<GLContextGLX*>(gl);
     }
 
-    bool Init() override;
+    virtual bool Init() override;
 
     virtual bool MakeCurrentImpl(bool aForce) override;
 
     virtual bool IsCurrent() override;
-
-    virtual bool SetupLookupFunction() override;
 
     virtual bool IsDoubleBuffered() const override;
 

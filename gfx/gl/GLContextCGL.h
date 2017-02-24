@@ -40,8 +40,6 @@ public:
         return static_cast<GLContextCGL*>(gl);
     }
 
-    bool Init() override;
-
     NSOpenGLContext* GetNSOpenGLContext() const { return mContext; }
     CGLContextObj GetCGLContext() const;
 
@@ -50,8 +48,6 @@ public:
     virtual bool IsCurrent() override;
 
     virtual GLenum GetPreferredARGB32Format() const override;
-
-    virtual bool SetupLookupFunction() override;
 
     virtual bool IsDoubleBuffered() const override;
 

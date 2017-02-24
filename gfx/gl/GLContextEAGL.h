@@ -37,8 +37,6 @@ public:
         return static_cast<GLContextEAGL*>(gl);
     }
 
-    bool Init() override;
-
     bool AttachToWindow(nsIWidget* aWidget);
 
     EAGLContext* GetEAGLContext() const { return mContext; }
@@ -46,8 +44,6 @@ public:
     virtual bool MakeCurrentImpl(bool aForce) override;
 
     virtual bool IsCurrent() override;
-
-    virtual bool SetupLookupFunction() override;
 
     virtual bool IsDoubleBuffered() const override;
 

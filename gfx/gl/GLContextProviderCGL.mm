@@ -64,6 +64,10 @@ public:
         return mUseDoubleBufferedWindows;
     }
 
+    PRFuncPtr GetProcAddress(const char* name) const {
+        return PR_FindFunctionSymbol(mOGLLibrary, name);
+    }
+
 private:
     bool mInitialized;
     bool mUseDoubleBufferedWindows;
@@ -72,10 +76,16 @@ private:
 
 CGLLibrary sCGLLibrary;
 
+PRFuncPtr GLAPIENTRY
+cglGetProcAddress(const char* name)
+{
+    return sCGLLibrary.GetProcAddress();
+}
+
 GLContextCGL::GLContextCGL(CreateContextFlags flags, const SurfaceCaps& caps,
                            NSOpenGLContext* context, bool isOffscreen,
                            ContextProfile profile)
-    : GLContext(flags, caps, nullptr, isOffscreen)
+    : GLContext((pfnGetProcAddressT)&cglGetProcAddress, flags, caps, nullptr, isOffscreen)
     , mContext(context)
 {
     SetProfileVersion(profile, 210);
@@ -94,16 +104,6 @@ GLContextCGL::~GLContextCGL()
         }
         [mContext release];
     }
-
-}
-
-bool
-GLContextCGL::Init()
-{
-    if (!InitWithPrefix("gl", true))
-        return false;
-
-    return true;
 }
 
 CGLContextObj
@@ -143,12 +143,6 @@ GLenum
 GLContextCGL::GetPreferredARGB32Format() const
 {
     return LOCAL_GL_BGRA;
-}
-
-bool
-GLContextCGL::SetupLookupFunction()
-{
-    return false;
 }
 
 bool

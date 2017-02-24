@@ -40,7 +40,7 @@ void* get_proc_address_from_glcontext(void* glcontext_ptr, const char* procname)
   if (!glcontext) {
     return nullptr;
   }
-  PRFuncPtr p = glcontext->LookupSymbol(procname);
+  PRFuncPtr p = (glcontext->mPfnLookup)(procname);
   return reinterpret_cast<void*>(p);
 }
 

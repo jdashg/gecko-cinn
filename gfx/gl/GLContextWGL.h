@@ -43,7 +43,7 @@ public:
         return static_cast<GLContextWGL*>(gl);
     }
 
-    bool Init() override;
+    virtual bool Init() override;
 
     virtual bool MakeCurrentImpl(bool aForce) override;
 
@@ -56,8 +56,6 @@ public:
     virtual bool SupportsRobustness() const override;
 
     virtual bool SwapBuffers() override;
-
-    virtual bool SetupLookupFunction() override;
 
     virtual void GetWSIInfo(nsCString* const out) const override;
 

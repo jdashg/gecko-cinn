@@ -8,15 +8,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef GLAPIENTRY
-# ifdef WIN32
-#  include <windef.h>
-#  define GLAPIENTRY APIENTRY
-#  define GLAPI
-# else
-#  define GLAPIENTRY
-#  define GLAPI
-# endif
+#ifdef WIN32
+# include <windef.h>
+# define GLAPIENTRY APIENTRY
+#else
+# define GLAPIENTRY
 #endif
 
 typedef int8_t realGLboolean;

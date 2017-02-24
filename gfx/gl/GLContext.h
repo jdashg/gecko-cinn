@@ -33,7 +33,7 @@
 #include "../../mfbt/UniquePtr.h"
 
 #include "GLDefs.h"
-#include "GLLibraryLoader.h"
+#include "LoadSymbols.h"
 #include "nsISupportsImpl.h"
 #include "plstr.h"
 #include "GLContextTypes.h"
@@ -192,21 +192,18 @@ enum class GLRenderer {
 };
 
 class GLContext
-    : public GLLibraryLoader
-    , public GenericAtomicRefCounted
+    : public GenericAtomicRefCounted
     , public SupportsWeakPtr<GLContext>
 {
 public:
+    const pfnGetProcAddressT mPfnLookup;
+    const bool mWorkAroundDriverBugs;
+    const bool mIsOffscreen;
+
     MOZ_DECLARE_WEAKREFERENCE_TYPENAME(GLContext)
 
 // -----------------------------------------------------------------------------
-// basic enums
-public:
-
-// -----------------------------------------------------------------------------
 // basic getters
-public:
-
     /**
      * Returns true if the context is using ANGLE. This should only be overridden
      * for an ANGLE implementation.
@@ -355,8 +352,8 @@ public:
         return 0;
     }
 
-protected:
-    bool mIsOffscreen;
+// -----------------------------------------------------------------------------
+
     bool mContextLost;
 
     /**
@@ -538,6 +535,13 @@ protected:
     }
 
     std::bitset<Extensions_Max> mAvailableExtensions;
+
+// -----------------------------------------------------------------------------
+
+protected:
+    bool LoadSymbols(const SymLoadStruct* list, const char* desc = nullptr) const;
+    bool LoadExtSymbols(const SymLoadStruct* list, GLExtensions ext);
+    bool LoadFeatureSymbols(const SymLoadStruct* list, GLFeature feature);
 
 // -----------------------------------------------------------------------------
 // Feature queries
@@ -3221,10 +3225,9 @@ public:
 // -----------------------------------------------------------------------------
 // Constructor
 protected:
-    explicit GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
-                       GLContext* sharedContext = nullptr,
-                       bool isOffscreen = false);
-
+    GLContext(pfnGetProcAddressT pfnLookup, CreateContextFlags flags,
+              const SurfaceCaps& caps, GLContext* sharedContext = nullptr,
+              bool isOffscreen = false);
 
 // -----------------------------------------------------------------------------
 // Destructor
@@ -3270,9 +3273,7 @@ public:
         return MakeCurrentImpl(aForce);
     }
 
-    virtual bool Init() = 0;
-
-    virtual bool SetupLookupFunction() = 0;
+    virtual bool Init();
 
     virtual void ReleaseSurface() {}
 
@@ -3539,16 +3540,9 @@ public:
 
     bool IsOffscreenSizeAllowed(const gfx::IntSize& aSize) const;
 
-protected:
-    bool InitWithPrefix(const char* prefix, bool trygl);
-
 private:
-    bool InitWithPrefixImpl(const char* prefix, bool trygl);
-    void LoadMoreSymbols(const char* prefix, bool trygl);
-    bool LoadExtSymbols(const char* prefix, bool trygl, const SymLoadStruct* list,
-                        GLExtensions ext);
-    bool LoadFeatureSymbols(const char* prefix, bool trygl, const SymLoadStruct* list,
-                            GLFeature feature);
+    bool InitImpl();
+    void LoadMoreSymbols();
 
 protected:
     void InitExtensions();
@@ -3566,7 +3560,6 @@ protected:
     bool mNeedsFlushBeforeDeleteFB;
     bool mTextureAllocCrashesOnMapFailure;
     bool mNeedsCheckAfterAttachTextureToFb;
-    bool mWorkAroundDriverBugs;
 
     bool IsTextureSizeSafeToPassToDriver(GLenum target, GLsizei width, GLsizei height) const {
         if (mNeedsTextureSizeChecks) {
