@@ -11,6 +11,7 @@
 #include "mozilla/Preferences.h"
 #include "MurmurHash3.h"
 #include "nsPrintfCString.h"
+#include <regex>
 #include <string>
 #include <vector>
 #include "WebGLContext.h"
@@ -89,8 +90,6 @@ ChooseValidatorCompileOptions(const ShBuiltInResources& resources,
     return options;
 }
 
-} // namespace webgl
-
 ////////////////////////////////////////
 
 static ShShaderOutput
@@ -121,210 +120,179 @@ ShaderOutput(gl::GLContext* gl)
     return SH_GLSL_COMPATIBILITY_OUTPUT;
 }
 
-webgl::ShaderValidator*
-WebGLContext::CreateShaderValidator(GLenum shaderType) const
+/*static*/ void
+ShaderValidator::ChooseResources(const WebGLContext* webgl, ShBuiltInResources* res)
 {
-    if (mBypassShaderValidation)
-        return nullptr;
+    memset(res, 0, sizeof(*res));
+    sh::InitBuiltInResources(res);
 
-    const auto spec = (IsWebGL2() ? SH_WEBGL2_SPEC : SH_WEBGL_SPEC);
-    const auto outputLanguage = ShaderOutput(gl);
+    res->HashFunction = webgl::IdentifierHashFunc;
 
-    ShBuiltInResources resources;
-    memset(&resources, 0, sizeof(resources));
-    ShInitBuiltInResources(&resources);
-
-    resources.HashFunction = webgl::IdentifierHashFunc;
-
-    resources.MaxVertexAttribs = mGLMaxVertexAttribs;
-    resources.MaxVertexUniformVectors = mGLMaxVertexUniformVectors;
-    resources.MaxVaryingVectors = mGLMaxVaryingVectors;
-    resources.MaxVertexTextureImageUnits = mGLMaxVertexTextureImageUnits;
-    resources.MaxCombinedTextureImageUnits = mGLMaxTextureUnits;
-    resources.MaxTextureImageUnits = mGLMaxTextureImageUnits;
-    resources.MaxFragmentUniformVectors = mGLMaxFragmentUniformVectors;
-
-    const bool hasMRTs = (IsWebGL2() ||
-                          IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers));
-    resources.MaxDrawBuffers = (hasMRTs ? mGLMaxDrawBuffers : 1);
-
-    if (IsExtensionEnabled(WebGLExtensionID::EXT_frag_depth))
-        resources.EXT_frag_depth = 1;
-
-    if (IsExtensionEnabled(WebGLExtensionID::OES_standard_derivatives))
-        resources.OES_standard_derivatives = 1;
-
-    if (IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers))
-        resources.EXT_draw_buffers = 1;
-
-    if (IsExtensionEnabled(WebGLExtensionID::EXT_shader_texture_lod))
-        resources.EXT_shader_texture_lod = 1;
+    res->MaxVertexAttribs             = webgl->mGLMaxVertexAttribs;
+    res->MaxVertexUniformVectors      = webgl->mGLMaxVertexUniformVectors;
+    res->MaxVaryingVectors            = webgl->mGLMaxVaryingVectors;
+    res->MaxVertexTextureImageUnits   = webgl->mGLMaxVertexTextureImageUnits;
+    res->MaxCombinedTextureImageUnits = webgl->mGLMaxTextureUnits;
+    res->MaxTextureImageUnits         = webgl->mGLMaxTextureImageUnits;
+    res->MaxFragmentUniformVectors    = webgl->mGLMaxFragmentUniformVectors;
+    res->MaxDrawBuffers               = webgl->mImplMaxDrawBuffers;
 
     // Tell ANGLE to allow highp in frag shaders. (unless disabled)
     // If underlying GLES doesn't have highp in frag shaders, it should complain anyways.
-    resources.FragmentPrecisionHigh = mDisableFragHighP ? 0 : 1;
+    res->FragmentPrecisionHigh = 1;
 
-    if (gl->WorkAroundDriverBugs()) {
+    if (webgl->mDisableFragHighP) {
+        res->FragmentPrecisionHigh = 0;
+    }
+
+    res->EXT_frag_depth           = webgl->IsExtensionEnabled(WebGLExtensionID::EXT_frag_depth);
+    res->OES_standard_derivatives = webgl->IsExtensionEnabled(WebGLExtensionID::OES_standard_derivatives);
+    res->EXT_draw_buffers         = webgl->IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers);
+    res->EXT_shader_texture_lod   = webgl->IsExtensionEnabled(WebGLExtensionID::EXT_shader_texture_lod);
+
+    if (webgl->gl->WorkAroundDriverBugs()) {
 #ifdef XP_MACOSX
-        if (gl->Vendor() == gl::GLVendor::NVIDIA) {
+        if (webgl->gl->Vendor() == gl::GLVendor::NVIDIA) {
             // Work around bug 890432
-            resources.MaxExpressionComplexity = 1000;
+            res->MaxExpressionComplexity = 1000;
         }
 #endif
     }
-
-    const auto compileOptions = webgl::ChooseValidatorCompileOptions(resources, gl);
-    return webgl::ShaderValidator::Create(shaderType, spec, outputLanguage, resources,
-                                          compileOptions);
 }
 
-////////////////////////////////////////
-
-namespace webgl {
-
-/*static*/ ShaderValidator*
-ShaderValidator::Create(GLenum shaderType, ShShaderSpec spec,
-                        ShShaderOutput outputLanguage,
-                        const ShBuiltInResources& resources,
-                        ShCompileOptions compileOptions)
+ShaderValidator::ShaderValidator(const WebGLContext* webgl)
 {
-    ShHandle handle = ShConstructCompiler(shaderType, spec, outputLanguage, &resources);
-    if (!handle)
-        return nullptr;
+    const auto spec = (webgl->IsWebGL2() ? SH_WEBGL2_SPEC : SH_WEBGL_SPEC);
+    const auto outputLang = ShaderOutput(webgl->gl);
 
-    return new ShaderValidator(handle, compileOptions, resources.MaxVaryingVectors);
+    ShBuiltInResources resources;
+    ChooseResources(webgl, &resources);
+
+    mCompileOptions = ChooseValidatorCompileOptions(resources, webgl->gl);
+    mVertCompiler = sh::ConstructCompiler(LOCAL_GL_VERTEX_SHADER  , spec, outputLang, &resources);
+    mFragCompiler = sh::ConstructCompiler(LOCAL_GL_FRAGMENT_SHADER, spec, outputLang, &resources);
+    MOZ_RELEASE_ASSERT(mVertCompiler);
+    MOZ_RELEASE_ASSERT(mFragCompiler);
+
+#ifdef DEBUG
+    mWebGL = webgl;
+    mResources = resources;
+#endif
 }
 
 ShaderValidator::~ShaderValidator()
 {
-    ShDestruct(mHandle);
+    ShDestruct(mVertCompiler);
+    ShDestruct(mFragCompiler);
 }
 
-bool
-ShaderValidator::ValidateAndTranslate(const char* source)
+UniquePtr<const ShaderInfo>
+ShaderValidator::Compile(GLenum shaderType, const char* source,
+                         nsCString* const out_infoLog) const
 {
-    MOZ_ASSERT(!mHasRun);
-    mHasRun = true;
+#ifdef DEBUG
+    ShBuiltInResources resources;
+    ChooseResources(mWebGL, &resources);
+    MOZ_ASSERT(memcmp(&mResources, &resources, sizeof(resources)) == 0);
+#endif
 
-    const char* const parts[] = {
-        source
-    };
-    return ShCompile(mHandle, parts, ArrayLength(parts), mCompileOptions);
+    const ShHandle* pCompiler;
+    switch (shaderType) {
+    case LOCAL_GL_VERTEX_SHADER:
+        pCompiler = &mVertCompiler;
+        break;
+
+    case LOCAL_GL_FRAGMENT_SHADER:
+        pCompiler = &mFragCompiler;
+        break;
+
+    default:
+        MOZ_CRASH();
+    }
+    const auto& compiler = *pCompiler;
+
+    UniquePtr<ShaderInfo> info;
+    if (sh::Compile(compiler, &source, 1, mCompileOptions)) {
+        info.reset(new ShaderInfo);
+
+        info->shaderVersion = sh::GetShaderVersion(compiler);
+        info->translatedSource = sh::GetObjectCode(compiler);
+
+        info->uniforms = *sh::GetUniforms(compiler);
+        info->varyings = *sh::GetVaryings(compiler);
+        info->attribs  = *sh::GetAttributes(compiler);
+        info->outputs  = *sh::GetOutputVariables(compiler);
+        info->blocks   = *sh::GetInterfaceBlocks(compiler);
+
+        for (const auto& itr : *sh::GetNameHashingMap(compiler)) {
+            info->mapName.insert({itr.first, itr.second});
+            info->unmapName.insert({itr.second, itr.first});
+        }
+    }
+
+    *out_infoLog = sh::GetInfoLog(compiler).c_str();
+
+    sh::ClearResults(compiler);
+    return Move(info);
 }
 
-void
-ShaderValidator::GetInfoLog(nsACString* out) const
-{
-    MOZ_ASSERT(mHasRun);
-
-    const std::string &log = ShGetInfoLog(mHandle);
-    out->Assign(log.data(), log.length());
-}
-
-void
-ShaderValidator::GetOutput(nsACString* out) const
-{
-    MOZ_ASSERT(mHasRun);
-
-    const std::string &output = ShGetObjectCode(mHandle);
-    out->Assign(output.data(), output.length());
-}
+////////////////////////////////////////////////////////////////////////////////
 
 template<size_t N>
-static bool
+static inline bool
 StartsWith(const std::string& haystack, const char (&needle)[N])
 {
     return haystack.compare(0, N - 1, needle) == 0;
 }
 
 bool
-ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log) const
+ShaderInfo::CanLinkToVert(const ShaderInfo& vert, const WebGLContext* webgl,
+                          nsCString* const out_log) const
 {
-    if (!prev) {
-        nsPrintfCString error("Passed in NULL prev ShaderValidator.");
-        *out_log = error;
+    if (shaderVersion != vert.shaderVersion) {
+        *out_log = nsPrintfCString("Fragment shader version %u does not match vertex"
+                                   " shader version %u.",
+                                   shaderVersion, vert.shaderVersion);
         return false;
     }
 
-    const auto shaderVersion = ShGetShaderVersion(mHandle);
-    if (ShGetShaderVersion(prev->mHandle) != shaderVersion) {
-        nsPrintfCString error("Vertex shader version %d does not match"
-                              " fragment shader version %d.",
-                              ShGetShaderVersion(prev->mHandle),
-                              ShGetShaderVersion(mHandle));
-        *out_log = error;
-        return false;
-    }
+    for (const auto& fragVar : uniforms) {
+        for (const auto& vertVar : vert.uniforms) {
+            if (vertVar.name != fragVar.name)
+                continue;
 
-    {
-        const std::vector<sh::Uniform>* vertPtr = ShGetUniforms(prev->mHandle);
-        const std::vector<sh::Uniform>* fragPtr = ShGetUniforms(mHandle);
-        if (!vertPtr || !fragPtr) {
-            nsPrintfCString error("Could not create uniform list.");
-            *out_log = error;
-            return false;
-        }
-
-        for (auto itrFrag = fragPtr->begin(); itrFrag != fragPtr->end(); ++itrFrag) {
-            for (auto itrVert = vertPtr->begin(); itrVert != vertPtr->end(); ++itrVert) {
-                if (itrVert->name != itrFrag->name)
-                    continue;
-
-                if (!itrVert->isSameUniformAtLinkTime(*itrFrag)) {
-                    nsPrintfCString error("Uniform `%s` is not linkable between"
-                                          " attached shaders.",
-                                          itrFrag->name.c_str());
-                    *out_log = error;
-                    return false;
-                }
-
-                break;
+            if (!fragVar.isSameUniformAtLinkTime(vertVar)) {
+                *out_log = nsPrintfCString("Uniform `%s` is not linkable between"
+                                           " attached shaders.",
+                                           fragVar.name.c_str());
+                return false;
             }
+            break;
         }
     }
-    {
-        const auto vertVars = sh::GetInterfaceBlocks(prev->mHandle);
-        const auto fragVars = sh::GetInterfaceBlocks(mHandle);
-        if (!vertVars || !fragVars) {
-            nsPrintfCString error("Could not create uniform block list.");
-            *out_log = error;
-            return false;
-        }
 
-        for (const auto& fragVar : *fragVars) {
-            for (const auto& vertVar : *vertVars) {
-                if (vertVar.name != fragVar.name)
-                    continue;
+    for (const auto& fragVar : blocks) {
+        for (const auto& vertVar : vert.blocks) {
+            if (vertVar.name != fragVar.name)
+                continue;
 
-                if (!vertVar.isSameInterfaceBlockAtLinkTime(fragVar)) {
-                    nsPrintfCString error("Interface block `%s` is not linkable between"
-                                          " attached shaders.",
-                                          fragVar.name.c_str());
-                    *out_log = error;
-                    return false;
-                }
-
-                break;
+            if (!fragVar.isSameInterfaceBlockAtLinkTime(vertVar)) {
+                *out_log = nsPrintfCString("Interface block `%s` is not linkable between"
+                                           " attached shaders.",
+                                           fragVar.name.c_str());
+                return false;
             }
+            break;
         }
-    }
-
-    const auto& vertVaryings = ShGetVaryings(prev->mHandle);
-    const auto& fragVaryings = ShGetVaryings(mHandle);
-    if (!vertVaryings || !fragVaryings) {
-        nsPrintfCString error("Could not create varying list.");
-        *out_log = error;
-        return false;
     }
 
     {
         std::vector<sh::ShaderVariable> staticUseVaryingList;
 
-        for (const auto& fragVarying : *fragVaryings) {
-            static const char prefix[] = "gl_";
-            if (StartsWith(fragVarying.name, prefix)) {
-                if (fragVarying.staticUse) {
-                    staticUseVaryingList.push_back(fragVarying);
+        for (const auto& fragVar : varyings) {
+            if (fragVar.isBuiltIn()) {
+                if (fragVar.staticUse) {
+                    staticUseVaryingList.push_back(fragVar);
                 }
                 continue;
             }
@@ -332,37 +300,36 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
             bool definedInVertShader = false;
             bool staticVertUse = false;
 
-            for (const auto& vertVarying : *vertVaryings) {
-                if (vertVarying.name != fragVarying.name)
+            for (const auto& vertVar : vert.varyings) {
+                if (vertVar.name != fragVar.name)
                     continue;
 
-                if (!vertVarying.isSameVaryingAtLinkTime(fragVarying, shaderVersion)) {
-                    nsPrintfCString error("Varying `%s`is not linkable between"
-                                          " attached shaders.",
-                                          fragVarying.name.c_str());
-                    *out_log = error;
+                if (!fragVar.isSameVaryingAtLinkTime(vertVar, shaderVersion)) {
+                    *out_log = nsPrintfCString("Varying `%s`is not linkable between"
+                                               " attached shaders.",
+                                               fragVar.name.c_str());
                     return false;
                 }
 
                 definedInVertShader = true;
-                staticVertUse = vertVarying.staticUse;
+                staticVertUse = vertVar.staticUse;
                 break;
             }
 
-            if (!definedInVertShader && fragVarying.staticUse) {
-                nsPrintfCString error("Varying `%s` has static-use in the frag"
-                                      " shader, but is undeclared in the vert"
-                                      " shader.", fragVarying.name.c_str());
-                *out_log = error;
+            if (!definedInVertShader && fragVar.staticUse) {
+                *out_log = nsPrintfCString("Varying `%s` has static-use in the frag"
+                                           " shader, but is undeclared in the vert"
+                                           " shader.",
+                                           fragVar.name.c_str());
                 return false;
             }
 
-            if (staticVertUse && fragVarying.staticUse) {
-                staticUseVaryingList.push_back(fragVarying);
+            if (staticVertUse && fragVar.staticUse) {
+                staticUseVaryingList.push_back(fragVar);
             }
         }
 
-        if (!ShCheckVariablesWithinPackingLimits(mMaxVaryingVectors,
+        if (!ShCheckVariablesWithinPackingLimits(webgl->mGLMaxVaryingVectors,
                                                  staticUseVaryingList))
         {
             *out_log = "Statically used varyings do not fit within packing limits. (see"
@@ -378,19 +345,19 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
         bool isInvariant_FragCoord = false;
         bool isInvariant_PointCoord = false;
 
-        for (const auto& varying : *vertVaryings) {
-            if (varying.name == "gl_Position") {
-                isInvariant_Position = varying.isInvariant;
-            } else if (varying.name == "gl_PointSize") {
-                isInvariant_PointSize = varying.isInvariant;
+        for (const auto& vertVar : vert.varyings) {
+            if (vertVar.name == "gl_Position") {
+                isInvariant_Position = vertVar.isInvariant;
+            } else if (vertVar.name == "gl_PointSize") {
+                isInvariant_PointSize = vertVar.isInvariant;
             }
         }
 
-        for (const auto& varying : *fragVaryings) {
-            if (varying.name == "gl_FragCoord") {
-                isInvariant_FragCoord = varying.isInvariant;
-            } else if (varying.name == "gl_PointCoord") {
-                isInvariant_PointCoord = varying.isInvariant;
+        for (const auto& fragVar : varyings) {
+            if (fragVar.name == "gl_FragCoord") {
+                isInvariant_FragCoord = fragVar.isInvariant;
+            } else if (fragVar.name == "gl_PointCoord") {
+                isInvariant_PointCoord = fragVar.isInvariant;
             }
         }
 
@@ -416,188 +383,164 @@ ShaderValidator::CanLinkTo(const ShaderValidator* prev, nsCString* const out_log
         }
     }
 
+    const auto& gl = webgl->gl;
+
+    if (gl->WorkAroundDriverBugs() &&
+        webgl->mIsMesa)
+    {
+        // Bug 777028: Mesa can't handle more than 16 samplers per program, counting each
+        // array entry.
+        const auto fnCalcSamplers = [&](const ShaderInfo& info) {
+            size_t accum = 0;
+            for (const auto& cur : info.uniforms) {
+                switch (cur.type) {
+                case LOCAL_GL_SAMPLER_2D:
+                case LOCAL_GL_SAMPLER_CUBE:
+                    accum += cur.arraySize;
+                    break;
+                }
+            }
+            return accum;
+        };
+        const auto numSamplers_upperBound = fnCalcSamplers(vert) + fnCalcSamplers(*this);
+        if (numSamplers_upperBound > 16) {
+            *out_log = "Programs with more than 16 samplers are disallowed on Mesa"
+                       " drivers to avoid crashing.";
+            return false;
+        }
+
+        // Bug 1203135: Mesa crashes internally if we exceed the reported maximum
+        // attribute count.
+        if (vert.attribs.size() > webgl->mGLMaxVertexAttribs) {
+            *out_log = "Number of attributes exceeds Mesa's reported max attribute"
+                       " count.";
+            return false;
+        }
+    }
+
     return true;
 }
 
-size_t
-ShaderValidator::CalcNumSamplerUniforms() const
+//const std::string var("foo.bar[3].qux[10]")
+//const std::sregex_token_iterator itr(var.begin(), var.end(), kRegex_GLSLVar, {-1,0});
+//const std::vector<std::string> parts(itr, std::sregex_token_iterator());
+//  => ||foo|.|bar|[3].|qux|[10]|
+
+/*static*/ std::string
+ShaderInfo::MapNameWith(const std::string& srcName,
+                        const decltype(ShaderInfo::mapName)& map)
 {
-    size_t accum = 0;
-
-    const std::vector<sh::Uniform>& uniforms = *ShGetUniforms(mHandle);
-
-    for (auto itr = uniforms.begin(); itr != uniforms.end(); ++itr) {
-        GLenum type = itr->type;
-        if (type == LOCAL_GL_SAMPLER_2D ||
-            type == LOCAL_GL_SAMPLER_CUBE)
-        {
-            accum += itr->arraySize;
-        }
-    }
-
-    return accum;
-}
-
-size_t
-ShaderValidator::NumAttributes() const
-{
-  return ShGetAttributes(mHandle)->size();
-}
-
-// Attribs cannot be structs or arrays, and neither can vertex inputs in ES3.
-// Therefore, attrib names are always simple.
-bool
-ShaderValidator::FindAttribUserNameByMappedName(const std::string& mappedName,
-                                                const std::string** const out_userName) const
-{
-    const std::vector<sh::Attribute>& attribs = *ShGetAttributes(mHandle);
-    for (auto itr = attribs.begin(); itr != attribs.end(); ++itr) {
-        if (itr->mappedName == mappedName) {
-            *out_userName = &(itr->name);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool
-ShaderValidator::FindAttribMappedNameByUserName(const std::string& userName,
-                                                const std::string** const out_mappedName) const
-{
-    const std::vector<sh::Attribute>& attribs = *ShGetAttributes(mHandle);
-    for (auto itr = attribs.begin(); itr != attribs.end(); ++itr) {
-        if (itr->name == userName) {
-            *out_mappedName = &(itr->mappedName);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool
-ShaderValidator::FindVaryingByMappedName(const std::string& mappedName,
-                                         std::string* const out_userName,
-                                         bool* const out_isArray) const
-{
-    const std::vector<sh::Varying>& varyings = *ShGetVaryings(mHandle);
-    for (auto itr = varyings.begin(); itr != varyings.end(); ++itr) {
-        const sh::ShaderVariable* found;
-        if (!itr->findInfoByMappedName(mappedName, &found, out_userName))
-            continue;
-
-        *out_isArray = found->isArray();
-        return true;
-    }
-
-    return false;
-}
-
-bool
-ShaderValidator::FindVaryingMappedNameByUserName(const std::string& userName,
-                                                 const std::string** const out_mappedName) const
-{
-    const std::vector<sh::Varying>& attribs = *ShGetVaryings(mHandle);
-    for (auto itr = attribs.begin(); itr != attribs.end(); ++itr) {
-        if (itr->name == userName) {
-            *out_mappedName = &(itr->mappedName);
-            return true;
-        }
-    }
-
-    return false;
-}
-// This must handle names like "foo.bar[0]".
-bool
-ShaderValidator::FindUniformByMappedName(const std::string& mappedName,
-                                         std::string* const out_userName,
-                                         bool* const out_isArray) const
-{
-    const std::vector<sh::Uniform>& uniforms = *ShGetUniforms(mHandle);
-    for (auto itr = uniforms.begin(); itr != uniforms.end(); ++itr) {
-        const sh::ShaderVariable* found;
-        if (!itr->findInfoByMappedName(mappedName, &found, out_userName))
-            continue;
-
-        *out_isArray = found->isArray();
-        return true;
-    }
-
-    const size_t dotPos = mappedName.find(".");
-
-    const std::vector<sh::InterfaceBlock>& interfaces = *ShGetInterfaceBlocks(mHandle);
-    for (const auto& interface : interfaces) {
-
-        std::string mappedFieldName;
-        const bool hasInstanceName = !interface.instanceName.empty();
-
-        // If the InterfaceBlock has an instanceName, all variables defined
-        // within the block are qualified with the block name, as opposed
-        // to being placed in the global scope.
-        if (hasInstanceName) {
-
-            // If mappedName has no block name prefix, skip
-            if (std::string::npos == dotPos)
-                continue;
-
-            // If mappedName has a block name prefix that doesn't match, skip
-            const std::string mappedInterfaceBlockName = mappedName.substr(0, dotPos);
-            if (interface.mappedName != mappedInterfaceBlockName)
-                continue;
-
-            mappedFieldName = mappedName.substr(dotPos + 1);
+    static const std::regex kRegex_GLSLVar("[a-zA-Z_][a-zA-Z_0-9]*");
+    const std::vector<std::string> srcParts(std::sregex_token_iterator(srcName.begin(),
+                                                                       srcName.end(),
+                                                                       kRegex_GLSLVar,
+                                                                       {-1,0}),
+                                            std::sregex_token_iterator());
+    std::vector<const std::string*> dstParts;
+    dstParts.reserve(srcParts.size());
+    size_t dstNameSize = 0;
+    for (const auto& src : srcParts) {
+        const auto itr = map.find(src);
+        const std::string* dst;
+        if (itr == map.end()) {
+            dst = &src;
         } else {
-            mappedFieldName = mappedName;
+            dst = &(itr->second);
         }
-
-        for (const auto& field : interface.fields) {
-            const sh::ShaderVariable* found;
-
-            if (!field.findInfoByMappedName(mappedFieldName, &found, out_userName))
-                continue;
-
-            if (hasInstanceName) {
-                // Prepend the user name of the interface that matched
-                *out_userName = interface.name + "." + *out_userName;
-            }
-
-            *out_isArray = found->isArray();
-            return true;
-        }
+        dstParts.push_back(dst);
+        dstNameSize += dst->size();
     }
 
-    return false;
+    std::string dstName;
+    dstName.reserve(dstNameSize);
+    for (const auto& dst : dstParts) {
+        dstName += *dst;
+    }
+    return dstName;
 }
 
-bool
-ShaderValidator::UnmapUniformBlockName(const nsACString& baseMappedName,
-                                       nsCString* const out_baseUserName) const
-{
-    const std::vector<sh::InterfaceBlock>& interfaces = *ShGetInterfaceBlocks(mHandle);
-    for (const auto& interface : interfaces) {
-        const nsDependentCString interfaceMappedName(interface.mappedName.data(),
-                                                     interface.mappedName.size());
-        if (baseMappedName == interfaceMappedName) {
-            *out_baseUserName = interface.name.data();
-            return true;
-        }
-    }
+////
 
-    return false;
+template<typename T>
+size_t MemSize(const T& x);
+
+size_t
+IndirectMemSize(int64_t)
+{
+    return 0;
 }
 
-void
-ShaderValidator::EnumerateFragOutputs(std::map<nsCString, const nsCString> &out_FragOutputs) const
+size_t
+IndirectMemSize(uint64_t)
 {
-    const auto* fragOutputs = ShGetOutputVariables(mHandle);
+    return 0;
+}
 
-    if (fragOutputs) {
-        for (const auto& fragOutput : *fragOutputs) {
-            out_FragOutputs.insert({nsCString(fragOutput.name.c_str()),
-                                    nsCString(fragOutput.mappedName.c_str())});
-        }
+size_t
+IndirectMemSize(const std::string& x)
+{
+    return x.size();
+}
+
+template<typename K, typename V>
+size_t
+IndirectMemSize(const std::map<K, V>& x)
+{
+    size_t ret = 0;
+    for (const auto& pair : x) {
+        ret += MemSize(pair.first);
+        ret += MemSize(pair.second);
     }
+    return ret;
+}
+
+template<typename T>
+size_t
+IndirectMemSize(const std::vector<T>& x)
+{
+    size_t ret = 0;
+    for (const auto& cur : x) {
+        ret += MemSize(cur);
+    }
+    return ret;
+}
+
+size_t
+IndirectMemSize(const sh::ShaderVariable& x)
+{
+    return IndirectMemSize(x.name) +
+           IndirectMemSize(x.mappedName) +
+           IndirectMemSize(x.fields) +
+           IndirectMemSize(x.structName);
+}
+
+size_t
+IndirectMemSize(const sh::InterfaceBlock& x)
+{
+    return IndirectMemSize(x.name) +
+           IndirectMemSize(x.mappedName) +
+           IndirectMemSize(x.instanceName) +
+           IndirectMemSize(x.fields);
+}
+
+template<typename T>
+size_t MemSize(const T& x)
+{
+    return sizeof(x) + IndirectMemSize(x);
+}
+
+size_t
+ShaderInfo::MemSize() const
+{
+    return sizeof(*this) +
+           IndirectMemSize(translatedSource) +
+           IndirectMemSize(uniforms) +
+           IndirectMemSize(varyings) +
+           IndirectMemSize(attribs) +
+           IndirectMemSize(outputs) +
+           IndirectMemSize(blocks) +
+           IndirectMemSize(mapName) +
+           IndirectMemSize(unmapName);
 }
 
 } // namespace webgl

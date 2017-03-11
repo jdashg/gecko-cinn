@@ -26,6 +26,8 @@ WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
     webgl->mImplMaxColorAttachments = webgl->mGLMaxColorAttachments;
     webgl->mImplMaxDrawBuffers = std::min(webgl->mGLMaxDrawBuffers,
                                           webgl->mImplMaxColorAttachments);
+
+    webgl->ResetShaderValidator();
 }
 
 WebGLExtensionDrawBuffers::~WebGLExtensionDrawBuffers()

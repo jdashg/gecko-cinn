@@ -14,6 +14,7 @@ namespace mozilla {
 WebGLExtensionShaderTextureLod::WebGLExtensionShaderTextureLod(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
+    webgl->ResetShaderValidator();
 }
 
 WebGLExtensionShaderTextureLod::~WebGLExtensionShaderTextureLod()

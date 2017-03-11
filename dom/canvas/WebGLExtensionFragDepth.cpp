@@ -15,6 +15,7 @@ WebGLExtensionFragDepth::WebGLExtensionFragDepth(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
     MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
+    webgl->ResetShaderValidator();
 }
 
 WebGLExtensionFragDepth::~WebGLExtensionFragDepth()

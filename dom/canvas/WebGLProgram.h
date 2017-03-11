@@ -29,7 +29,6 @@ class WebGLUniformLocation;
 
 namespace dom {
 template<typename> struct Nullable;
-class OwningUnsignedLongOrUint32ArrayOrBoolean;
 template<typename> class Sequence;
 } // namespace dom
 
@@ -86,7 +85,7 @@ struct LinkedProgramInfo final
 
     //////
 
-    WebGLProgram* const prog;
+    const WebGLProgram* const prog;
     const GLenum transformFeedbackBufferMode;
 
     std::vector<AttribInfo> attribs;
@@ -104,10 +103,9 @@ struct LinkedProgramInfo final
     // The maps for the frag data names to the translated names.
     std::map<nsCString, const nsCString> fragDataMap;
 
-    explicit LinkedProgramInfo(WebGLProgram* prog);
+    explicit LinkedProgramInfo(const WebGLProgram* prog);
     ~LinkedProgramInfo();
 
-    bool FindAttrib(const nsCString& userName, const AttribInfo** const out_info) const;
     bool FindUniform(const nsCString& userName, nsCString* const out_mappedName,
                      size_t* const out_arrayIndex, UniformInfo** const out_info) const;
     bool MapFragDataName(const nsCString& userName,
@@ -159,22 +157,11 @@ public:
 
     ////////////////
 
-    bool FindAttribUserNameByMappedName(const nsACString& mappedName,
-                                        nsCString* const out_userName) const;
-    bool FindVaryingByMappedName(const nsACString& mappedName,
-                                 nsCString* const out_userName,
-                                 bool* const out_isArray) const;
-    bool FindUniformByMappedName(const nsACString& mappedName,
-                                 nsCString* const out_userName,
-                                 bool* const out_isArray) const;
-    bool UnmapUniformBlockName(const nsCString& mappedName,
-                               nsCString* const out_userName) const;
+    RefPtr<const webgl::LinkedProgramInfo> GatherLinkInfo() const;
 
     void TransformFeedbackVaryings(const dom::Sequence<nsString>& varyings,
                                    GLenum bufferMode);
     already_AddRefed<WebGLActiveInfo> GetTransformFeedbackVarying(GLuint index) const;
-
-    void EnumerateFragOutputs(std::map<nsCString, const nsCString> &out_FragOutputs) const;
 
     bool IsLinked() const { return mMostRecentLinkInfo; }
 
@@ -205,7 +192,7 @@ private:
 
     std::map<nsCString, GLuint> mNextLink_BoundAttribLocs;
 
-    std::vector<nsString> mNextLink_TransformFeedbackVaryings;
+    std::vector<nsCString> mNextLink_TransformFeedbackVaryings;
     GLenum mNextLink_TransformFeedbackBufferMode;
 
     nsCString mLinkLog;

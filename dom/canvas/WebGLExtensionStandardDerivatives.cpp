@@ -14,6 +14,7 @@ namespace mozilla {
 WebGLExtensionStandardDerivatives::WebGLExtensionStandardDerivatives(WebGLContext* webgl)
     : WebGLExtensionBase(webgl)
 {
+    webgl->ResetShaderValidator();
 }
 
 WebGLExtensionStandardDerivatives::~WebGLExtensionStandardDerivatives()

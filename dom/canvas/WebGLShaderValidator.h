@@ -7,68 +7,67 @@
 #define WEBGL_SHADER_VALIDATOR_H_
 
 #include "angle/ShaderLang.h"
+#include "mozilla/UniquePtr.h"
 #include "GLDefs.h"
 #include "nsString.h"
+#include <map>
 #include <string>
 
 namespace mozilla {
+class WebGLContext;
+
 namespace webgl {
+struct ShaderInfo;
 
 class ShaderValidator final
 {
-    const ShHandle mHandle;
-    const ShCompileOptions mCompileOptions;
-    const int mMaxVaryingVectors;
-    bool mHasRun;
+    ShCompileOptions mCompileOptions;
+    ShHandle mVertCompiler;
+    ShHandle mFragCompiler;
+
+#ifdef DEBUG
+    const WebGLContext* mWebGL;
+    ShBuiltInResources mResources;
+#endif
+
+    static void ChooseResources(const WebGLContext* webgl, ShBuiltInResources* res);
 
 public:
-    static ShaderValidator* Create(GLenum shaderType, ShShaderSpec spec,
-                                   ShShaderOutput outputLanguage,
-                                   const ShBuiltInResources& resources,
-                                   ShCompileOptions compileOptions);
-
-private:
-    ShaderValidator(ShHandle handle, ShCompileOptions compileOptions,
-                    int maxVaryingVectors)
-        : mHandle(handle)
-        , mCompileOptions(compileOptions)
-        , mMaxVaryingVectors(maxVaryingVectors)
-        , mHasRun(false)
-    { }
+    explicit ShaderValidator(const WebGLContext* webgl);
+    virtual ~ShaderValidator();
 
 public:
-    ~ShaderValidator();
+    UniquePtr<const ShaderInfo> Compile(GLenum shaderType, const char* source,
+                                        nsCString* const out_infoLog) const;
+};
 
-    bool ValidateAndTranslate(const char* source);
-    void GetInfoLog(nsACString* out) const;
-    void GetOutput(nsACString* out) const;
-    bool CanLinkTo(const ShaderValidator* prev, nsCString* const out_log) const;
-    size_t CalcNumSamplerUniforms() const;
-    size_t NumAttributes() const;
+struct ShaderInfo final
+{
+    std::string translatedSource;
+    uint16_t shaderVersion;
+    std::vector<sh::Uniform> uniforms;
+    std::vector<sh::Varying> varyings;
+    std::vector<sh::Attribute> attribs;
+    std::vector<sh::OutputVariable> outputs;
+    std::vector<sh::InterfaceBlock> blocks;
 
-    bool FindAttribUserNameByMappedName(const std::string& mappedName,
-                                        const std::string** const out_userName) const;
+    std::map<std::string, const std::string> mapName;
+    std::map<std::string, const std::string> unmapName;
 
-    bool FindAttribMappedNameByUserName(const std::string& userName,
-                                        const std::string** const out_mappedName) const;
+    bool CanLinkToVert(const ShaderInfo& vert, const WebGLContext* webgl,
+                       nsCString* const out_log) const;
 
-    bool FindVaryingMappedNameByUserName(const std::string& userName,
-                                         const std::string** const out_mappedName) const;
+    static std::string MapNameWith(const std::string& srcName,
+                                   const decltype(mapName)& map);
 
-    bool FindVaryingByMappedName(const std::string& mappedName,
-                                 std::string* const out_userName,
-                                 bool* const out_isArray) const;
-    bool FindUniformByMappedName(const std::string& mappedName,
-                                 std::string* const out_userName,
-                                 bool* const out_isArray) const;
-    bool UnmapUniformBlockName(const nsACString& baseMappedName,
-                               nsCString* const out_baseUserName) const;
+    std::string MapName(const std::string& userName) const {
+        return MapNameWith(userName, mapName);
+    }
+    //std::string UnmapName(const std::string& mappedName) const {
+    //    return MapNameWith(mappedName, unmapName);
+    //}
 
-    void EnumerateFragOutputs(std::map<nsCString, const nsCString> &out_FragOutputs) const;
-
-    bool ValidateTransformFeedback(const std::vector<nsString>& userNames,
-                                   uint32_t maxComponents, nsCString* const out_errorText,
-                                   std::vector<std::string>* const out_mappedNames);
+    size_t MemSize() const;
 };
 
 } // namespace webgl

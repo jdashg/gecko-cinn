@@ -71,6 +71,7 @@
 #include "WebGLQuery.h"
 #include "WebGLSampler.h"
 #include "WebGLShader.h"
+#include "WebGLShaderValidator.h"
 #include "WebGLSync.h"
 #include "WebGLTransformFeedback.h"
 #include "WebGLVertexArray.h"
@@ -2410,6 +2411,24 @@ WebGLContext::ValidateArrayBufferView(const char* funcName,
     *out_bytes = bytes + (elemOffset * elemSize);
     *out_byteLen = elemCount * elemSize;
     return true;
+}
+
+////
+
+void
+WebGLContext::ResetShaderValidator() const
+{
+    mShaderValidator = nullptr;
+}
+
+const webgl::ShaderValidator*
+WebGLContext::ShaderValidator() const
+{
+    if (mBypassShaderValidation)
+        return nullptr;
+
+    mShaderValidator.reset(new webgl::ShaderValidator(this));
+    return mShaderValidator.get();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

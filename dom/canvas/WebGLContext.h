@@ -123,6 +123,7 @@ class VRLayerChild;
 
 namespace webgl {
 struct LinkedProgramInfo;
+struct ShaderInfo;
 class ShaderValidator;
 class TexUnpackBlob;
 struct UniformInfo;
@@ -316,6 +317,8 @@ class WebGLContext
     friend class WebGLExtensionLoseContext;
     friend class WebGLExtensionVertexArray;
     friend class WebGLMemoryTracker;
+    friend struct webgl::ShaderInfo;
+    friend class webgl::ShaderValidator;
     friend struct webgl::UniformBlockInfo;
 
     enum {
@@ -1447,8 +1450,12 @@ protected:
 
     bool mBypassShaderValidation;
 
-    webgl::ShaderValidator* CreateShaderValidator(GLenum shaderType) const;
+    mutable UniquePtr<const webgl::ShaderValidator> mShaderValidator;
+public:
+    void ResetShaderValidator() const;
+    const webgl::ShaderValidator* ShaderValidator() const;
 
+protected:
     // some GL constants
     uint32_t mGLMaxVertexAttribs;
     int32_t mGLMaxTextureUnits;
