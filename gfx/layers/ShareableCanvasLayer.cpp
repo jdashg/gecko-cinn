@@ -5,17 +5,17 @@
 
 #include "ShareableCanvasLayer.h"
 
-#include "GLContext.h"                  // for GLContext
-#include "GLScreenBuffer.h"             // for GLScreenBuffer
-#include "SharedSurfaceGL.h"            // for SurfaceFactory_GLTexture, etc
+#include "mozilla/dom/CanvasRenderingContext2D.h"
 #include "mozilla/layers/AsyncCanvasRenderer.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
+#include "SharedSurfaceGL.h"            // for SurfaceFactory_GLTexture, etc
+#include "../../dom/canvas/WebGLContext.h"
 
 namespace mozilla {
 namespace layers {
 
 ShareableCanvasLayer::ShareableCanvasLayer(LayerManager* aLayerManager, void *aImplData)
-  : CopyableCanvasLayer(aLayerManager, aImplData)
+  : ContentCanvasLayer(aLayerManager, aImplData)
   , mFlags(TextureFlags::NO_FLAGS)
 {
   MOZ_COUNT_CTOR(ShareableCanvasLayer);
@@ -40,198 +40,133 @@ ShareableCanvasLayer::Initialize(const Data& aData)
 
   mCanvasClient = nullptr;
 
-  if (!mGLContext)
-    return;
-
-  gl::GLScreenBuffer* screen = mGLContext->Screen();
-
-  gl::SurfaceCaps caps;
-  if (mGLFrontbuffer) {
-    // The screen caps are irrelevant if we're using a separate frontbuffer.
-    caps = mGLFrontbuffer->mHasAlpha ? gl::SurfaceCaps::ForRGBA()
-                                     : gl::SurfaceCaps::ForRGB();
-  } else {
-    MOZ_ASSERT(screen);
-    caps = screen->mCaps;
+  const auto& forwarder = GetForwarder();
+  if (mWebGL) {
+    mWebGL->mSurfFactory.Morph(forwarder);
+  } else if (mCanvas2D) {
+    mCanvas2D->mSurfFactory.Morph(forwarder);
+    mCanvas2D->mProvider->SetForwarder(forwarder);
   }
-  MOZ_ASSERT(caps.alpha == aData.mHasAlpha);
-
-  auto forwarder = GetForwarder();
-
-  mFlags = TextureFlags::ORIGIN_BOTTOM_LEFT;
-  if (!aData.mIsGLAlphaPremult) {
-    mFlags |= TextureFlags::NON_PREMULTIPLIED;
-  }
-
-  UniquePtr<gl::SurfaceFactory> factory =
-    gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, mFlags);
-
-  if (mGLFrontbuffer || aData.mIsMirror) {
-    // We're using a source other than the one in the default screen.
-    // (SkiaGL)
-    mFactory = Move(factory);
-    if (!mFactory) {
-      // Absolutely must have a factory here, so create a basic one
-      mFactory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, caps, mFlags);
-    }
-  } else {
-    if (factory)
-      screen->Morph(Move(factory));
-  }
-}
-
-bool
-ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
-{
-  MOZ_ASSERT(aDestTarget);
-  if (!aDestTarget) {
-    return false;
-  }
-
-  RefPtr<SourceSurface> surface;
-
-  if (!mGLContext) {
-    AutoReturnSnapshot autoReturn;
-
-    if (mAsyncRenderer) {
-      surface = mAsyncRenderer->GetSurface();
-    } else if (mBufferProvider) {
-      surface = mBufferProvider->BorrowSnapshot();
-      autoReturn.mSnapshot = &surface;
-      autoReturn.mBufferProvider = mBufferProvider;
-    }
-
-    MOZ_ASSERT(surface);
-    if (!surface) {
-      return false;
-    }
-
-    aDestTarget->CopySurface(surface,
-                             IntRect(0, 0, mBounds.width, mBounds.height),
-                             IntPoint(0, 0));
-    return true;
-  }
-
-  gl::SharedSurface* frontbuffer = nullptr;
-  if (mGLFrontbuffer) {
-    frontbuffer = mGLFrontbuffer.get();
-  } else {
-    gl::GLScreenBuffer* screen = mGLContext->Screen();
-    const auto& front = screen->Front();
-    if (front) {
-      frontbuffer = front->Surf();
-    }
-  }
-
-  if (!frontbuffer) {
-    NS_WARNING("Null frame received.");
-    return false;
-  }
-
-  IntSize readSize(frontbuffer->mSize);
-  SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
-                          ? SurfaceFormat::B8G8R8X8
-                          : SurfaceFormat::B8G8R8A8;
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
-
-  // Try to read back directly into aDestTarget's output buffer
-  uint8_t* destData;
-  IntSize destSize;
-  int32_t destStride;
-  SurfaceFormat destFormat;
-  if (aDestTarget->LockBits(&destData, &destSize, &destStride, &destFormat)) {
-    if (destSize == readSize && destFormat == format) {
-      RefPtr<DataSourceSurface> data =
-        Factory::CreateWrappingDataSourceSurface(destData, destStride, destSize, destFormat);
-      mGLContext->Readback(frontbuffer, data);
-      if (needsPremult) {
-        gfxUtils::PremultiplyDataSurface(data, data);
-      }
-      aDestTarget->ReleaseBits(destData);
-      return true;
-    }
-    aDestTarget->ReleaseBits(destData);
-  }
-
-  RefPtr<DataSourceSurface> resultSurf = GetTempSurface(readSize, format);
-  // There will already be a warning from inside of GetTempSurface, but
-  // it doesn't hurt to complain:
-  if (NS_WARN_IF(!resultSurf)) {
-    return false;
-  }
-
-  // Readback handles Flush/MarkDirty.
-  mGLContext->Readback(frontbuffer, resultSurf);
-  if (needsPremult) {
-    gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
-  }
-
-  aDestTarget->CopySurface(resultSurf,
-                           IntRect(0, 0, readSize.width, readSize.height),
-                           IntPoint(0, 0));
-
-  return true;
-}
-
-CanvasClient::CanvasClientType
-ShareableCanvasLayer::GetCanvasClientType()
-{
-  if (mAsyncRenderer) {
-    return CanvasClient::CanvasClientAsync;
-  }
-
-  if (mGLContext) {
-    return CanvasClient::CanvasClientTypeShSurf;
-  }
-  return CanvasClient::CanvasClientSurface;
 }
 
 void
 ShareableCanvasLayer::UpdateCompositableClient()
 {
   if (!mCanvasClient) {
-    TextureFlags flags = TextureFlags::DEFAULT;
-    if (mOriginPos == gl::OriginPos::BottomLeft) {
-      flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
-    }
-
-    if (!mIsAlphaPremultiplied) {
-      flags |= TextureFlags::NON_PREMULTIPLIED;
-    }
-
-    mCanvasClient = CanvasClient::CreateCanvasClient(GetCanvasClientType(),
-                                                     GetForwarder(),
-                                                     flags);
-    if (!mCanvasClient) {
-      return;
-    }
-
+    mCanvasClient = new CanvasClient(GetForwarder(), TextureFlags::DEFAULT);
     AttachCompositable();
   }
 
-  if (mCanvasClient && mAsyncRenderer) {
-    mCanvasClient->UpdateAsync(mAsyncRenderer);
+  const auto& frame = GetFrameForRedraw();
+  if (!frame)
+    return;
+
+  RefPtr<TextureClient> texClient = frame->mTexClient;
+  if (!texClient) {
+    texClient = frame->mProvider->GetTextureClient();
   }
 
-  if (!IsDirty()) {
+  if (texClient && mCanvasClient->UseTexClient(texClient)) {
+    mMappableA = nullptr;
+    mMappableB = nullptr;
     return;
   }
-  Painted();
 
-  FirePreTransactionCallback();
-  if (mBufferProvider && mBufferProvider->GetTextureClient()) {
-    if (!mBufferProvider->SetForwarder(mManager->AsShadowForwarder())) {
+  UniquePtr<TextureClientAutoLock> mapped;
+  const auto fnLock = [&](TextureClient* texClient) {
+    if (!texClient)
+      return false;
+
+    mapped.reset(new TextureClientAutoLock(texClient, OpenMode::OPEN_WRITE_ONLY));
+    if (!autoLock.Succeeded()) {
+      mapped = nullptr;
+      return false;
+    }
+
+    return true;
+  };
+
+  do {
+    if (fnLock(mLockableA)) {
+      texClient = mLockableA;
+      break;
+    }
+
+    if (fnLock(mLockableB)) {
+      texClient = mLockableB;
+      break;
+    }
+
+    mLockableB = mLockableA;
+    mLockableA = CreateTextureClientForCanvas();
+
+    if (fnLock(mLockableA)) {
+      texClient = mLockableA;
+      break;
+    }
+
+    gfxCriticalNote << "Failed to lock a texClient.";
+    return;
+  } while (false);
+
+  RefPtr<DrawTarget> target = mCopiedBackBuffer->BorrowDrawTarget();
+  if (target) {
+    aLayer->DrawTo(target);
+    updated = true;
+  }
+
+  const auto& sourceSurface = ToSourceSurface()
+  const auto compatibleTexClient = [&]() {
+    if (frame->mTexClient)
+      return frame->mTexClient;
+
+    if (frame->mProvider->GetTextureClient() &&
+        frame->mProvider->SetForwarder(mManager->AsShadowForwarder()))
+    {
+      return frame->mProvider->GetTextureClient();
+    }
+  };
+
+  if (frame->mTexClient) {
+    mCanvasClient->SetTexClient(frame->mTexClient);
+  } else if (frame->mProvider->GetTextureClient()) {
+    if (!frame->mProvider->SetForwarder(mManager->AsShadowForwarder())) {
       gfxCriticalNote << "BufferProvider::SetForwarder failed";
       return;
     }
-    mCanvasClient->UpdateFromTexture(mBufferProvider->GetTextureClient());
+    mCanvasClient->SetTexClient(frame->mProvider->GetTextureClient());
   } else {
-    mCanvasClient->Update(gfx::IntSize(mBounds.width, mBounds.height), this);
+    mCanvasClient->CopyFrameFromLayer(this, frame);
   }
 
-  FireDidTransactionCallback();
-
   mCanvasClient->Updated();
+}
+
+already_AddRefed<TextureClient>
+CanvasClientSync::CreateTextureClientForCanvas(gfx::SurfaceFormat aFormat,
+                                               gfx::IntSize aSize,
+                                               TextureFlags aFlags,
+                                               ShareableCanvasLayer* aLayer)
+{
+  if (aLayer->IsGLLayer()) {
+    // We want a cairo backend here as we don't want to be copying into
+    // an accelerated backend and we like LockBits to work. This is currently
+    // the most effective way to make this work.
+    return TextureClient::CreateForRawBufferAccess(GetForwarder(),
+                                                   aFormat, aSize, BackendType::CAIRO,
+                                                   mTextureFlags | aFlags);
+  }
+
+#ifdef XP_WIN
+  return CreateTextureClientForDrawing(aFormat, aSize, BackendSelector::Canvas, aFlags);
+#else
+  // XXX - We should use CreateTextureClientForDrawing, but we first need
+  // to use double buffering.
+  gfx::BackendType backend = gfxPlatform::GetPlatform()->GetPreferredCanvasBackend();
+  return TextureClient::CreateForRawBufferAccess(GetForwarder(),
+                                                 aFormat, aSize, backend,
+                                                 mTextureFlags | aFlags);
+#endif
 }
 
 } // namespace layers

@@ -83,6 +83,10 @@ typedef void* EGLCastToRelevantPtr;
 typedef void* EGLImage;
 typedef void* EGLSync;
 typedef uint64_t EGLTime;
+typedef intptr_t EGLAttrib;
+
+// EGL_EXT_device_base
+typedef void* EGLDeviceEXT;
 
 #define EGL_NO_CONTEXT       ((EGLContext)0)
 #define EGL_NO_DISPLAY       ((EGLDisplay)0)

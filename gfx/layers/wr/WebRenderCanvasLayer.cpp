@@ -9,7 +9,6 @@
 #include "gfxPrefs.h"
 #include "gfxUtils.h"
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "LayersLogging.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
@@ -32,20 +31,6 @@ WebRenderCanvasLayer::~WebRenderCanvasLayer()
 }
 
 void
-WebRenderCanvasLayer::Initialize(const Data& aData)
-{
-  ShareableCanvasLayer::Initialize(aData);
-
-  // XXX: Use basic surface factory until we support shared surface.
-  if (!mGLContext || mGLFrontbuffer)
-    return;
-
-  gl::GLScreenBuffer* screen = mGLContext->Screen();
-  auto factory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, screen->mCaps, mFlags);
-  screen->Morph(Move(factory));
-}
-
-void
 WebRenderCanvasLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
 {
   UpdateCompositableClient();
@@ -57,7 +42,7 @@ WebRenderCanvasLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
   MOZ_ASSERT(mExternalImageId);
 
   gfx::Matrix4x4 transform = GetTransform();
-  const bool needsYFlip = (mOriginPos == gl::OriginPos::BottomLeft);
+  const bool needsYFlip = false;
   if (needsYFlip) {
     transform.PreTranslate(0, mBounds.height, 0).PreScale(1, -1, 1);
   }

@@ -4,10 +4,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "gfxUtils.h"
 #include "GLBlitHelper.h"
+
+#include "gfxUtils.h"
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
+#include "MozFramebuffer.h"
 #include "ScopedGLHelpers.h"
 #include "mozilla/Preferences.h"
 #include "ImageContainer.h"
@@ -573,10 +574,9 @@ GLBlitHelper::BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
 }
 
 void
-GLBlitHelper::BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
+GLBlitHelper::CopyFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                            const gfx::IntSize& srcSize,
-                                           const gfx::IntSize& destSize,
-                                           const GLFormats& srcFormats)
+                                           const gfx::IntSize& destSize)
 {
     MOZ_ASSERT(!srcFB || mGL->fIsFramebuffer(srcFB));
     MOZ_ASSERT(!destFB || mGL->fIsFramebuffer(destFB));
@@ -587,13 +587,11 @@ GLBlitHelper::BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
         return;
     }
 
-    GLuint tex = CreateTextureForOffscreen(mGL, srcFormats, srcSize);
-    MOZ_ASSERT(tex);
-
-    BlitFramebufferToTexture(srcFB, tex, srcSize, srcSize);
-    BlitTextureToFramebuffer(tex, destFB, srcSize, destSize);
-
-    mGL->fDeleteTextures(1, &tex);
+    const auto& tempFB = MozFramebuffer::Create(mGL, srcSize, 0, false);
+    const auto colorTex = tempFB->ColorTex();
+    MOZ_ASSERT(colorTex);
+    BlitFramebufferToTexture(srcFB, colorTex, srcSize, srcSize);
+    BlitTextureToFramebuffer(colorTex, destFB, srcSize, destSize);
 }
 
 void

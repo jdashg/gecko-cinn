@@ -39,6 +39,8 @@ class DrawTarget;
 } // namespace gfx
 
 namespace layers {
+class KnowsCompositor;
+enum class LayersBackend : int8_t;
 class LayersIPCChannel;
 class SharedSurfaceTextureClient;
 enum class TextureFlags : uint32_t;
@@ -49,56 +51,52 @@ class TextureClient;
 namespace gl {
 
 class GLContext;
+class MozFramebuffer;
 class SurfaceFactory;
 class ShSurfHandle;
 
 class SharedSurface
 {
 public:
-    static void ProdCopy(SharedSurface* src, SharedSurface* dest,
-                         SurfaceFactory* factory);
-
     const SharedSurfaceType mType;
-    const AttachmentType mAttachType;
+
     const WeakPtr<GLContext> mGL;
     const gfx::IntSize mSize;
-    const bool mHasAlpha;
     const bool mCanRecycle;
 protected:
-    bool mIsLocked;
-    bool mIsProducerAcquired;
+    const UniquePtr<MozFramebuffer> mMozFB;
+public:
+    const GLuint mFB;
+
+protected:
+    bool mIsWriteAcquired;
+    bool mIsReadAcquired;
 #ifdef DEBUG
     nsIThread* const mOwningThread;
 #endif
 
-    SharedSurface(SharedSurfaceType type,
-                  AttachmentType attachType,
-                  GLContext* gl,
-                  const gfx::IntSize& size,
-                  bool hasAlpha,
-                  bool canRecycle);
+    SharedSurface(SharedSurfaceType type, GLContext* gl, const gfx::IntSize& size,
+                  bool canRecycle, UniquePtr<MozFramebuffer> mozFB);
 
 public:
-    virtual ~SharedSurface() {
-    }
+    virtual ~SharedSurface();
+
+    void CopyFrom(const MozFramebuffer* src);
+    void CopyFrom(SharedSurface* src);
+    virtual bool CopyFromSameType(SharedSurface* src) { return false; }
 
     // Specifies to the TextureClient any flags which
     // are required by the SharedSurface backend.
     virtual layers::TextureFlags GetTextureFlags() const;
 
-    bool IsLocked() const { return mIsLocked; }
-    bool IsProducerAcquired() const { return mIsProducerAcquired; }
-
-    // This locks the SharedSurface as the production buffer for the context.
-    // This is needed by backends which use PBuffers and/or EGLSurfaces.
-    void LockProd();
-
-    // Unlocking is harmless if we're already unlocked.
-    void UnlockProd();
+    //bool IsProducerAcquired() const { return mIsProducerAcquired; }
 
 protected:
-    virtual void LockProdImpl() = 0;
-    virtual void UnlockProdImpl() = 0;
+    // This locks the SharedSurface as the production buffer for the context.
+    // This is needed by backends which use PBuffers and/or EGLSurfaces.
+    friend class GLContext;
+    virtual void LockProd() { }
+    virtual void UnlockProd() { }
 
     virtual void ProducerAcquireImpl() = 0;
     virtual void ProducerReleaseImpl() = 0;
@@ -107,24 +105,28 @@ protected:
 
 public:
     void ProducerAcquire() {
-        MOZ_ASSERT(!mIsProducerAcquired);
+        MOZ_ASSERT(!mIsWriteAcquired);
+        MOZ_ASSERT(!mIsReadAcquired);
         ProducerAcquireImpl();
-        mIsProducerAcquired = true;
+        mIsWriteAcquired = true;
     }
     void ProducerRelease() {
-        MOZ_ASSERT(mIsProducerAcquired);
+        MOZ_ASSERT(mIsWriteAcquired);
+        MOZ_ASSERT(!mIsReadAcquired);
         ProducerReleaseImpl();
-        mIsProducerAcquired = false;
+        mIsWriteAcquired = false;
     }
     void ProducerReadAcquire() {
-        MOZ_ASSERT(!mIsProducerAcquired);
+        MOZ_ASSERT(!mIsWriteAcquired);
+        MOZ_ASSERT(!mIsReadAcquired);
         ProducerReadAcquireImpl();
-        mIsProducerAcquired = true;
+        mIsReadAcquired = true;
     }
     void ProducerReadRelease() {
-        MOZ_ASSERT(mIsProducerAcquired);
+        MOZ_ASSERT(!mIsWriteAcquired);
+        MOZ_ASSERT(mIsReadAcquired);
         ProducerReadReleaseImpl();
-        mIsProducerAcquired = false;
+        mIsReadAcquired = false;
     }
 
     // This function waits until the buffer is no longer being used.
@@ -132,39 +134,7 @@ public:
     // even when its buffer is still being used.
     virtual void WaitForBufferOwnership() {}
 
-    // For use when AttachType is correct.
-    virtual GLenum ProdTextureTarget() const {
-        MOZ_ASSERT(mAttachType == AttachmentType::GLTexture);
-        return LOCAL_GL_TEXTURE_2D;
-    }
-
-    virtual GLuint ProdTexture() {
-        MOZ_ASSERT(mAttachType == AttachmentType::GLTexture);
-        MOZ_CRASH("GFX: Did you forget to override this function?");
-    }
-
-    virtual GLuint ProdRenderbuffer() {
-        MOZ_ASSERT(mAttachType == AttachmentType::GLRenderbuffer);
-        MOZ_CRASH("GFX: Did you forget to override this function?");
-    }
-
-    virtual bool CopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x,
-                                GLint y, GLsizei width, GLsizei height, GLint border)
-    {
-        return false;
-    }
-
-    virtual bool ReadPixels(GLint x, GLint y,
-                            GLsizei width, GLsizei height,
-                            GLenum format, GLenum type,
-                            GLvoid* pixels)
-    {
-        return false;
-    }
-
-    virtual bool NeedsIndirectReads() const {
-        return false;
-    }
+    virtual bool NeedsIndirectReads() const { return false; }
 
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) = 0;
 
@@ -266,34 +236,39 @@ public:
 
     const SharedSurfaceType mType;
     GLContext* const mGL;
-    const SurfaceCaps mCaps;
+    const bool mDepthStencil;
     const RefPtr<layers::LayersIPCChannel> mAllocator;
     const layers::TextureFlags mFlags;
-    const GLFormats mFormats;
+
+    gfx::IntSize mDepthStencilSize;
+    GLuint mDepthRB;
+    GLuint mStencilRB;
     Mutex mMutex;
 protected:
-    SurfaceCaps mDrawCaps;
-    SurfaceCaps mReadCaps;
     RefQueue<layers::SharedSurfaceTextureClient> mRecycleFreePool;
     RefSet<layers::SharedSurfaceTextureClient> mRecycleTotalPool;
 
-    SurfaceFactory(SharedSurfaceType type, GLContext* gl, const SurfaceCaps& caps,
-                   const RefPtr<layers::LayersIPCChannel>& allocator,
-                   const layers::TextureFlags& flags);
+public:
+    static UniquePtr<SurfaceFactory> Create(GLContext* gl, bool depthStencil,
+                                            layers::KnowsCompositor* compositor,
+                                            layers::TextureFlags flags);
+    static UniquePtr<SurfaceFactory> Create(GLContext* gl, bool depthStencil,
+                                            layers::LayersIPCChannel* ipcChannel,
+                                            layers::LayersBackend backend,
+                                            layers::TextureFlags flags);
+
+protected:
+    SurfaceFactory(SharedSurfaceType type, GLContext* gl, bool depthStencil,
+                   layers::LayersIPCChannel* allocator, layers::TextureFlags flags);
 
 public:
     virtual ~SurfaceFactory();
 
-    const SurfaceCaps& DrawCaps() const {
-        return mDrawCaps;
-    }
-
-    const SurfaceCaps& ReadCaps() const {
-        return mReadCaps;
-    }
+private:
+    void DeleteDepthStencil();
 
 protected:
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) = 0;
+    virtual UniquePtr<SharedSurface> NewSharedSurfaceImpl(const gfx::IntSize& size) = 0;
 
     void StartRecycling(layers::SharedSurfaceTextureClient* tc);
     void SetRecycleCallback(layers::SharedSurfaceTextureClient* tc);
@@ -301,8 +276,12 @@ protected:
 
 public:
     UniquePtr<SharedSurface> NewSharedSurface(const gfx::IntSize& size);
-    //already_AddRefed<ShSurfHandle> NewShSurfHandle(const gfx::IntSize& size);
-    already_AddRefed<layers::SharedSurfaceTextureClient> NewTexClient(const gfx::IntSize& size);
+
+    RefPtr<layers::SharedSurfaceTextureClient>
+    NewTexClient(const gfx::IntSize& size);
+
+    RefPtr<layers::SharedSurfaceTextureClient>
+    CloneTexClient(SharedSurface* src);
 
     static void RecycleCallback(layers::TextureClient* tc, void* /*closure*/);
 
@@ -310,23 +289,35 @@ public:
     bool Recycle(layers::SharedSurfaceTextureClient* texClient);
 };
 
-class ScopedReadbackFB
+////
+
+class MorphableSurfaceFactory final
 {
-    GLContext* const mGL;
-    ScopedBindFramebuffer mAutoFB;
-    ScopedBypassScreen mBypass;
-    GLuint mTempFB;
-    GLuint mTempTex;
-    SharedSurface* mSurfToUnlock;
-    SharedSurface* mSurfToLock;
+    UniquePtr<SurfaceFactory> mFactory;
 
 public:
-    explicit ScopedReadbackFB(SharedSurface* src);
-    ~ScopedReadbackFB();
+    void Reset(UniquePtr<SurfaceFactory> factory) {
+        mFactory = Move(factory);
+    }
+
+    bool Morph(layers::KnowsCompositor* info, bool force = false);
+
+    explicit operator bool() const { return bool(mFactory); }
+    SurfaceFactory* operator ->() const { return mFactory.get(); }
 };
 
-bool ReadbackSharedSurface(SharedSurface* src, gfx::DrawTarget* dst);
+bool ReadbackSharedSurface(SharedSurface* src, gfx::DrawTarget* dest);
+void Readback(SharedSurface* src, gfx::DataSourceSurface* dest);
 uint32_t ReadPixel(SharedSurface* src);
+
+template<typename T>
+inline UniquePtr<T>
+AsUnique(T* const x)
+{
+    UniquePtr<T> ret;
+    ret.reset(x);
+    return Move(ret);
+}
 
 } // namespace gl
 } // namespace mozilla

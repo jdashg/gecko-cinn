@@ -867,31 +867,34 @@ HTMLCanvasElement::TransferControlToOffscreen(ErrorResult& aRv)
     return nullptr;
   }
 
-  if (!mOffscreenCanvas) {
-    nsIntSize sz = GetWidthHeight();
-    RefPtr<AsyncCanvasRenderer> renderer = GetAsyncCanvasRenderer();
-    renderer->SetWidth(sz.width);
-    renderer->SetHeight(sz.height);
-
-    nsCOMPtr<nsIGlobalObject> global =
-      do_QueryInterface(OwnerDoc()->GetInnerWindow());
-    mOffscreenCanvas = new OffscreenCanvas(global,
-                                           sz.width,
-                                           sz.height,
-                                           GetCompositorBackendType(),
-                                           renderer);
-    if (mWriteOnly) {
-      mOffscreenCanvas->SetWriteOnly();
-    }
-
-    if (!mContextObserver) {
-      mContextObserver = new HTMLCanvasElementObserver(this);
-    }
-  } else {
+  if (mOffscreenCanvas) {
     aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
+    return mOffscreenCanvas;
   }
 
-  return mOffscreenCanvas;
+  aRv.Throw(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
+  return nullptr;
+  /*
+  nsIntSize sz = GetWidthHeight();
+  RefPtr<AsyncCanvasRenderer> renderer = GetAsyncCanvasRenderer();
+  renderer->SetWidth(sz.width);
+  renderer->SetHeight(sz.height);
+
+  nsCOMPtr<nsIGlobalObject> global =
+    do_QueryInterface(OwnerDoc()->GetInnerWindow());
+  mOffscreenCanvas = new OffscreenCanvas(global,
+                                         sz.width,
+                                         sz.height,
+                                         GetCompositorBackendType(),
+                                         renderer);
+  if (mWriteOnly) {
+    mOffscreenCanvas->SetWriteOnly();
+  }
+
+  if (!mContextObserver) {
+    mContextObserver = new HTMLCanvasElementObserver(this);
+  }
+  */
 }
 
 already_AddRefed<File>
@@ -1132,42 +1135,44 @@ HTMLCanvasElement::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
                                   Layer *aOldLayer,
                                   LayerManager *aManager)
 {
+  if (mCurrentContext) {
+    return mCurrentContext->GetCanvasLayer(aBuilder, aOldLayer, aManager, mVRPresentationActive);
+  }
+
+  if (!mOffscreenCanvas)
+    return nullptr;
+
+  return nullptr;
+  /*
   // The address of sOffscreenCanvasLayerUserDataDummy is used as the user
   // data key for retained LayerManagers managed by FrameLayerBuilder.
   // We don't much care about what value in it, so just assign a dummy
   // value for it.
   static uint8_t sOffscreenCanvasLayerUserDataDummy = 0;
 
-  if (mCurrentContext) {
-    return mCurrentContext->GetCanvasLayer(aBuilder, aOldLayer, aManager, mVRPresentationActive);
+  if (!mResetLayer &&
+      aOldLayer && aOldLayer->HasUserData(&sOffscreenCanvasLayerUserDataDummy)) {
+    RefPtr<Layer> ret = aOldLayer;
+    return ret.forget();
   }
 
-  if (mOffscreenCanvas) {
-    if (!mResetLayer &&
-        aOldLayer && aOldLayer->HasUserData(&sOffscreenCanvasLayerUserDataDummy)) {
-      RefPtr<Layer> ret = aOldLayer;
-      return ret.forget();
-    }
-
-    RefPtr<CanvasLayer> layer = aManager->CreateCanvasLayer();
-    if (!layer) {
-      NS_WARNING("CreateCanvasLayer failed!");
-      return nullptr;
-    }
-
-    LayerUserData* userData = nullptr;
-    layer->SetUserData(&sOffscreenCanvasLayerUserDataDummy, userData);
-
-    CanvasLayer::Data data;
-    data.mRenderer = GetAsyncCanvasRenderer();
-    data.mSize = GetWidthHeight();
-    layer->Initialize(data);
-
-    layer->Updated();
-    return layer.forget();
+  RefPtr<CanvasLayer> layer = aManager->CreateCanvasLayer();
+  if (!layer) {
+    NS_WARNING("CreateCanvasLayer failed!");
+    return nullptr;
   }
 
-  return nullptr;
+  LayerUserData* userData = nullptr;
+  layer->SetUserData(&sOffscreenCanvasLayerUserDataDummy, userData);
+
+  CanvasLayer::Data data(GetWidthHeight(), true);
+  data.mRenderer = GetAsyncCanvasRenderer();
+  data.mSize = GetWidthHeight();
+  layer->Initialize(data);
+
+  layer->Updated();
+  return layer.forget();
+  */
 }
 
 bool
@@ -1319,12 +1324,15 @@ HTMLCanvasElement::GetSurfaceSnapshot(bool* aPremultAlpha)
 AsyncCanvasRenderer*
 HTMLCanvasElement::GetAsyncCanvasRenderer()
 {
+  MOZ_CRASH("GetAsyncCanvasRenderer");
+  /*
   if (!mAsyncCanvasRenderer) {
     mAsyncCanvasRenderer = new AsyncCanvasRenderer();
     mAsyncCanvasRenderer->mHTMLCanvasElement = this;
   }
 
   return mAsyncCanvasRenderer;
+  */
 }
 
 layers::LayersBackend

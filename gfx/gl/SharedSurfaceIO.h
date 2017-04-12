@@ -14,83 +14,53 @@ class MacIOSurface;
 namespace mozilla {
 namespace gl {
 
-class SharedSurface_IOSurface : public SharedSurface
+class SharedSurface_IOSurface final : public SharedSurface
 {
-private:
+public:
     const RefPtr<MacIOSurface> mIOSurf;
-    GLuint mProdTex;
 
-public:
-    static UniquePtr<SharedSurface_IOSurface> Create(const RefPtr<MacIOSurface>& ioSurf,
-                                                     GLContext* gl,
-                                                     bool hasAlpha);
-
+    SharedSurface_IOSurface(GLContext* gl, const gfx::IntSize& size,
+                            UniquePtr<MozFramebuffer> mozFB, MacIOSurface* ioSurf);
 private:
-    SharedSurface_IOSurface(const RefPtr<MacIOSurface>& ioSurf,
-                            GLContext* gl, const gfx::IntSize& size,
-                            bool hasAlpha);
-
-public:
-    ~SharedSurface_IOSurface();
-
-    virtual void LockProdImpl() override { }
-    virtual void UnlockProdImpl() override { }
-
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
 
-    virtual bool CopyTexImage2D(GLenum target, GLint level, GLenum internalformat,
-                                GLint x, GLint y, GLsizei width, GLsizei height,
-                                GLint border) override;
-    virtual bool ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                            GLenum format, GLenum type, GLvoid* pixels) override;
-
-    virtual GLuint ProdTexture() override {
-        return mProdTex;
-    }
-
-    virtual GLenum ProdTextureTarget() const override {
-        return LOCAL_GL_TEXTURE_RECTANGLE_ARB;
-    }
-
-    static SharedSurface_IOSurface* Cast(SharedSurface* surf) {
-        MOZ_ASSERT(surf->mType == SharedSurfaceType::IOSurface);
-        return static_cast<SharedSurface_IOSurface*>(surf);
-    }
-
-    MacIOSurface* GetIOSurface() const {
-        return mIOSurf;
-    }
-
-    virtual bool NeedsIndirectReads() const override {
-        return true;
-    }
-
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
-
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
+
+    /* Bug 896693 - OpenGL framebuffers that are backed by IOSurface on OSX expose a bug
+     * in glCopyTexImage2D --- internalformats GL_ALPHA, GL_LUMINANCE, GL_LUMINANCE_ALPHA
+     * return the wrong results. To work around, copy framebuffer to a temporary texture
+     * using GL_RGBA (which works), attach as read framebuffer and glCopyTexImage2D
+     * instead.
+     *
+     * Calling glReadPixels when an IOSurface is bound to the current framebuffer
+     * can cause corruption in following glReadPixel calls (even if they aren't
+     * reading from an IOSurface).
+     * We workaround this by copying to a temporary texture, and doing the readback
+     * from that.
+     */
+    virtual bool NeedsIndirectReads() const override { return true; }
+
 };
 
-class SurfaceFactory_IOSurface : public SurfaceFactory
+class SurfaceFactory_IOSurface final : public SurfaceFactory
 {
-public:
-    // Infallible.
-    static UniquePtr<SurfaceFactory_IOSurface> Create(GLContext* gl,
-                                                      const SurfaceCaps& caps,
-                                                      const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                      const layers::TextureFlags& flags);
-protected:
     const gfx::IntSize mMaxDims;
 
-    SurfaceFactory_IOSurface(GLContext* gl, const SurfaceCaps& caps,
-                             const RefPtr<layers::LayersIPCChannel>& allocator,
-                             const layers::TextureFlags& flags,
-                             const gfx::IntSize& maxDims)
-        : SurfaceFactory(SharedSurfaceType::IOSurface, gl, caps, allocator, flags)
-        , mMaxDims(maxDims)
+    static gfx::IntSize MaxIOSurfaceSize();
+
+public:
+    SurfaceFactory_IOSurface(GLContext* const gl, const bool depthStencil,
+                             layers::LayersIPCChannel* const allocator,
+                             const layers::TextureFlags flags)
+        : SurfaceFactory(SharedSurfaceType::IOSurface, gl, depthStencil, allocator, flags)
+        , mMaxDims(MaxIOSurfaceSize())
     { }
 
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override;
+private:
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override;
 };
 
 } // namespace gl

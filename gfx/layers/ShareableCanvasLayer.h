@@ -17,7 +17,7 @@ class SurfaceFactory;
 
 namespace layers {
 
-class ShareableCanvasLayer : public CopyableCanvasLayer
+class ShareableCanvasLayer : public ContentCanvasLayer
 {
   typedef CanvasClient::CanvasClientType CanvasClientType;
 public:
@@ -38,18 +38,17 @@ public:
   const TextureFlags& Flags() const { return mFlags; }
 
 protected:
-
-  bool UpdateTarget(gfx::DrawTarget* aDestTarget = nullptr);
-
-  CanvasClientType GetCanvasClientType();
-
   RefPtr<CanvasClient> mCanvasClient;
+
+  // One of these should always be lockable.
+  RefPtr<TextureClient> mLockableA;
+  RefPtr<TextureClient> mLockableB;
 
   UniquePtr<gl::SurfaceFactory> mFactory;
 
   TextureFlags mFlags;
 
-  friend class CanvasClient2D;
+  friend class CanvasClientReadback;
   friend class CanvasClientSharedSurface;
 };
 

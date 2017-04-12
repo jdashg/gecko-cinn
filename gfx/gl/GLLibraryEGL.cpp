@@ -460,6 +460,8 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformInitialize, { "ANGLEPlatformInitialize", nullptr } },
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformShutdown, { "ANGLEPlatformShutdown", nullptr } },
             SYMBOL(GetPlatformDisplayEXT),
+            SYMBOL(QueryDisplayAttribEXT),
+            SYMBOL(QueryDeviceAttribEXT),
             END_OF_SYMBOLS
         };
         if (!fnLoadSymbols(angleSymbols)) {

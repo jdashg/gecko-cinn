@@ -129,14 +129,12 @@ CompositorOGL::CreateContext()
 
   // Allow to create offscreen GL context for main Layer Manager
   if (!context && gfxEnv::LayersPreferOffscreen()) {
-    SurfaceCaps caps = SurfaceCaps::ForRGB();
-    caps.preserve = false;
-    caps.bpp16 = gfxVars::OffscreenFormat() == SurfaceFormat::R5G6B5_UINT16;
-
     nsCString discardFailureId;
-    context = GLContextProvider::CreateOffscreen(mSurfaceSize,
-                                                 caps, CreateContextFlags::REQUIRE_COMPAT_PROFILE,
-                                                 &discardFailureId);
+    context = GLContextProvider::CreateHeadless(CreateContextFlags::REQUIRE_COMPAT_PROFILE,
+                                                &discardFailureId);
+    if (context && !context->ResizeFakeDefaultFB(mSurfaceSize)) {
+      context = nullptr;
+    }
   }
 
   if (!context) {
@@ -488,7 +486,7 @@ CompositorOGL::PrepareViewport(CompositingRenderTargetOGL* aRenderTarget)
     // Matrix to transform (0, 0, aWidth, aHeight) to viewport space (-1.0, 1.0,
     // 2, 2) and flip the contents.
     Matrix viewMatrix;
-    if (mGLContext->IsOffscreen() && !gIsGtest) {
+    if (mGLContext->mIsOffscreen && !gIsGtest) {
       // In case of rendering via GL Offscreen context, disable Y-Flipping
       viewMatrix.PreTranslate(-1.0, -1.0);
       viewMatrix.PreScale(2.0f / float(size.width), 2.0f / float(size.height));

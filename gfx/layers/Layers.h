@@ -17,6 +17,7 @@
 #include "gfxPoint.h"                   // for gfxPoint
 #include "gfxRect.h"                    // for gfxRect
 #include "gfx2DGlue.h"
+#include "GLContextTypes.h"
 #include "mozilla/Assertions.h"         // for MOZ_ASSERT_HELPER2, etc
 #include "mozilla/Array.h"
 #include "mozilla/DebugOnly.h"          // for DebugOnly
@@ -63,6 +64,11 @@ namespace mozilla {
 class ComputedTimingFunction;
 class FrameLayerBuilder;
 class StyleAnimationValue;
+class WebGLContext;
+
+namespace dom {
+class CanvasRenderingContext2D;
+} // namespace dom
 
 namespace gl {
 class GLContext;
@@ -711,7 +717,7 @@ public:
   virtual void RemoveDidCompositeObserver(DidCompositeObserver* aObserver) { MOZ_CRASH("GFX: LayerManager"); }
 
   virtual void UpdateTextureFactoryIdentifier(const TextureFactoryIdentifier& aNewIdentifier,
-											  uint64_t aDeviceResetSeqNo) {}
+                        uint64_t aDeviceResetSeqNo) {}
 
   virtual TextureFactoryIdentifier GetTextureFactoryIdentifier()
   {
@@ -1338,7 +1344,7 @@ public:
   const Maybe<ParentLayerIntRect>& GetClipRect() const { return mClipRect; }
   const Maybe<LayerClip>& GetScrolledClip() const { return mSimpleAttrs.ScrolledClip(); }
   Maybe<ParentLayerIntRect> GetScrolledClipRect() const;
-  uint32_t GetContentFlags() { return mSimpleAttrs.ContentFlags(); }
+  uint32_t GetContentFlags() const { return mSimpleAttrs.ContentFlags(); }
   const gfx::IntRect& GetLayerBounds() const { return mSimpleAttrs.LayerBounds(); }
   const LayerIntRegion& GetVisibleRegion() const { return mVisibleRegion; }
   const ScrollMetadata& GetScrollMetadata(uint32_t aIndex) const;
@@ -2606,122 +2612,80 @@ protected:
  * After Initialize is called, the underlying canvas Surface/GLContext
  * must not be modified during a layer transaction.
  */
+
+class SharedSurfaceTextureClient;
+
 class CanvasLayer : public Layer {
 public:
-  struct Data {
-    Data()
-      : mBufferProvider(nullptr)
-      , mGLContext(nullptr)
-      , mRenderer(nullptr)
-      , mFrontbufferGLTex(0)
-      , mSize(0,0)
-      , mHasAlpha(false)
-      , mIsGLAlphaPremult(true)
-      , mIsMirror(false)
-    { }
+  struct Data final {
+    explicit Data(const gfx::IntSize& size);
+    ~Data();
 
-    // One of these three must be specified for Canvas2D, but never more than one
-    PersistentBufferProvider* mBufferProvider; // A BufferProvider for the Canvas contents
-    mozilla::gl::GLContext* mGLContext; // or this, for GL.
-    AsyncCanvasRenderer* mRenderer; // or this, for OffscreenCanvas
+    const gfx::IntSize mSize;
 
-    // Frontbuffer override
-    uint32_t mFrontbufferGLTex;
-
-    // The size of the canvas content
-    gfx::IntSize mSize;
-
-    // Whether the canvas drawingbuffer has an alpha channel.
-    bool mHasAlpha;
-
-    // Whether mGLContext contains data that is alpha-premultiplied.
-    bool mIsGLAlphaPremult;
-
-    // Whether the canvas front buffer is already being rendered somewhere else.
-    // When true, do not swap buffers or Morph() to another factory on mGLContext
-    bool mIsMirror;
+    // Specify only one of these:
+    RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
+    RefPtr<WebGLContext> mWebGL;
   };
 
-  /**
-   * CONSTRUCTION PHASE ONLY
-   * Initialize this CanvasLayer with the given data.  The data must
-   * have either mSurface or mGLContext initialized (but not both), as
-   * well as mSize.
-   *
-   * This must only be called once.
-   */
-  virtual void Initialize(const Data& aData) = 0;
+/*
+  struct FrameData final
+    : public RefCounted<FrameData>
+  {
+    MOZ_DECLARE_REFCOUNTED_TYPENAME(CanvasLayer::FrameData)
 
-  void SetBounds(gfx::IntRect aBounds) { mBounds = aBounds; }
+    const RefPtr<layers::SharedSurfaceTextureClient> mTexClient;
+  private:
+    const RefPtr<PersistentBufferProvider> mProvider;
+  public:
+    const RefPtr<gfx::SourceSurface> mBorrowedSnapshot;
 
-  /**
-   * Check the data is owned by this layer is still valid for rendering
-   */
-  virtual bool IsDataValid(const Data& aData) { return true; }
+    FrameData(layers::SharedSurfaceTextureClient* texClient);
+    FrameData(PersistentBufferProvider* provider);
+    ~FrameData();
+  };
+*/
 
+  struct FrameData final
+  {
+    const RefPtr<layers::SharedSurfaceTextureClient> mTexClient;
+    const RefPtr<PersistentBufferProvider> mProvider;
+  };
+
+
+  class Source {
+    uint64_t mFrameID;
+
+    Source()
+      : mFrameID(0)
+    { }
+
+  public:
+    void IncFrameID() { mFrameID++; }
+    const decltype(mFrameID)& FrameID() const { return mFrameID; }
+
+    virtual RefPtr<FrameData> GetFrame() = 0;
+
+    RefPtr<FrameData> GetNextFrame(uint64_t* pDestFrameID) {
+      if (pDestFrameID) {
+        if (*pDestFrameID == mFrameID)
+          return nullptr;
+        *pDestFrameID = mFrameID;
+      }
+
+      return GetFrame();
+    }
+  };
+
+
+  MOZ_LAYER_DECL_NAME("CanvasLayer", TYPE_CANVAS)
   virtual CanvasLayer* AsCanvasLayer() override { return this; }
 
-  /**
-   * Notify this CanvasLayer that the canvas surface contents have
-   * changed (or will change) before the next transaction.
-   */
-  void Updated() { mDirty = true; SetInvalidRectToVisibleRegion(); }
 
-  /**
-   * Notify this CanvasLayer that the canvas surface contents have
-   * been painted since the last change.
-   */
-  void Painted() { mDirty = false; }
-
-  /**
-   * Returns true if the canvas surface contents have changed since the
-   * last paint.
-   */
-  bool IsDirty()
-  {
-    // We can only tell if we are dirty if we're part of the
-    // widget's retained layer tree.
-    if (!mManager || !mManager->IsWidgetLayerManager()) {
-      return true;
-    }
-    return mDirty;
-  }
-
-  /**
-   * Register a callback to be called at the start of each transaction.
-   */
-  typedef void PreTransactionCallback(void* closureData);
-  void SetPreTransactionCallback(PreTransactionCallback* callback, void* closureData)
-  {
-    mPreTransCallback = callback;
-    mPreTransCallbackData = closureData;
-  }
-
+  void SetBounds(gfx::IntRect aBounds) { mBounds = aBounds; }
   const nsIntRect& GetBounds() const { return mBounds; }
 
-protected:
-  void FirePreTransactionCallback()
-  {
-    if (mPreTransCallback) {
-      mPreTransCallback(mPreTransCallbackData);
-    }
-  }
 
-public:
-  /**
-   * Register a callback to be called at the end of each transaction.
-   */
-  typedef void (* DidTransactionCallback)(void* aClosureData);
-  void SetDidTransactionCallback(DidTransactionCallback aCallback, void* aClosureData)
-  {
-    mPostTransCallback = aCallback;
-    mPostTransCallbackData = aClosureData;
-  }
-
-  /**
-   * CONSTRUCTION PHASE ONLY
-   * Set the filter used to resample this image (if necessary).
-   */
   void SetSamplingFilter(gfx::SamplingFilter aSamplingFilter)
   {
     if (mSamplingFilter != aSamplingFilter) {
@@ -2732,7 +2696,6 @@ public:
   }
   gfx::SamplingFilter GetSamplingFilter() const { return mSamplingFilter; }
 
-  MOZ_LAYER_DECL_NAME("CanvasLayer", TYPE_CANVAS)
 
   virtual void ComputeEffectiveTransforms(const gfx::Matrix4x4& aTransformToSurface) override
   {
@@ -2747,42 +2710,17 @@ public:
     ComputeEffectiveTransformForMaskLayers(aTransformToSurface);
   }
 
-  bool GetIsAsyncRenderer() const
-  {
-    return !!mAsyncRenderer;
-  }
-
 protected:
-  CanvasLayer(LayerManager* aManager, void* aImplData);
-  virtual ~CanvasLayer();
+  CanvasLayer(LayerManager* aManager, void* aImplData, const gfx::IntSize& size);
+  virtual ~CanvasLayer() override;
 
   virtual void PrintInfo(std::stringstream& aStream, const char* aPrefix) override;
 
   virtual void DumpPacket(layerscope::LayersPacket* aPacket, const void* aParent) override;
 
-  void FireDidTransactionCallback()
-  {
-    if (mPostTransCallback) {
-      mPostTransCallback(mPostTransCallbackData);
-    }
-  }
 
-  /**
-   * 0, 0, canvaswidth, canvasheight
-   */
   gfx::IntRect mBounds;
-  PreTransactionCallback* mPreTransCallback;
-  void* mPreTransCallbackData;
-  DidTransactionCallback mPostTransCallback;
-  void* mPostTransCallbackData;
   gfx::SamplingFilter mSamplingFilter;
-  RefPtr<AsyncCanvasRenderer> mAsyncRenderer;
-
-private:
-  /**
-   * Set to true in Updated(), cleared during a transaction.
-   */
-  bool mDirty;
 };
 
 /**

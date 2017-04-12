@@ -67,9 +67,6 @@ WebGL2Context::ValidateClearBuffer(const char* funcName, GLenum buffer, GLint dr
 
     const auto& fb = mBoundDrawFramebuffer;
     if (fb) {
-        if (!fb->ValidateAndInitAttachments(funcName))
-            return false;
-
         if (!fb->ValidateClearBufferType(funcName, buffer, drawBuffer, funcType))
             return false;
     } else if (buffer == LOCAL_GL_COLOR) {
@@ -86,6 +83,9 @@ WebGL2Context::ValidateClearBuffer(const char* funcName, GLenum buffer, GLint dr
             return false;
         }
     }
+
+    if (!DoBindDrawFB(funcName))
+        return false;
 
     return true;
 }
@@ -113,7 +113,6 @@ WebGL2Context::ClearBufferfv(GLenum buffer, GLint drawBuffer, const Float32Arr& 
         return;
     }
 
-    ScopedDrawCallWrapper wrapper(*this);
     const auto ptr = src.elemBytes + srcElemOffset;
     gl->fClearBufferfv(buffer, drawBuffer, ptr);
 }
@@ -139,7 +138,6 @@ WebGL2Context::ClearBufferiv(GLenum buffer, GLint drawBuffer, const Int32Arr& sr
         return;
     }
 
-    ScopedDrawCallWrapper wrapper(*this);
     const auto ptr = src.elemBytes + srcElemOffset;
     gl->fClearBufferiv(buffer, drawBuffer, ptr);
 }
@@ -161,7 +159,6 @@ WebGL2Context::ClearBufferuiv(GLenum buffer, GLint drawBuffer, const Uint32Arr& 
         return;
     }
 
-    ScopedDrawCallWrapper wrapper(*this);
     const auto ptr = src.elemBytes + srcElemOffset;
     gl->fClearBufferuiv(buffer, drawBuffer, ptr);
 }
@@ -182,7 +179,6 @@ WebGL2Context::ClearBufferfi(GLenum buffer, GLint drawBuffer, GLfloat depth,
     if (!ValidateClearBuffer(funcName, buffer, drawBuffer, 2, 0, 0))
         return;
 
-    ScopedDrawCallWrapper wrapper(*this);
     gl->fClearBufferfi(buffer, drawBuffer, depth, stencil);
 }
 

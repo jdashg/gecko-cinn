@@ -16,7 +16,7 @@
 namespace mozilla {
 namespace layers {
 
-class BasicCanvasLayer : public CopyableCanvasLayer,
+class BasicCanvasLayer : public ContentCanvasLayer,
                          public BasicImplData
 {
 public:
@@ -31,14 +31,10 @@ public:
     CanvasLayer::SetVisibleRegion(aRegion);
   }
 
-  virtual void Paint(gfx::DrawTarget* aDT,
-                     const gfx::Point& aDeviceOffset,
+  virtual void Paint(gfx::DrawTarget* aDT, const gfx::Point& aDeviceOffset,
                      Layer* aMaskLayer) override;
 
 protected:
-
-  already_AddRefed<gfx::SourceSurface> UpdateSurface();
-
   BasicLayerManager* BasicManager()
   {
     return static_cast<BasicLayerManager*>(mManager);

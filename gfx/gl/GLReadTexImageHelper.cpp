@@ -452,7 +452,6 @@ YInvertImageSurface(gfx::DataSourceSurface* aSurf)
 already_AddRefed<DataSourceSurface>
 ReadBackSurface(GLContext* gl, GLuint aTexture, bool aYInvert, SurfaceFormat aFormat)
 {
-    MOZ_ASSERT(!gl->Screen());
     gl->MakeCurrent();
     gl->fActiveTexture(LOCAL_GL_TEXTURE0);
     gl->fBindTexture(LOCAL_GL_TEXTURE_2D, aTexture);

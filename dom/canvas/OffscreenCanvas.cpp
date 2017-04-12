@@ -15,7 +15,6 @@
 #include "mozilla/Telemetry.h"
 #include "CanvasRenderingContext2D.h"
 #include "CanvasUtils.h"
-#include "GLScreenBuffer.h"
 #include "WebGL1Context.h"
 #include "WebGL2Context.h"
 
@@ -136,7 +135,10 @@ OffscreenCanvas::GetContext(JSContext* aCx,
   if (!mCurrentContext) {
     return nullptr;
   }
-
+  // De-implemented for now.
+  aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+  return nullptr;
+/*
   if (mCanvasRenderer) {
     if (contextType == CanvasContextType::WebGL1 ||
         contextType == CanvasContextType::WebGL2) {
@@ -145,27 +147,25 @@ OffscreenCanvas::GetContext(JSContext* aCx,
       mCanvasRenderer->mContext = mCurrentContext;
       mCanvasRenderer->SetActiveThread();
       mCanvasRenderer->mGLContext = gl;
-      mCanvasRenderer->SetIsAlphaPremultiplied(webGL->IsPremultAlpha() || !gl->Caps().alpha);
+
+      const auto& options = webGL->Options();
+      const bool treatAsPremult = (options.premultipliedAlpha || !options.alpha);
+      mCanvasRenderer->SetIsAlphaPremultiplied(treatAsPremult);
 
       if (RefPtr<ImageBridgeChild> imageBridge = ImageBridgeChild::GetSingleton()) {
         TextureFlags flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
         mCanvasClient = imageBridge->CreateCanvasClient(CanvasClient::CanvasClientTypeShSurf, flags);
         mCanvasRenderer->SetCanvasClient(mCanvasClient);
 
-        gl::GLScreenBuffer* screen = gl->Screen();
-        gl::SurfaceCaps caps = screen->mCaps;
-        auto forwarder = mCanvasClient->GetForwarder();
-
-        UniquePtr<gl::SurfaceFactory> factory =
-          gl::GLScreenBuffer::CreateFactory(gl, caps, forwarder, flags);
-
-        if (factory)
-          screen->Morph(Move(factory));
+        const auto& forwarder = mCanvasClient->GetForwarder();
+        MOZ_CRASH("fixme");
+        //MOZ_ALWAYS_TRUE( webGL->MorphSurfFactory(forwarder) );
       }
     }
   }
 
   return result;
+  */
 }
 
 already_AddRefed<nsICanvasRenderingContextInternal>
@@ -173,7 +173,7 @@ OffscreenCanvas::CreateContext(CanvasContextType aContextType)
 {
   RefPtr<nsICanvasRenderingContextInternal> ret =
     CanvasRenderingContextHelper::CreateContext(aContextType);
-
+  MOZ_CRASH("OffscreenCanvas::CreateContext");
   ret->SetOffscreenCanvas(this);
   return ret.forget();
 }
@@ -227,8 +227,9 @@ OffscreenCanvas::TransferToImageBitmap()
   if ((mCurrentContextType == CanvasContextType::WebGL1 ||
        mCurrentContextType == CanvasContextType::WebGL2))
   {
-    WebGLContext* webGL = static_cast<WebGLContext*>(mCurrentContext.get());
-    webGL->ClearScreen();
+    MOZ_CRASH("fixme");
+    //WebGLContext* webGL = static_cast<WebGLContext*>(mCurrentContext.get());
+    //webGL->ClearScreen();
   }
 
   return result.forget();
