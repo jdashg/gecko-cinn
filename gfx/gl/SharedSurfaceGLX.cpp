@@ -46,8 +46,8 @@ SharedSurface_GLXDrawable::SharedSurface_GLXDrawable(GLContext* gl,
                                                      bool inSameProcess,
                                                      const RefPtr<gfxXlibSurface>& xlibSurface)
     : SharedSurface(SharedSurfaceType::GLXDrawable,
-                    AttachmentType::Screen,
                     gl,
+                    0, 0, true, 0,
                     size,
                     true,
                     true)
@@ -73,6 +73,23 @@ void
 SharedSurface_GLXDrawable::UnlockProdImpl()
 {
     GLContextGLX::Cast(mGL)->RestoreDrawable();
+}
+
+bool
+SharedSurface_GLXDrawable::CopyFromSameType(SharedSurface* const opaqueSrc)
+{
+    const auto src = (SharedSurface_GLXDrawable*)opaqueSrc;
+
+    const auto srcPixmap = src->mXlibSurface->GetGLXPixmap();
+    const auto destPixmap = mXlibSurface->GetGLXPixmap();
+
+    const auto glxContext = (GLContextGLX*)mGL;
+    MOZ_ALWAYS_TRUE( sGLXLibrary.fMakeContextCurrent(glxContext->mDisplay, destPixmap,
+                                                     srcPixmap, glxContext->mContext) );
+    mGL->BlitHelper()->BlitFramebufferToFramebuffer(0, 0, mSize, mSize, true);
+
+    MOZ_ALWAYS_TRUE( mGL->MakeCurrent(true) );
+    return true;
 }
 
 bool
@@ -133,7 +150,7 @@ SurfaceFactory_GLXDrawable::Create(GLContext* prodGL,
 }
 
 UniquePtr<SharedSurface>
-SurfaceFactory_GLXDrawable::CreateShared(const gfx::IntSize& size)
+SurfaceFactory_GLXDrawable::NewSharedSurfaceImpl(const gfx::IntSize& size)
 {
     bool deallocateClient = !!(mFlags & layers::TextureFlags::DEALLOCATE_CLIENT);
     return SharedSurface_GLXDrawable::Create(mGL, mCaps, size, deallocateClient,

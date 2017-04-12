@@ -11,6 +11,7 @@
 
 struct IDXGIKeyedMutex;
 struct ID3D11Texture2D;
+struct ID3D11DeviceContext;
 
 namespace mozilla {
 namespace gl {
@@ -27,17 +28,13 @@ public:
                                                             const gfx::IntSize& size,
                                                             bool hasAlpha);
 
-    static SharedSurface_ANGLEShareHandle* Cast(SharedSurface* surf) {
-        MOZ_ASSERT(surf->mType == SharedSurfaceType::EGLSurfaceANGLE);
-
-        return (SharedSurface_ANGLEShareHandle*)surf;
-    }
-
 protected:
     GLLibraryEGL* const mEGL;
     const EGLSurface mPBuffer;
 public:
     const HANDLE mShareHandle;
+    const RefPtr<ID3D11Texture2D> mD3DTex;
+    const RefPtr<ID3D11DeviceContext> mD3DContext;
 protected:
     RefPtr<IDXGIKeyedMutex> mKeyedMutex;
 
@@ -47,7 +44,7 @@ protected:
                                    bool hasAlpha,
                                    EGLSurface pbuffer,
                                    HANDLE shareHandle,
-                                   const RefPtr<IDXGIKeyedMutex>& keyedMutex);
+                                   ID3D11Texture2D* d3dTex);
 
     EGLDisplay Display();
 
@@ -61,6 +58,8 @@ public:
     virtual void ProducerReleaseImpl() override;
     virtual void ProducerReadAcquireImpl() override;
     virtual void ProducerReadReleaseImpl() override;
+
+    virtual bool CopyFromSameType(SharedSurface* src) override;
 
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
 
@@ -89,9 +88,10 @@ protected:
                                     const layers::TextureFlags& flags, GLLibraryEGL* egl,
                                     EGLConfig config);
 
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override {
-        bool hasAlpha = mReadCaps.alpha;
-        return SharedSurface_ANGLEShareHandle::Create(mProdGL, mConfig, size, hasAlpha);
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override {
+        return SharedSurface_ANGLEShareHandle::Create(mProdGL, mConfig, size,
+                                                      mCaps.alpha);
     }
 };
 

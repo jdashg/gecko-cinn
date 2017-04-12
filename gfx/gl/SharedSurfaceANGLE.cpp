@@ -57,25 +57,26 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
 
     // Declare everything before 'goto's.
     HANDLE shareHandle = nullptr;
-    bool ok = egl->fQuerySurfacePointerANGLE(display,
-                                             pbuffer,
-                                             LOCAL_EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                             &shareHandle);
-    if (!ok) {
+    IUnknown* maybeD3DTex = nullptr;
+    MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(display, pbuffer,
+                                                    LOCAL_EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                                    &shareHandle) );
+    MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(display, pbuffer,
+                                                    LOCAL_EGL_D3D_TEXTURE_ANGLE,
+                                                    (void**)&maybeD3DTex) );
+    ID3D11Texture2D* d3dTex = nullptr;
+    if (maybeD3DTex) {
+        maybeD3DTex->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&d3dTex);
+    }
+
+    if (!shareHandle || !d3dTex) {
         egl->fDestroySurface(egl->Display(), pbuffer);
         return nullptr;
     }
-    void* opaqueKeyedMutex = nullptr;
-    egl->fQuerySurfacePointerANGLE(display,
-                                   pbuffer,
-                                   LOCAL_EGL_DXGI_KEYED_MUTEX_ANGLE,
-                                   &opaqueKeyedMutex);
-    RefPtr<IDXGIKeyedMutex> keyedMutex = static_cast<IDXGIKeyedMutex*>(opaqueKeyedMutex);
 
-    typedef SharedSurface_ANGLEShareHandle ptrT;
-    UniquePtr<ptrT> ret( new ptrT(gl, egl, size, hasAlpha, pbuffer, shareHandle,
-                                  keyedMutex) );
-    return Move(ret);
+    return UniquePtr<SharedSurface_ANGLEShareHandle>(
+        new SharedSurface_ANGLEShareHandle(gl, egl, size, hasAlpha, pbuffer, shareHandle,
+                                           d3dTex) );
 }
 
 EGLDisplay
@@ -84,23 +85,54 @@ SharedSurface_ANGLEShareHandle::Display()
     return mEGL->Display();
 }
 
+static ID3D11DeviceContext*
+D3DContext(GLLibraryEGL* egl)
+{
+    EGLDeviceEXT eglDevice = nullptr;
+    egl->fQueryDisplayAttribEXT(egl->Display(), LOCAL_EGL_DEVICE_EXT,
+                                (EGLAttrib*)&eglDevice);
+    MOZ_ASSERT(eglDevice);
+
+    ID3D11Device* d3dDevice = nullptr;
+    egl->fQueryDeviceAttribEXT(eglDevice, LOCAL_EGL_D3D11_DEVICE_ANGLE,
+                               (EGLAttrib*)&d3dDevice);
+    MOZ_ASSERT(d3dDevice);
+
+    ID3D11DeviceContext* d3dContext = nullptr;
+    d3dDevice->GetImmediateContext(&d3dContext);
+    MOZ_ASSERT(d3dContext);
+    return d3dContext;
+}
+
+static IDXGIKeyedMutex*
+KeyedMutex(GLLibraryEGL* egl, EGLSurface pbuffer)
+{
+    IDXGIKeyedMutex* keyedMutex = nullptr;
+    MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(egl->Display(), pbuffer,
+                                                    LOCAL_EGL_DXGI_KEYED_MUTEX_ANGLE,
+                                                    (void**)&keyedMutex) );
+    return keyedMutex;
+}
+
 SharedSurface_ANGLEShareHandle::SharedSurface_ANGLEShareHandle(GLContext* gl,
                                                                GLLibraryEGL* egl,
                                                                const gfx::IntSize& size,
                                                                bool hasAlpha,
                                                                EGLSurface pbuffer,
                                                                HANDLE shareHandle,
-                                                               const RefPtr<IDXGIKeyedMutex>& keyedMutex)
+                                                               ID3D11Texture2D* d3dTex)
     : SharedSurface(SharedSurfaceType::EGLSurfaceANGLE,
-                    AttachmentType::Screen,
                     gl,
+                    0, 0, false, 0,
                     size,
                     hasAlpha,
                     true)
     , mEGL(egl)
     , mPBuffer(pbuffer)
     , mShareHandle(shareHandle)
-    , mKeyedMutex(keyedMutex)
+    , mD3DTex(d3dTex)
+    , mD3DContext(D3DContext(egl))
+    , mKeyedMutex(KeyedMutex(egl, pbuffer))
 {
 }
 
@@ -160,6 +192,18 @@ SharedSurface_ANGLEShareHandle::ProducerReadReleaseImpl()
         return;
     }
 }
+
+////////////////////
+
+bool
+SharedSurface_ANGLEShareHandle::CopyFromSameType(SharedSurface* const opaqueSrc)
+{
+    const auto src = (SharedSurface_ANGLEShareHandle*)opaqueSrc;
+    mD3DContext->CopyResource(mD3DTex, src->mD3DTex);
+    return true;
+}
+
+////////////////////
 
 bool
 SharedSurface_ANGLEShareHandle::ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor)

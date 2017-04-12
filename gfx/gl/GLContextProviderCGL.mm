@@ -132,7 +132,8 @@ GLContextCGL::MakeCurrentImpl(bool aForce)
 }
 
 bool
-GLContextCGL::IsCurrent() {
+GLContextCGL::IsCurrent() const
+{
     return [NSOpenGLContext currentContext] == mContext;
 }
 

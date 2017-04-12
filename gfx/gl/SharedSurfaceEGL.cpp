@@ -27,17 +27,13 @@ SharedSurface_EGLImage::Create(GLContext* prodGL,
     MOZ_ASSERT(egl);
     MOZ_ASSERT(context);
 
-    UniquePtr<SharedSurface_EGLImage> ret;
-
-    if (!HasExtensions(egl, prodGL)) {
-        return Move(ret);
-    }
+    if (!HasExtensions(egl, prodGL))
+        return nullptr;
 
     MOZ_ALWAYS_TRUE(prodGL->MakeCurrent());
     GLuint prodTex = CreateTextureForOffscreen(prodGL, formats, size);
-    if (!prodTex) {
-        return Move(ret);
-    }
+    if (!prodTex)
+        return nullptr;
 
     EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(uintptr_t(prodTex));
     EGLImage image = egl->fCreateImage(egl->Display(), context,
@@ -45,12 +41,11 @@ SharedSurface_EGLImage::Create(GLContext* prodGL,
                                        nullptr);
     if (!image) {
         prodGL->fDeleteTextures(1, &prodTex);
-        return Move(ret);
+        return nullptr;
     }
 
-    ret.reset( new SharedSurface_EGLImage(prodGL, egl, size, hasAlpha,
-                                          formats, prodTex, image) );
-    return Move(ret);
+    return UniquePtr<SharedSurface_EGLImage>(
+        new SharedSurface_EGLImage(prodGL, prodTex, size, hasAlpha, egl, formats, image));
 }
 
 bool
@@ -63,22 +58,21 @@ SharedSurface_EGLImage::HasExtensions(GLLibraryEGL* egl, GLContext* gl)
 }
 
 SharedSurface_EGLImage::SharedSurface_EGLImage(GLContext* gl,
-                                               GLLibraryEGL* egl,
+                                               GLuint tex,
                                                const gfx::IntSize& size,
                                                bool hasAlpha,
+                                               GLLibraryEGL* egl,
                                                const GLFormats& formats,
-                                               GLuint prodTex,
                                                EGLImage image)
     : SharedSurface(SharedSurfaceType::EGLImageShare,
-                    AttachmentType::GLTexture,
                     gl,
+                    LOCAL_GL_TEXTURE_2D, tex, true, 0,
                     size,
                     hasAlpha,
                     false) // Can't recycle, as mSync changes never update TextureHost.
     , mMutex("SharedSurface_EGLImage mutex")
     , mEGL(egl)
     , mFormats(formats)
-    , mProdTex(prodTex)
     , mImage(image)
     , mSync(0)
 {}
@@ -93,12 +87,6 @@ SharedSurface_EGLImage::~SharedSurface_EGLImage()
         mEGL->fDestroySync(Display(), mSync);
         mSync = 0;
     }
-
-    if (!mGL || !mGL->MakeCurrent())
-        return;
-
-    mGL->fDeleteTextures(1, &mProdTex);
-    mProdTex = 0;
 }
 
 layers::TextureFlags

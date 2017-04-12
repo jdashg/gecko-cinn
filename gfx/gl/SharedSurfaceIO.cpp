@@ -119,25 +119,15 @@ SharedSurface_IOSurface::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei hei
     return true;
 }
 
-static void
-BackTextureWithIOSurf(GLContext* gl, GLuint tex, MacIOSurface* ioSurf)
+static GLuint
+TexForIOSurf(GLContext* gl, MacIOSurface* ioSurf)
 {
-    MOZ_ASSERT(gl->IsCurrent());
+    gl->MakeCurrent();
 
+    GLuint tex = 0;
+    gl->fGenTextures(1, &tex);
     ScopedBindTexture texture(gl, tex, LOCAL_GL_TEXTURE_RECTANGLE_ARB);
-
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB,
-                        LOCAL_GL_TEXTURE_MIN_FILTER,
-                        LOCAL_GL_LINEAR);
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB,
-                        LOCAL_GL_TEXTURE_MAG_FILTER,
-                        LOCAL_GL_LINEAR);
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB,
-                        LOCAL_GL_TEXTURE_WRAP_S,
-                        LOCAL_GL_CLAMP_TO_EDGE);
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_RECTANGLE_ARB,
-                        LOCAL_GL_TEXTURE_WRAP_T,
-                        LOCAL_GL_CLAMP_TO_EDGE);
+    gl->TexParams_SetClampNoMips(LOCAL_GL_TEXTURE_RECTANGLE_ARB);
 
     CGLContextObj cgl = GLContextCGL::Cast(gl)->GetCGLContext();
     MOZ_ASSERT(cgl);
@@ -150,25 +140,13 @@ SharedSurface_IOSurface::SharedSurface_IOSurface(const RefPtr<MacIOSurface>& ioS
                                                  const gfx::IntSize& size,
                                                  bool hasAlpha)
   : SharedSurface(SharedSurfaceType::IOSurface,
-                  AttachmentType::GLTexture,
                   gl,
+                  LOCAL_GL_TEXTURE_RECTANGLE_ARB, TexForIOSurf(gl, ioSurf), true, 0,
                   size,
                   hasAlpha,
                   true)
   , mIOSurf(ioSurf)
 {
-    gl->MakeCurrent();
-    mProdTex = 0;
-    gl->fGenTextures(1, &mProdTex);
-    BackTextureWithIOSurf(gl, mProdTex, mIOSurf);
-}
-
-SharedSurface_IOSurface::~SharedSurface_IOSurface()
-{
-    if (!mGL || !mGL->MakeCurrent())
-        return;
-
-    mGL->fDeleteTextures(1, &mProdTex);
 }
 
 bool
@@ -223,7 +201,7 @@ SurfaceFactory_IOSurface::Create(GLContext* gl, const SurfaceCaps& caps,
 }
 
 UniquePtr<SharedSurface>
-SurfaceFactory_IOSurface::CreateShared(const gfx::IntSize& size)
+SurfaceFactory_IOSurface::NewSharedSurfaceImpl(const gfx::IntSize& size)
 {
     if (size.width > mMaxDims.width ||
         size.height > mMaxDims.height)
@@ -231,7 +209,7 @@ SurfaceFactory_IOSurface::CreateShared(const gfx::IntSize& size)
         return nullptr;
     }
 
-    bool hasAlpha = mReadCaps.alpha;
+    const auto& hasAlpha = mCaps.alpha;
     RefPtr<MacIOSurface> ioSurf;
     ioSurf = MacIOSurface::CreateIOSurface(size.width, size.height, 1.0,
                                            hasAlpha);

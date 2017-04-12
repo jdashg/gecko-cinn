@@ -20,7 +20,6 @@ class SharedSurface_D3D11Interop
     : public SharedSurface
 {
 public:
-    const GLuint mProdTex;
     const GLuint mInteropFB;
     const GLuint mInteropRB;
     const RefPtr<DXInterop2Device> mInterop;
@@ -38,16 +37,11 @@ public:
                                                         const gfx::IntSize& size,
                                                         bool hasAlpha);
 
-    static SharedSurface_D3D11Interop* Cast(SharedSurface* surf) {
-        MOZ_ASSERT(surf->mType == SharedSurfaceType::DXGLInterop2);
-        return (SharedSurface_D3D11Interop*)surf;
-    }
-
 protected:
     SharedSurface_D3D11Interop(GLContext* gl,
+                               GLuint prodTex, GLuint prodFB,
                                const gfx::IntSize& size,
                                bool hasAlpha,
-                               GLuint prodTex,
                                GLuint interopFB,
                                GLuint interopRB,
                                DXInterop2Device* interop,
@@ -63,16 +57,6 @@ public:
 
     virtual void ProducerAcquireImpl() override;
     virtual void ProducerReleaseImpl() override;
-
-    virtual GLuint ProdRenderbuffer() override {
-        MOZ_ASSERT(!mProdTex);
-        return mInteropRB;
-    }
-
-    virtual GLuint ProdTexture() override {
-        MOZ_ASSERT(mProdTex);
-        return mProdTex;
-    }
 
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
 };
@@ -98,9 +82,9 @@ public:
     virtual ~SurfaceFactory_D3D11Interop() override;
 
 protected:
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override {
-        bool hasAlpha = mReadCaps.alpha;
-        return SharedSurface_D3D11Interop::Create(mInterop, mGL, size, hasAlpha);
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override {
+        return SharedSurface_D3D11Interop::Create(mInterop, mGL, size, mCaps.alpha);
     }
 };
 

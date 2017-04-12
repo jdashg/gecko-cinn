@@ -533,7 +533,6 @@ BaseCaps(const WebGLContextOptions& options, WebGLContext* webgl)
 {
     gl::SurfaceCaps baseCaps;
 
-    baseCaps.color = true;
     baseCaps.alpha = options.alpha;
     baseCaps.antialias = options.antialias;
     baseCaps.depth = options.depth;
@@ -1113,8 +1112,6 @@ WebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight)
     AssertCachedBindings();
     AssertCachedGlobalState();
 
-    MOZ_ASSERT(gl->Caps().color);
-
     MOZ_ASSERT_IF(!mNeedsFakeNoAlpha, gl->Caps().alpha == mOptions.alpha);
     MOZ_ASSERT_IF(mNeedsFakeNoAlpha, !mOptions.alpha && gl->Caps().alpha);
 
@@ -1609,7 +1606,7 @@ WebGLContext::PresentScreenBuffer()
     GLScreenBuffer* screen = gl->Screen();
     MOZ_ASSERT(screen);
 
-    if (!screen->PublishFrame(screen->Size())) {
+    if (!screen->PublishFrame()) {
         ForceLoseContext();
         return false;
     }
@@ -2344,27 +2341,17 @@ WebGLContext::GetVRFrame()
         return nullptr;
     }
 
-    RefPtr<SharedSurfaceTextureClient> sharedSurface = screen->Front();
-    if (!sharedSurface) {
+    RefPtr<SharedSurfaceTextureClient> texClient = screen->Front();
+    if (!texClient)
         return nullptr;
-    }
 
-    if (sharedSurface && sharedSurface->GetAllocator() != vrmc) {
-        RefPtr<SharedSurfaceTextureClient> dest =
-        screen->Factory()->NewTexClient(sharedSurface->GetSize());
-        if (!dest) {
+    if (texClient->GetAllocator() != vrmc) {
+        texClient = screen->Factory()->CloneTexClient(texClient->Surf());
+        if (!texClient)
             return nullptr;
-        }
-        gl::SharedSurface* destSurf = dest->Surf();
-        destSurf->ProducerAcquire();
-        SharedSurface::ProdCopy(sharedSurface->Surf(), dest->Surf(),
-                                screen->Factory());
-        destSurf->ProducerRelease();
-
-        return dest.forget();
     }
 
-  return sharedSurface.forget();
+    return texClient.forget();
 }
 
 bool

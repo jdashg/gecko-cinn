@@ -333,6 +333,10 @@ egl::Error SurfaceD3D::querySurfacePointerANGLE(EGLint attribute, void **value)
     {
         *value = mSwapChain->getShareHandle();
     }
+    if (attribute == EGL_D3D_TEXTURE_ANGLE)
+    {
+        *value = mSwapChain->getTexture();
+    }
     else if (attribute == EGL_DXGI_KEYED_MUTEX_ANGLE)
     {
         *value = mSwapChain->getKeyedMutex();

@@ -76,8 +76,8 @@ public:
     void           fDestroyContext(Display* display, GLXContext context) const
         VOID_WRAP( fDestroyContext(display, context) )
 
-    Bool      fMakeCurrent(Display* display, GLXDrawable drawable, GLXContext context) const
-        WRAP( fMakeCurrent(display, drawable, context) )
+    Bool      fMakeContextCurrent(Display* display, GLXDrawable draw, GLXDrawable read, GLXContext context) const
+        WRAP( fMakeContextCurrent(display, draw, read, context) )
 
     GLXContext fGetCurrentContext() const
         WRAP(  fGetCurrentContext() )
@@ -173,7 +173,8 @@ public:
 private:
     struct {
         void         (GLAPIENTRY *fDestroyContext) (Display*, GLXContext);
-        Bool         (GLAPIENTRY *fMakeCurrent) (Display*, GLXDrawable, GLXContext);
+        Bool         (GLAPIENTRY *fMakeContextCurrent) (Display*, GLXDrawable,
+                                                        GLXDrawable, GLXContext);
         GLXContext   (GLAPIENTRY *fGetCurrentContext) ();
         void*        (GLAPIENTRY *fGetProcAddress) (const char*);
         GLXFBConfig* (GLAPIENTRY *fChooseFBConfig) (Display*, int, const int*, int*);

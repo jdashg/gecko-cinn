@@ -268,7 +268,6 @@ GLContext::GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
     mSharedContext(sharedContext),
     mCaps(caps),
     mBypassScreen(false),
-    mLockedSurface(nullptr),
     mMaxTextureSize(0),
     mMaxCubeMapTextureSize(0),
     mMaxTextureImageSize(0),
@@ -943,7 +942,6 @@ GLContext::InitWithPrefixImpl(const char* prefix, bool trygl)
     // TODO: Remove SurfaceCaps::any.
     if (mCaps.any) {
         mCaps.any = false;
-        mCaps.color = true;
         mCaps.alpha = false;
     }
 
@@ -2331,8 +2329,11 @@ GLContext::OffscreenSize() const
 }
 
 bool
-GLContext::CreateScreenBufferImpl(const IntSize& size, const SurfaceCaps& caps)
+GLContext::CreateScreenBuffer(const IntSize& size, const SurfaceCaps& caps)
 {
+    if (!IsOffscreenSizeAllowed(size))
+        return false;
+
     UniquePtr<GLScreenBuffer> newScreen = GLScreenBuffer::Create(this, size, caps);
     if (!newScreen)
         return false;
@@ -2496,47 +2497,17 @@ GLContext::Readback(SharedSurface* src, gfx::DataSourceSurface* dest)
 
     MakeCurrent();
 
-    SharedSurface* prev = GetLockedSurface();
-
-    const bool needsSwap = src != prev;
-    if (needsSwap) {
-        if (prev)
-            prev->UnlockProd();
-        src->LockProd();
-    }
+    PushSurfaceLock(src);
 
     GLuint tempFB = 0;
     GLuint tempTex = 0;
 
     {
-        ScopedBindFramebuffer autoFB(this);
+        const ScopedBindFramebuffer autoFB(this, src->mFB);
 
         // We're consuming from the producer side, so which do we use?
         // Really, we just want a read-only lock, so ConsumerAcquire is the best match.
         src->ProducerReadAcquire();
-
-        if (src->mAttachType == AttachmentType::Screen) {
-            fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
-        } else {
-            fGenFramebuffers(1, &tempFB);
-            fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, tempFB);
-
-            switch (src->mAttachType) {
-            case AttachmentType::GLTexture:
-                fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
-                                      src->ProdTextureTarget(), src->ProdTexture(), 0);
-                break;
-            case AttachmentType::GLRenderbuffer:
-                fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
-                                         LOCAL_GL_RENDERBUFFER, src->ProdRenderbuffer());
-                break;
-            default:
-                MOZ_CRASH("GFX: bad `src->mAttachType`.");
-            }
-
-            DebugOnly<GLenum> status = fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
-            MOZ_ASSERT(status == LOCAL_GL_FRAMEBUFFER_COMPLETE);
-        }
 
         if (src->NeedsIndirectReads()) {
             fGenTextures(1, &tempTex);
@@ -2568,11 +2539,7 @@ GLContext::Readback(SharedSurface* src, gfx::DataSourceSurface* dest)
         fDeleteTextures(1, &tempTex);
     }
 
-    if (needsSwap) {
-        src->UnlockProd();
-        if (prev)
-            prev->LockProd();
-    }
+    PopSurfaceLock();
 }
 
 // Do whatever tear-down is necessary after drawing to our offscreen FBO,
@@ -2831,6 +2798,31 @@ bool
 GLContext::IsDrawingToDefaultFramebuffer()
 {
     return Screen()->IsDrawFramebufferDefault();
+}
+
+
+void
+GLContext::LockTopSurface()
+{
+    if (!mSurfaceLockStack.size())
+        return;
+
+    const auto top = mSurfaceLockStack.top();
+    if (top) {
+        top->LockProd();
+    }
+}
+
+void
+GLContext::UnlockTopSurface()
+{
+    if (!mSurfaceLockStack.size())
+        return;
+
+    const auto top = mSurfaceLockStack.top();
+    if (top) {
+        top->UnlockProd();
+    }
 }
 
 GLuint

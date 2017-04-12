@@ -105,7 +105,6 @@ GLXLibrary::EnsureInitialized()
     const GLLibraryLoader::SymLoadStruct symbols[] = {
         /* functions that were in GLX 1.0 */
         SYMBOL(DestroyContext),
-        SYMBOL(MakeCurrent),
         SYMBOL(SwapBuffers),
         SYMBOL(QueryVersion),
         SYMBOL(GetCurrentContext),
@@ -118,6 +117,7 @@ GLXLibrary::EnsureInitialized()
         SYMBOL(QueryServerString),
 
         /* functions introduced in GLX 1.3 */
+        SYMBOL(MakeContextCurrent),
         SYMBOL(ChooseFBConfig),
         SYMBOL(GetFBConfigAttrib),
         SYMBOL(GetFBConfigs),
@@ -576,7 +576,7 @@ GLContextGLX::~GLContextGLX()
 #ifdef DEBUG
     bool success =
 #endif
-    mGLX->fMakeCurrent(mDisplay, X11None, nullptr);
+    mGLX->fMakeContextCurrent(mDisplay, X11None, X11None, nullptr);
     MOZ_ASSERT(success,
                "glXMakeCurrent failed to release GL context before we call "
                "glXDestroyContext!");
@@ -623,7 +623,7 @@ GLContextGLX::MakeCurrentImpl(bool aForce)
           Unused << XPending(mDisplay);
         }
 
-        succeeded = mGLX->fMakeCurrent(mDisplay, mDrawable, mContext);
+        succeeded = mGLX->fMakeContextCurrent(mDisplay, mDrawable, mDrawable, mContext);
         NS_ASSERTION(succeeded, "Failed to make GL context current!");
 
         if (!IsOffscreen() && mGLX->SupportsSwapControl()) {
@@ -639,7 +639,8 @@ GLContextGLX::MakeCurrentImpl(bool aForce)
 }
 
 bool
-GLContextGLX::IsCurrent() {
+GLContextGLX::IsCurrent() const
+{
     return mGLX->fGetCurrentContext() == mContext;
 }
 
@@ -691,14 +692,14 @@ GLContextGLX::OverrideDrawable(GLXDrawable drawable)
 {
     if (Screen())
         Screen()->AssureBlitted();
-    Bool result = mGLX->fMakeCurrent(mDisplay, drawable, mContext);
+    Bool result = mGLX->fMakeContextCurrent(mDisplay, drawable, drawable, mContext);
     return result;
 }
 
 bool
 GLContextGLX::RestoreDrawable()
 {
-    return mGLX->fMakeCurrent(mDisplay, mDrawable, mContext);
+    return mGLX->fMakeContextCurrent(mDisplay, mDrawable, mDrawable, mContext);
 }
 
 GLContextGLX::GLContextGLX(

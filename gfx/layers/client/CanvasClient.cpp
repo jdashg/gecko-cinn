@@ -357,23 +357,6 @@ TexClientFromReadback(SharedSurface* src, CompositableForwarder* allocator,
 
 ////////////////////////////////////////
 
-static already_AddRefed<SharedSurfaceTextureClient>
-CloneSurface(gl::SharedSurface* src, gl::SurfaceFactory* factory)
-{
-    RefPtr<SharedSurfaceTextureClient> dest = factory->NewTexClient(src->mSize);
-    if (!dest) {
-      return nullptr;
-    }
-
-    gl::SharedSurface* destSurf = dest->Surf();
-
-    destSurf->ProducerAcquire();
-    SharedSurface::ProdCopy(src, dest->Surf(), factory);
-    destSurf->ProducerRelease();
-
-    return dest.forget();
-}
-
 void
 CanvasClientSharedSurface::Update(gfx::IntSize aSize, ShareableCanvasLayer* aLayer)
 {
@@ -408,21 +391,22 @@ CanvasClientSharedSurface::UpdateRenderer(gfx::IntSize aSize, Renderer& aRendere
   RefPtr<TextureClient> newFront;
 
   if (layer && layer->mGLFrontbuffer) {
-    mShSurfClient = CloneSurface(layer->mGLFrontbuffer.get(), layer->mFactory.get());
+    mShSurfClient = layer->mFactory->CloneTexClient(layer->mGLFrontbuffer.get());
     if (!mShSurfClient) {
       gfxCriticalError() << "Invalid canvas front buffer";
       return;
     }
   } else if (layer && layer->mIsMirror) {
-    mShSurfClient = CloneSurface(gl->Screen()->Front()->Surf(), layer->mFactory.get());
+    mShSurfClient = layer->mFactory->CloneTexClient(gl->Screen()->Front()->Surf());
     if (!mShSurfClient) {
       return;
     }
   } else {
     mShSurfClient = gl->Screen()->Front();
     if (mShSurfClient && mShSurfClient->GetAllocator() &&
-        mShSurfClient->GetAllocator() != GetForwarder()->GetTextureForwarder()) {
-      mShSurfClient = CloneSurface(mShSurfClient->Surf(), gl->Screen()->Factory());
+        mShSurfClient->GetAllocator() != GetForwarder()->GetTextureForwarder())
+    {
+      mShSurfClient = gl->Screen()->Factory()->CloneTexClient(mShSurfClient->Surf());
     }
     if (!mShSurfClient) {
       return;

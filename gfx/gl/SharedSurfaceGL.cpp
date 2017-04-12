@@ -48,6 +48,8 @@ SharedSurface_Basic::Wrap(GLContext* gl,
                           bool hasAlpha,
                           GLuint tex)
 {
+    gl->MakeCurrent();
+
     bool ownsTex = false;
     UniquePtr<SharedSurface_Basic> ret( new SharedSurface_Basic(gl, size, hasAlpha, tex,
                                                                 ownsTex) );
@@ -60,41 +62,13 @@ SharedSurface_Basic::SharedSurface_Basic(GLContext* gl,
                                          GLuint tex,
                                          bool ownsTex)
     : SharedSurface(SharedSurfaceType::Basic,
-                    AttachmentType::GLTexture,
                     gl,
+                    LOCAL_GL_TEXTURE_2D, tex, ownsTex, 0,
                     size,
                     hasAlpha,
                     true)
-    , mTex(tex)
-    , mOwnsTex(ownsTex)
-    , mFB(0)
 {
-    mGL->MakeCurrent();
-    mGL->fGenFramebuffers(1, &mFB);
-
-    ScopedBindFramebuffer autoFB(mGL, mFB);
-    mGL->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
-                              LOCAL_GL_COLOR_ATTACHMENT0,
-                              LOCAL_GL_TEXTURE_2D,
-                              mTex,
-                              0);
-
-    DebugOnly<GLenum> status = mGL->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
-    MOZ_ASSERT(status == LOCAL_GL_FRAMEBUFFER_COMPLETE);
 }
-
-SharedSurface_Basic::~SharedSurface_Basic()
-{
-    if (!mGL || !mGL->MakeCurrent())
-        return;
-
-    if (mFB)
-        mGL->fDeleteFramebuffers(1, &mFB);
-
-    if (mOwnsTex)
-        mGL->fDeleteTextures(1, &mTex);
-}
-
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -129,14 +103,13 @@ SharedSurface_GLTexture::Create(GLContext* prodGL,
         return Move(ret);
     }
 
-    ret.reset(new SharedSurface_GLTexture(prodGL, size,
-                                          hasAlpha, tex));
+    ret.reset(new SharedSurface_GLTexture(prodGL, size, hasAlpha, tex));
     return Move(ret);
 }
 
 SharedSurface_GLTexture::~SharedSurface_GLTexture()
 {
-    if (!mGL->MakeCurrent())
+    if (!mGL || !mGL->MakeCurrent())
         return;
 
     if (mTex) {
@@ -173,8 +146,8 @@ SharedSurface_GLTexture::ProducerReleaseImpl()
 bool
 SharedSurface_GLTexture::ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor)
 {
-    *out_descriptor = layers::SurfaceDescriptorSharedGLTexture(ProdTexture(),
-                                                               ProdTextureTarget(),
+    *out_descriptor = layers::SurfaceDescriptorSharedGLTexture(mTex,
+                                                               mTexTarget,
                                                                (uintptr_t)mSync,
                                                                mSize,
                                                                mHasAlpha);

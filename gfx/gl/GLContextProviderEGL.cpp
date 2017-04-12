@@ -389,7 +389,8 @@ GLContextEGL::MakeCurrentImpl(bool aForce) {
 }
 
 bool
-GLContextEGL::IsCurrent() {
+GLContextEGL::IsCurrent() const
+{
     return sEGLLibrary.fGetCurrentContext() == mContext;
 }
 
@@ -888,7 +889,6 @@ ChooseConfig(GLLibraryEGL* egl, CreateContextFlags flags, const SurfaceCaps& min
     EGLConfig config = configs[0];
 
     *out_configCaps = minCaps; // Pick up any preserve, etc.
-    out_configCaps->color = true;
     out_configCaps->alpha   = bool(GetAttrib(egl, config, LOCAL_EGL_ALPHA_SIZE));
     out_configCaps->depth   = bool(GetAttrib(egl, config, LOCAL_EGL_DEPTH_SIZE));
     out_configCaps->stencil = bool(GetAttrib(egl, config, LOCAL_EGL_STENCIL_SIZE));

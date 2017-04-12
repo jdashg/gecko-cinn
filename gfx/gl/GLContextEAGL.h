@@ -45,7 +45,7 @@ public:
 
     virtual bool MakeCurrentImpl(bool aForce) override;
 
-    virtual bool IsCurrent() override;
+    virtual bool IsCurrent() const override;
 
     virtual bool SetupLookupFunction() override;
 

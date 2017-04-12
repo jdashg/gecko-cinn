@@ -288,6 +288,12 @@ public:
     void fANGLEPlatformShutdown() const
         VOID_WRAP( fANGLEPlatformShutdown() )
 
+    EGLBoolean fQueryDisplayAttribEXT(EGLDisplay dpy, EGLint attribute, EGLAttrib* value) const
+        WRAP( fQueryDisplayAttribEXT(dpy, attribute, value) )
+
+    EGLBoolean fQueryDeviceAttribEXT(EGLDeviceEXT device, EGLint attribute, EGLAttrib* value) const
+        WRAP( fQueryDeviceAttribEXT(device, attribute, value) )
+
 #undef WRAP
 #undef VOID_WRAP
 #undef PROFILE_CALL
@@ -412,6 +418,8 @@ private:
         EGLint     (GLAPIENTRY * fDupNativeFenceFDANDROID)(EGLDisplay dpy, EGLSync sync);
         void       (GLAPIENTRY * fANGLEPlatformInitialize)(angle::Platform* platform);
         void       (GLAPIENTRY * fANGLEPlatformShutdown)();
+        EGLBoolean (GLAPIENTRY * fQueryDisplayAttribEXT)(EGLDisplay, EGLint, EGLAttrib*);
+        EGLBoolean (GLAPIENTRY * fQueryDeviceAttribEXT)(EGLDeviceEXT, EGLint, EGLAttrib*);
     } mSymbols;
 
 public:

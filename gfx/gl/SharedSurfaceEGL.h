@@ -27,30 +27,23 @@ public:
                                                     bool hasAlpha,
                                                     EGLContext context);
 
-    static SharedSurface_EGLImage* Cast(SharedSurface* surf) {
-        MOZ_ASSERT(surf->mType == SharedSurfaceType::EGLImageShare);
-
-        return (SharedSurface_EGLImage*)surf;
-    }
-
     static bool HasExtensions(GLLibraryEGL* egl, GLContext* gl);
 
 protected:
     mutable Mutex mMutex;
     GLLibraryEGL* const mEGL;
     const GLFormats mFormats;
-    GLuint mProdTex;
 public:
     const EGLImage mImage;
 protected:
     EGLSync mSync;
 
     SharedSurface_EGLImage(GLContext* gl,
-                           GLLibraryEGL* egl,
+                           GLuint tex,
                            const gfx::IntSize& size,
                            bool hasAlpha,
+                           GLLibraryEGL* egl,
                            const GLFormats& formats,
-                           GLuint prodTex,
                            EGLImage image);
 
     EGLDisplay Display() const;
@@ -69,10 +62,6 @@ public:
 
     virtual void ProducerReadAcquireImpl() override;
     virtual void ProducerReadReleaseImpl() override {};
-
-    virtual GLuint ProdTexture() override {
-      return mProdTex;
-    }
 
     // Implementation-specific functions below:
     // Returns texture and target
@@ -105,9 +94,9 @@ protected:
     { }
 
 public:
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override {
-        bool hasAlpha = mReadCaps.alpha;
-        return SharedSurface_EGLImage::Create(mGL, mFormats, size, hasAlpha, mContext);
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override {
+        return SharedSurface_EGLImage::Create(mGL, mFormats, size, mCaps.alpha, mContext);
     }
 };
 

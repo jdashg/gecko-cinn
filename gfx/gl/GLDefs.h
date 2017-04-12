@@ -78,6 +78,17 @@
 // GL_KHR_robustness
 #define LOCAL_GL_CONTEXT_ROBUST_ACCESS                  0x90F3
 
+// EGL_ANGLE_d3d_texture_client_buffer
+#define LOCAL_EGL_D3D_TEXTURE_ANGLE 0x33A3
+
+// EGL_ANGLE_device_d3d
+#define LOCAL_EGL_D3D9_DEVICE_ANGLE  0x33A0
+#define LOCAL_EGL_D3D11_DEVICE_ANGLE 0x33A1
+
+// EGL_EXT_device_base
+#define LOCAL_EGL_BAD_DEVICE_EXT 0x322B
+#define LOCAL_EGL_DEVICE_EXT     0x322C
+
 // Others
 #define LOCAL_EGL_PRESERVED_RESOURCES                   0x3030
 #define LOCAL_EGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_EXT 0x3138

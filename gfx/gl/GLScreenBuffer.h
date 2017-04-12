@@ -42,11 +42,9 @@ class DrawBuffer
 public:
     // Fallible!
     // But it may return true with *out_buffer==nullptr if unneeded.
-    static bool Create(GLContext* const gl,
-                       const SurfaceCaps& caps,
-                       const GLFormats& formats,
-                       const gfx::IntSize& size,
-                       UniquePtr<DrawBuffer>* out_buffer);
+    static UniquePtr<DrawBuffer> Create(GLContext* gl, const SurfaceCaps& caps,
+                                        const GLFormats& formats,
+                                        const gfx::IntSize& size);
 
 protected:
     GLContext* const mGL;
@@ -79,52 +77,6 @@ public:
     virtual ~DrawBuffer();
 };
 
-class ReadBuffer
-{
-public:
-    // Infallible, always non-null.
-    static UniquePtr<ReadBuffer> Create(GLContext* gl,
-                                        const SurfaceCaps& caps,
-                                        const GLFormats& formats,
-                                        SharedSurface* surf);
-
-protected:
-    GLContext* const mGL;
-public:
-    const GLuint mFB;
-protected:
-    // mFB has the following attachments:
-    const GLuint mDepthRB;
-    const GLuint mStencilRB;
-    // note no mColorRB here: this is provided by mSurf.
-    SharedSurface* mSurf;
-
-    ReadBuffer(GLContext* gl,
-               GLuint fb,
-               GLuint depthRB,
-               GLuint stencilRB,
-               SharedSurface* surf)
-        : mGL(gl)
-        , mFB(fb)
-        , mDepthRB(depthRB)
-        , mStencilRB(stencilRB)
-        , mSurf(surf)
-    {}
-
-public:
-    virtual ~ReadBuffer();
-
-    // Cannot attach a surf of a different AttachType or Size than before.
-    void Attach(SharedSurface* surf);
-
-    const gfx::IntSize& Size() const;
-
-    SharedSurface* SharedSurf() const {
-        return mSurf;
-    }
-};
-
-
 class GLScreenBuffer
 {
 public:
@@ -156,7 +108,6 @@ protected:
     RefPtr<layers::SharedSurfaceTextureClient> mFront;
 
     UniquePtr<DrawBuffer> mDraw;
-    UniquePtr<ReadBuffer> mRead;
 
     bool mNeedsBlit;
 
@@ -176,22 +127,9 @@ protected:
 public:
     virtual ~GLScreenBuffer();
 
-    SurfaceFactory* Factory() const {
-        return mFactory.get();
-    }
+    SurfaceFactory* Factory() const { return mFactory.get(); }
 
-    const RefPtr<layers::SharedSurfaceTextureClient>& Front() const {
-        return mFront;
-    }
-
-    SharedSurface* SharedSurf() const {
-        MOZ_ASSERT(mRead);
-        return mRead->SharedSurf();
-    }
-
-    bool ShouldPreserveBuffer() const {
-        return mCaps.preserve;
-    }
+    const decltype(mFront)& Front() const { return mFront; }
 
     GLuint DrawFB() const {
         if (!mDraw)
@@ -200,9 +138,7 @@ public:
         return mDraw->mFB;
     }
 
-    GLuint ReadFB() const {
-        return mRead->mFB;
-    }
+    GLuint ReadFB() const;
 
     GLsizei Samples() const {
         if (!mDraw)
@@ -213,17 +149,13 @@ public:
 
     uint32_t DepthBits() const;
 
-    const gfx::IntSize& Size() const {
-        MOZ_ASSERT(mRead);
-        MOZ_ASSERT(!mDraw || mDraw->mSize == mRead->Size());
-        return mRead->Size();
-    }
+    const gfx::IntSize& Size() const;
 
     void BindFramebuffer(GLenum target, GLuint userFB);
     GLuint CurDrawFB() const;
     GLuint CurReadFB() const;
 
-    void RequireBlit();
+    void RequireBlit() { mNeedsBlit = true; }
     void AssureBlitted();
     void AfterDrawCall();
     void BeforeReadCall();
@@ -251,21 +183,13 @@ public:
     void Morph(UniquePtr<SurfaceFactory> newFactory);
 
 protected:
-    // Returns false on error or inability to resize.
-    bool Swap(const gfx::IntSize& size);
+    // Returns the old mBack on success.
+    decltype(mBack) Swap(const gfx::IntSize& size);
 
 public:
-    bool PublishFrame(const gfx::IntSize& size);
-
+    bool PublishFrame();
     bool Resize(const gfx::IntSize& size);
 
-protected:
-    bool Attach(SharedSurface* surf, const gfx::IntSize& size);
-
-    bool CreateDraw(const gfx::IntSize& size, UniquePtr<DrawBuffer>* out_buffer);
-    UniquePtr<ReadBuffer> CreateRead(SharedSurface* surf);
-
-public:
     bool IsDrawFramebufferDefault() const;
     bool IsReadFramebufferDefault() const;
 };

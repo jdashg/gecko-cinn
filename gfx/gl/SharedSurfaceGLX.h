@@ -30,6 +30,8 @@ public:
     virtual void LockProdImpl() override;
     virtual void UnlockProdImpl() override;
 
+    virtual bool CopyFromSameType(SharedSurface* src) override;
+
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
 
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
@@ -52,7 +54,8 @@ public:
                                                         const RefPtr<layers::LayersIPCChannel>& allocator,
                                                         const layers::TextureFlags& flags);
 
-    virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override;
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override;
 
 private:
     SurfaceFactory_GLXDrawable(GLContext* prodGL, const SurfaceCaps& caps,

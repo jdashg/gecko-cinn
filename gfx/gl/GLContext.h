@@ -296,7 +296,7 @@ public:
 
     virtual GLContextType GetContextType() const = 0;
 
-    virtual bool IsCurrent() = 0;
+    virtual bool IsCurrent() const = 0;
 
     /**
      * Get the default framebuffer for this context.
@@ -538,13 +538,13 @@ public:
     }
 
 private:
-    GLenum mTopError;
+    mutable GLenum mTopError;
 
-    GLenum RawGetError() {
+    GLenum RawGetError() const {
         return mSymbols.fGetError();
     }
 
-    GLenum RawGetErrorAndClear() {
+    GLenum RawGetErrorAndClear() const {
         GLenum err = RawGetError();
 
         if (err)
@@ -554,7 +554,7 @@ private:
     }
 
 public:
-    GLenum FlushErrors() {
+    GLenum FlushErrors() const {
         GLenum err = RawGetErrorAndClear();
         if (!mTopError)
             mTopError = err;
@@ -665,7 +665,7 @@ private:
 # endif
 #endif
 
-    void BeforeGLCall(const char* funcName) {
+    void BeforeGLCall(const char* funcName) const {
         MOZ_ASSERT(IsCurrent());
 
         if (mDebugFlags) {
@@ -685,7 +685,7 @@ private:
         }
     }
 
-    void AfterGLCall(const char* funcName) {
+    void AfterGLCall(const char* funcName) const {
         if (mDebugFlags) {
             // calling fFinish() immediately after every GL call makes sure that if this GL command crashes,
             // the stack trace will actually point to it. Otherwise, OpenGL being an asynchronous API, stack traces
@@ -1910,7 +1910,7 @@ public:
         AFTER_GL_CALL;
     }
 
-    GLenum fCheckFramebufferStatus(GLenum target) {
+    GLenum fCheckFramebufferStatus(GLenum target) const {
         BEFORE_GL_CALL;
         GLenum retval = mSymbols.fCheckFramebufferStatus(target);
         AFTER_GL_CALL;
@@ -3354,15 +3354,7 @@ public:
 
 protected:
     // Note that it does -not- clear the resized buffers.
-    bool CreateScreenBuffer(const gfx::IntSize& size, const SurfaceCaps& caps) {
-        if (!IsOffscreenSizeAllowed(size))
-            return false;
-
-       return CreateScreenBufferImpl(size, caps);
-    }
-
-    bool CreateScreenBufferImpl(const gfx::IntSize& size,
-                                const SurfaceCaps& caps);
+    bool CreateScreenBuffer(const gfx::IntSize& size, const SurfaceCaps& caps);
 
 public:
     bool ResizeScreenBuffer(const gfx::IntSize& size);
@@ -3377,6 +3369,11 @@ public:
 
     // Only varies based on bpp16 and alpha.
     GLFormats ChooseGLFormats(const SurfaceCaps& caps) const;
+
+    bool IsFramebufferComplete() const {
+        const auto status = fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
+        return status == LOCAL_GL_FRAMEBUFFER_COMPLETE;
+    }
 
     bool IsFramebufferComplete(GLuint fb, GLenum* status = nullptr);
 
@@ -3409,21 +3406,27 @@ public:
     }
 
 protected:
-    SharedSurface* mLockedSurface;
+    std::stack<SharedSurface*> mSurfaceLockStack;
+
+    void LockTopSurface();
+    void UnlockTopSurface();
 
 public:
-    void LockSurface(SharedSurface* surf) {
-        MOZ_ASSERT(!mLockedSurface);
-        mLockedSurface = surf;
+    // null is fine
+    void PushSurfaceLock(SharedSurface* const surf) {
+        MOZ_ASSERT(mSurfaceLockStack.size() <= 10, "Are you sure about this?");
+        UnlockTopSurface();
+        mSurfaceLockStack.push(surf);
+        LockTopSurface();
     }
 
-    void UnlockSurface(SharedSurface* surf) {
-        MOZ_ASSERT(mLockedSurface == surf);
-        mLockedSurface = nullptr;
-    }
-
-    SharedSurface* GetLockedSurface() const {
-        return mLockedSurface;
+    SharedSurface* PopSurfaceLock() {
+        MOZ_ASSERT(mSurfaceLockStack.size());
+        UnlockTopSurface();
+        const auto top = mSurfaceLockStack.top();
+        mSurfaceLockStack.pop();
+        LockTopSurface();
+        return top;
     }
 
     bool IsOffscreen() const {

@@ -21,204 +21,71 @@
 namespace mozilla {
 namespace gl {
 
-/*static*/ void
-SharedSurface::ProdCopy(SharedSurface* src, SharedSurface* dest,
-                        SurfaceFactory* factory)
+/*static*/ GLuint
+SharedSurface::CreateFB(GLContext* gl)
 {
-    GLContext* gl = src->mGL;
-
-    // If `src` begins locked, it must end locked, though we may
-    // temporarily unlock it if we need to.
-    MOZ_ASSERT((src == gl->GetLockedSurface()) == src->IsLocked());
-
-    gl->MakeCurrent();
-
-    if (src->mAttachType  == AttachmentType::Screen &&
-        dest->mAttachType == AttachmentType::Screen)
-    {
-        // Here, we actually need to blit through a temp surface, so let's make one.
-        UniquePtr<SharedSurface_Basic> tempSurf;
-        tempSurf = SharedSurface_Basic::Create(gl, factory->mFormats, src->mSize,
-                                               factory->mCaps.alpha);
-
-        ProdCopy(src, tempSurf.get(), factory);
-        ProdCopy(tempSurf.get(), dest, factory);
-        return;
-    }
-
-    if (src->mAttachType == AttachmentType::Screen) {
-        SharedSurface* origLocked = gl->GetLockedSurface();
-        bool srcNeedsUnlock = false;
-        bool origNeedsRelock = false;
-        if (origLocked != src) {
-            if (origLocked) {
-                origLocked->UnlockProd();
-                origNeedsRelock = true;
-            }
-
-            src->LockProd();
-            srcNeedsUnlock = true;
-        }
-
-        if (dest->mAttachType == AttachmentType::GLTexture) {
-            GLuint destTex = dest->ProdTexture();
-            GLenum destTarget = dest->ProdTextureTarget();
-
-            const ScopedBypassScreen bypass(gl);
-            gl->BlitHelper()->BlitFramebufferToTexture(0, destTex,
-                                                       src->mSize,
-                                                       dest->mSize,
-                                                       destTarget);
-        } else if (dest->mAttachType == AttachmentType::GLRenderbuffer) {
-            GLuint destRB = dest->ProdRenderbuffer();
-            ScopedFramebufferForRenderbuffer destWrapper(gl, destRB);
-
-            const ScopedBypassScreen bypass(gl);
-            gl->BlitHelper()->BlitFramebufferToFramebuffer(0,
-                                                           destWrapper.FB(),
-                                                           src->mSize,
-                                                           dest->mSize);
-        } else {
-            MOZ_CRASH("GFX: Unhandled dest->mAttachType 1.");
-        }
-
-        if (srcNeedsUnlock)
-            src->UnlockProd();
-
-        if (origNeedsRelock)
-            origLocked->LockProd();
-
-        return;
-    }
-
-    if (dest->mAttachType == AttachmentType::Screen) {
-        SharedSurface* origLocked = gl->GetLockedSurface();
-        bool destNeedsUnlock = false;
-        bool origNeedsRelock = false;
-        if (origLocked != dest) {
-            if (origLocked) {
-                origLocked->UnlockProd();
-                origNeedsRelock = true;
-            }
-
-            dest->LockProd();
-            destNeedsUnlock = true;
-        }
-
-        if (src->mAttachType == AttachmentType::GLTexture) {
-            GLuint srcTex = src->ProdTexture();
-            GLenum srcTarget = src->ProdTextureTarget();
-
-            const ScopedBypassScreen bypass(gl);
-            gl->BlitHelper()->BlitTextureToFramebuffer(srcTex, 0,
-                                                       src->mSize,
-                                                       dest->mSize,
-                                                       srcTarget);
-        } else if (src->mAttachType == AttachmentType::GLRenderbuffer) {
-            GLuint srcRB = src->ProdRenderbuffer();
-            ScopedFramebufferForRenderbuffer srcWrapper(gl, srcRB);
-
-            const ScopedBypassScreen bypass(gl);
-            gl->BlitHelper()->BlitFramebufferToFramebuffer(srcWrapper.FB(),
-                                                           0,
-                                                           src->mSize,
-                                                           dest->mSize);
-        } else {
-            MOZ_CRASH("GFX: Unhandled src->mAttachType 2.");
-        }
-
-        if (destNeedsUnlock)
-            dest->UnlockProd();
-
-        if (origNeedsRelock)
-            origLocked->LockProd();
-
-        return;
-    }
-
-    // Alright, done with cases involving Screen types.
-    // Only {src,dest}x{texture,renderbuffer} left.
-
-    if (src->mAttachType == AttachmentType::GLTexture) {
-        GLuint srcTex = src->ProdTexture();
-        GLenum srcTarget = src->ProdTextureTarget();
-
-        if (dest->mAttachType == AttachmentType::GLTexture) {
-            GLuint destTex = dest->ProdTexture();
-            GLenum destTarget = dest->ProdTextureTarget();
-
-            gl->BlitHelper()->BlitTextureToTexture(srcTex, destTex,
-                                                   src->mSize, dest->mSize,
-                                                   srcTarget, destTarget);
-
-            return;
-        }
-
-        if (dest->mAttachType == AttachmentType::GLRenderbuffer) {
-            GLuint destRB = dest->ProdRenderbuffer();
-            ScopedFramebufferForRenderbuffer destWrapper(gl, destRB);
-
-            gl->BlitHelper()->BlitTextureToFramebuffer(srcTex, destWrapper.FB(),
-                                                       src->mSize, dest->mSize, srcTarget);
-
-            return;
-        }
-
-        MOZ_CRASH("GFX: Unhandled dest->mAttachType 3.");
-    }
-
-    if (src->mAttachType == AttachmentType::GLRenderbuffer) {
-        GLuint srcRB = src->ProdRenderbuffer();
-        ScopedFramebufferForRenderbuffer srcWrapper(gl, srcRB);
-
-        if (dest->mAttachType == AttachmentType::GLTexture) {
-            GLuint destTex = dest->ProdTexture();
-            GLenum destTarget = dest->ProdTextureTarget();
-
-            gl->BlitHelper()->BlitFramebufferToTexture(srcWrapper.FB(), destTex,
-                                                       src->mSize, dest->mSize, destTarget);
-
-            return;
-        }
-
-        if (dest->mAttachType == AttachmentType::GLRenderbuffer) {
-            GLuint destRB = dest->ProdRenderbuffer();
-            ScopedFramebufferForRenderbuffer destWrapper(gl, destRB);
-
-            gl->BlitHelper()->BlitFramebufferToFramebuffer(srcWrapper.FB(), destWrapper.FB(),
-                                                           src->mSize, dest->mSize);
-
-            return;
-        }
-
-        MOZ_CRASH("GFX: Unhandled dest->mAttachType 4.");
-    }
-
-    MOZ_CRASH("GFX: Unhandled src->mAttachType 5.");
+    GLuint ret = 0;
+    gl->fGenFramebuffers(1, &ret);
+    return ret;
 }
 
-////////////////////////////////////////////////////////////////////////
-// SharedSurface
+static GLuint
+ChooseFB(GLContext* gl, GLenum texTarget, GLuint tex, GLuint fbIfNoTex)
+{
+    if (!tex)
+        return fbIfNoTex;
+    MOZ_ASSERT(!fbIfNoTex);
 
+    GLuint fb = 0;
+    gl->fGenFramebuffers(1, &fb);
+    const ScopedBindFramebuffer autoFB(gl, fb);
+
+    gl->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
+                              texTarget, tex, 0);
+
+    MOZ_ASSERT(gl->IsFramebufferComplete());
+    return fb;
+}
 
 SharedSurface::SharedSurface(SharedSurfaceType type,
-                             AttachmentType attachType,
                              GLContext* gl,
+                             GLenum texTarget, GLuint tex, bool ownsTex,
+                             GLuint fbIfNoTex,
                              const gfx::IntSize& size,
                              bool hasAlpha,
                              bool canRecycle)
     : mType(type)
-    , mAttachType(attachType)
     , mGL(gl)
+    , mTexTarget(texTarget)
+    , mTex(tex)
+    , mOwnsTex(ownsTex)
+    , mFB(ChooseFB(gl, texTarget, tex, fbIfNoTex))
     , mSize(size)
     , mHasAlpha(hasAlpha)
     , mCanRecycle(canRecycle)
     , mIsLocked(false)
-    , mIsProducerAcquired(false)
+    , mIsWriteAcquired(false)
+    , mIsReadAcquired(false)
 #ifdef DEBUG
     , mOwningThread(NS_GetCurrentThread())
 #endif
 { }
+
+SharedSurface::~SharedSurface()
+{
+    MOZ_ASSERT(!mIsLocked);
+    MOZ_ASSERT(!mIsWriteAcquired);
+    MOZ_ASSERT(!mIsReadAcquired);
+    if (!mGL || !mGL->MakeCurrent())
+        return;
+
+    if (mFB) {
+        mGL->fDeleteFramebuffers(1, &mFB);
+    }
+    if (mTex && mOwnsTex) {
+        mGL->fDeleteTextures(1, &mTex);
+    }
+}
 
 layers::TextureFlags
 SharedSurface::GetTextureFlags() const
@@ -227,64 +94,36 @@ SharedSurface::GetTextureFlags() const
 }
 
 void
-SharedSurface::LockProd()
+SharedSurface::CopyFrom(SharedSurface* const src)
 {
+    MOZ_RELEASE_ASSERT(src->mSize == mSize);
+    MOZ_ASSERT(!src->mIsLocked);
     MOZ_ASSERT(!mIsLocked);
+    MOZ_ASSERT(src->mIsReadAcquired);
+    MOZ_ASSERT(mIsWriteAcquired);
 
-    LockProdImpl();
+    if (src->mType == mType) {
+        if (CopyFromSameType(src))
+            return;
+    } else {
+        MOZ_RELEASE_ASSERT(src->mType == SharedSurfaceType::Basic);
+    }
+    MOZ_RELEASE_ASSERT(src->mTex);
 
-    mGL->LockSurface(this);
-    mIsLocked = true;
-}
+    const ScopedBypassScreen bypass(mGL);
+    mGL->PushSurfaceLock(this);
 
-void
-SharedSurface::UnlockProd()
-{
-    if (!mIsLocked)
-        return;
-
-    UnlockProdImpl();
-
-    mGL->UnlockSurface(this);
-    mIsLocked = false;
+    if (mGL->IsSupported(GLFeature::framebuffer_blit)) {
+        mGL->BlitHelper()->BlitFramebufferToFramebuffer(src->mFB, mFB, mSize, mSize);
+    } else {
+        mGL->BlitHelper()->DrawBlitTextureToFramebuffer(src->mTex, mFB, mSize, mSize,
+                                                        src->mTexTarget);
+    }
+    mGL->PopSurfaceLock();
 }
 
 ////////////////////////////////////////////////////////////////////////
 // SurfaceFactory
-
-static void
-ChooseBufferBits(const SurfaceCaps& caps,
-                 SurfaceCaps* const out_drawCaps,
-                 SurfaceCaps* const out_readCaps)
-{
-    MOZ_ASSERT(out_drawCaps);
-    MOZ_ASSERT(out_readCaps);
-
-    SurfaceCaps screenCaps;
-
-    screenCaps.color = caps.color;
-    screenCaps.alpha = caps.alpha;
-    screenCaps.bpp16 = caps.bpp16;
-
-    screenCaps.depth = caps.depth;
-    screenCaps.stencil = caps.stencil;
-
-    screenCaps.antialias = caps.antialias;
-    screenCaps.preserve = caps.preserve;
-
-    if (caps.antialias) {
-        *out_drawCaps = screenCaps;
-        out_readCaps->Clear();
-
-        // Color caps need to be duplicated in readCaps.
-        out_readCaps->color = caps.color;
-        out_readCaps->alpha = caps.alpha;
-        out_readCaps->bpp16 = caps.bpp16;
-    } else {
-        out_drawCaps->Clear();
-        *out_readCaps = screenCaps;
-    }
-}
 
 SurfaceFactory::SurfaceFactory(SharedSurfaceType type, GLContext* gl,
                                const SurfaceCaps& caps,
@@ -296,13 +135,20 @@ SurfaceFactory::SurfaceFactory(SharedSurfaceType type, GLContext* gl,
     , mAllocator(allocator)
     , mFlags(flags)
     , mFormats(gl->ChooseGLFormats(caps))
+    , mDepthStencilSize(0, 0)
+    , mDepthRB(0)
+    , mStencilRB(0)
     , mMutex("SurfaceFactor::mMutex")
 {
-    ChooseBufferBits(mCaps, &mDrawCaps, &mReadCaps);
+    MOZ_ASSERT(!mCaps.antialias);
 }
 
 SurfaceFactory::~SurfaceFactory()
 {
+    if (mGL->MakeCurrent()) {
+        DeleteDepthStencil();
+    }
+
     while (!mRecycleTotalPool.empty()) {
         RefPtr<layers::SharedSurfaceTextureClient> tex = *mRecycleTotalPool.begin();
         StopRecycling(tex);
@@ -316,7 +162,90 @@ SurfaceFactory::~SurfaceFactory()
     mRecycleFreePool.clear();
 }
 
-already_AddRefed<layers::SharedSurfaceTextureClient>
+void
+SurfaceFactory::DeleteDepthStencil()
+{
+    if (mDepthRB) {
+        mGL->fDeleteRenderbuffers(1, &mDepthRB);
+        if (mStencilRB == mDepthRB) {
+            mStencilRB = 0;
+        }
+        mDepthRB = 0;
+    }
+    if (mStencilRB) {
+        mGL->fDeleteRenderbuffers(1, &mStencilRB);
+        mStencilRB = 0;
+    }
+}
+
+UniquePtr<SharedSurface>
+SurfaceFactory::NewSharedSurface(const gfx::IntSize& size)
+{
+    UniquePtr<SharedSurface> surf = NewSharedSurfaceImpl(size);
+    if (!surf)
+        return nullptr;
+
+    if (!surf->mFB)
+        return nullptr;
+
+    if (size != mDepthStencilSize) {
+        DeleteDepthStencil();
+        mDepthStencilSize = gfx::IntSize(0, 0);
+
+        const auto fnCreateRB = [&](GLenum format) {
+            MOZ_ASSERT(format);
+            GLuint rb = 0;
+            mGL->fGenRenderbuffers(1, &rb);
+            const ScopedBindRenderbuffer bindRB(mGL, rb);
+            mGL->fRenderbufferStorage(LOCAL_GL_RENDERBUFFER, format,
+                                      mDepthStencilSize.width, mDepthStencilSize.height);
+            return rb;
+        };
+
+        GLContext::LocalErrorScope errScope(*mGL);
+
+        if (mCaps.depth && mCaps.stencil &&
+            mFormats.depthStencil)
+        {
+            mDepthRB = fnCreateRB(mFormats.depthStencil);
+            mStencilRB = mDepthRB;
+        }
+        if (mCaps.depth && !mDepthRB) {
+            mDepthRB = fnCreateRB(mFormats.depth);
+        }
+        if (mCaps.stencil && !mStencilRB) {
+            mStencilRB = fnCreateRB(mFormats.stencil);
+        }
+
+        const auto err = errScope.GetError();
+        if (err) {
+            MOZ_RELEASE_ASSERT(err == LOCAL_GL_OUT_OF_MEMORY);
+            DeleteDepthStencil();
+            return nullptr;
+        }
+        mDepthStencilSize = size;
+    }
+
+    const ScopedBindFramebuffer bindFB(mGL, surf->mFB);
+    if (mDepthRB) {
+        mGL->fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_DEPTH_ATTACHMENT,
+                                      LOCAL_GL_RENDERBUFFER, mDepthRB);
+    }
+    if (mStencilRB) {
+        mGL->fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_STENCIL_ATTACHMENT,
+                                      LOCAL_GL_RENDERBUFFER, mStencilRB);
+    }
+
+    const auto status = mGL->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
+    if (status != LOCAL_GL_FRAMEBUFFER_COMPLETE) {
+        MOZ_RELEASE_ASSERT(false);
+        return nullptr;
+    }
+
+    return Move(surf);
+}
+
+RefPtr<layers::SharedSurfaceTextureClient>
 SurfaceFactory::NewTexClient(const gfx::IntSize& size)
 {
     while (!mRecycleFreePool.empty()) {
@@ -331,16 +260,35 @@ SurfaceFactory::NewTexClient(const gfx::IntSize& size)
         StopRecycling(cur);
     }
 
-    UniquePtr<SharedSurface> surf = Move(CreateShared(size));
+    UniquePtr<SharedSurface> surf = NewSharedSurface(size);
     if (!surf)
         return nullptr;
 
     RefPtr<layers::SharedSurfaceTextureClient> ret;
-    ret = layers::SharedSurfaceTextureClient::Create(Move(surf), this, mAllocator, mFlags);
-
+    ret = layers::SharedSurfaceTextureClient::Create(Move(surf), this, mAllocator,
+                                                     mFlags);
     StartRecycling(ret);
+    return ret;
+}
 
-    return ret.forget();
+RefPtr<layers::SharedSurfaceTextureClient>
+SurfaceFactory::CloneTexClient(SharedSurface* const src)
+{
+    const auto destClient = NewTexClient(src->mSize);
+    if (!destClient)
+        return nullptr;
+
+    const auto& dest = destClient->Surf();
+
+    src->ProducerReadAcquire();
+    dest->ProducerAcquire();
+
+    dest->CopyFrom(src);
+
+    dest->ProducerRelease();
+    src->ProducerReadRelease();
+
+    return destClient;
 }
 
 void
@@ -401,56 +349,12 @@ SurfaceFactory::Recycle(layers::SharedSurfaceTextureClient* texClient)
 
 ScopedReadbackFB::ScopedReadbackFB(SharedSurface* src)
     : mGL(src->mGL)
-    , mAutoFB(mGL)
+    , mAutoFB(mGL, 0)
     , mBypass(mGL)
     , mTempFB(0)
     , mTempTex(0)
-    , mSurfToUnlock(nullptr)
-    , mSurfToLock(nullptr)
 {
-    switch (src->mAttachType) {
-    case AttachmentType::GLRenderbuffer:
-        {
-            mGL->fGenFramebuffers(1, &mTempFB);
-            mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mTempFB);
-
-            GLuint rb = src->ProdRenderbuffer();
-            mGL->fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER,
-                                          LOCAL_GL_COLOR_ATTACHMENT0,
-                                          LOCAL_GL_RENDERBUFFER, rb);
-            break;
-        }
-    case AttachmentType::GLTexture:
-        {
-            mGL->fGenFramebuffers(1, &mTempFB);
-            mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mTempFB);
-
-            GLuint tex = src->ProdTexture();
-            GLenum texImageTarget = src->ProdTextureTarget();
-            mGL->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
-                                       LOCAL_GL_COLOR_ATTACHMENT0,
-                                       texImageTarget, tex, 0);
-            break;
-        }
-    case AttachmentType::Screen:
-        {
-            SharedSurface* origLocked = mGL->GetLockedSurface();
-            if (origLocked != src) {
-                if (origLocked) {
-                    mSurfToLock = origLocked;
-                    mSurfToLock->UnlockProd();
-                }
-
-                mSurfToUnlock = src;
-                mSurfToUnlock->LockProd();
-            }
-
-            mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
-            break;
-        }
-    default:
-        MOZ_CRASH("GFX: Unhandled `mAttachType`.");
-    }
+    mGL->PushSurfaceLock(src);
 
     if (src->NeedsIndirectReads()) {
         mGL->fGenTextures(1, &mTempTex);
@@ -480,12 +384,7 @@ ScopedReadbackFB::~ScopedReadbackFB()
     if (mTempTex) {
         mGL->fDeleteTextures(1, &mTempTex);
     }
-    if (mSurfToUnlock) {
-        mSurfToUnlock->UnlockProd();
-    }
-    if (mSurfToLock) {
-        mSurfToLock->LockProd();
-    }
+    mGL->PopSurfaceLock();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

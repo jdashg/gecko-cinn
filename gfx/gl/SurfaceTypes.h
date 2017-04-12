@@ -20,7 +20,7 @@ namespace gl {
 struct SurfaceCaps final
 {
     bool any;
-    bool color, alpha;
+    bool alpha;
     bool bpp16;
     bool depth, stencil;
     bool antialias;
@@ -42,26 +42,18 @@ struct SurfaceCaps final
     // We can't use just 'RGB' here, since it's an ancient Windows macro.
     static SurfaceCaps ForRGB() {
         SurfaceCaps caps;
-
-        caps.color = true;
-
         return caps;
     }
 
     static SurfaceCaps ForRGBA() {
         SurfaceCaps caps;
-
-        caps.color = true;
         caps.alpha = true;
-
         return caps;
     }
 
     static SurfaceCaps Any() {
         SurfaceCaps caps;
-
         caps.any = true;
-
         return caps;
     }
 };
@@ -77,15 +69,6 @@ enum class SharedSurfaceType : uint8_t {
     IOSurface,
     GLXDrawable,
     SharedGLTexture,
-
-    Max
-};
-
-enum class AttachmentType : uint8_t {
-    Screen = 0,
-
-    GLTexture,
-    GLRenderbuffer,
 
     Max
 };
