@@ -314,6 +314,7 @@ class ScopedReadbackFB
 {
     GLContext* const mGL;
     ScopedBindFramebuffer mAutoFB;
+    ScopedBypassScreen mBypass;
     GLuint mTempFB;
     GLuint mTempTex;
     SharedSurface* mSurfToUnlock;

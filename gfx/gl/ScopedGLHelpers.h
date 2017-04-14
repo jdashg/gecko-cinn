@@ -378,6 +378,17 @@ protected:
     void UnwrapImpl();
 };
 
+////
+
+class ScopedBypassScreen final
+{
+    GLContext* const mGL;
+
+public:
+    explicit ScopedBypassScreen(GLContext* gl);
+    ~ScopedBypassScreen();
+};
+
 } /* namespace gl */
 } /* namespace mozilla */
 

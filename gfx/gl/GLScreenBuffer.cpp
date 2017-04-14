@@ -142,12 +142,8 @@ GLScreenBuffer::GLScreenBuffer(GLContext* gl,
     , mUserDrawBufferMode(LOCAL_GL_BACK)
     , mUserDrawFB(0)
     , mUserReadFB(0)
-    , mInternalDrawFB(0)
-    , mInternalReadFB(0)
-#ifdef DEBUG
-    , mInInternalMode_DrawFB(true)
-    , mInInternalMode_ReadFB(true)
-#endif
+    , mDriverDrawFB(0)
+    , mDriverReadFB(0)
 { }
 
 GLScreenBuffer::~GLScreenBuffer()
@@ -164,148 +160,55 @@ GLScreenBuffer::~GLScreenBuffer()
 }
 
 void
-GLScreenBuffer::BindAsFramebuffer(GLContext* const gl, GLenum target) const
+GLScreenBuffer::BindFramebuffer(GLenum target, GLuint userFB)
 {
-    GLuint drawFB = DrawFB();
-    GLuint readFB = ReadFB();
+    GLuint driverFB = 0;
 
-    if (!gl->IsSupported(GLFeature::split_framebuffer)) {
-        MOZ_ASSERT(drawFB == readFB);
-        gl->raw_fBindFramebuffer(target, readFB);
-        return;
-    }
+    const auto fnUpdateDraw = [&]() {
+        mUserDrawFB = userFB;
+        mDriverDrawFB = (mUserDrawFB ? mUserDrawFB : DrawFB());
+        driverFB = mDriverDrawFB;
+    };
+    const auto fnUpdateRead = [&]() {
+        mUserReadFB = userFB;
+        mDriverReadFB = (mUserReadFB ? mUserReadFB : ReadFB());
+        driverFB = mDriverReadFB;
+    };
 
     switch (target) {
     case LOCAL_GL_FRAMEBUFFER:
-        gl->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, drawFB);
-        gl->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, readFB);
+        fnUpdateDraw();
+        fnUpdateRead();
+
+        if (mDriverDrawFB != mDriverReadFB) {
+            mGL->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER, mDriverDrawFB);
+            mGL->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER, mDriverReadFB);
+            return;
+        }
         break;
 
-    case LOCAL_GL_DRAW_FRAMEBUFFER_EXT:
-        gl->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, drawFB);
+    case LOCAL_GL_DRAW_FRAMEBUFFER:
+        fnUpdateDraw();
         break;
 
-    case LOCAL_GL_READ_FRAMEBUFFER_EXT:
-        gl->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, readFB);
+    case LOCAL_GL_READ_FRAMEBUFFER:
+        fnUpdateRead();
         break;
-
-    default:
-        MOZ_CRASH("GFX: Bad `target` for BindFramebuffer.");
-    }
-}
-
-void
-GLScreenBuffer::BindFB(GLuint fb)
-{
-    GLuint drawFB = DrawFB();
-    GLuint readFB = ReadFB();
-
-    mUserDrawFB = fb;
-    mUserReadFB = fb;
-    mInternalDrawFB = (fb == 0) ? drawFB : fb;
-    mInternalReadFB = (fb == 0) ? readFB : fb;
-
-    if (mInternalDrawFB == mInternalReadFB) {
-        mGL->raw_fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mInternalDrawFB);
-    } else {
-        MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-        mGL->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, mInternalDrawFB);
-        mGL->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, mInternalReadFB);
     }
 
-#ifdef DEBUG
-    mInInternalMode_DrawFB = false;
-    mInInternalMode_ReadFB = false;
-#endif
+    mGL->raw_fBindFramebuffer(target, driverFB);
 }
-
-void
-GLScreenBuffer::BindDrawFB(GLuint fb)
-{
-    MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-
-    GLuint drawFB = DrawFB();
-    mUserDrawFB = fb;
-    mInternalDrawFB = (fb == 0) ? drawFB : fb;
-
-    mGL->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, mInternalDrawFB);
-
-#ifdef DEBUG
-    mInInternalMode_DrawFB = false;
-#endif
-}
-
-void
-GLScreenBuffer::BindReadFB(GLuint fb)
-{
-    MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-
-    GLuint readFB = ReadFB();
-    mUserReadFB = fb;
-    mInternalReadFB = (fb == 0) ? readFB : fb;
-
-    mGL->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, mInternalReadFB);
-
-#ifdef DEBUG
-    mInInternalMode_ReadFB = false;
-#endif
-}
-
-void
-GLScreenBuffer::BindFB_Internal(GLuint fb)
-{
-    mInternalDrawFB = mUserDrawFB = fb;
-    mInternalReadFB = mUserReadFB = fb;
-    mGL->raw_fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mInternalDrawFB);
-
-#ifdef DEBUG
-    mInInternalMode_DrawFB = true;
-    mInInternalMode_ReadFB = true;
-#endif
-}
-
-void
-GLScreenBuffer::BindDrawFB_Internal(GLuint fb)
-{
-    MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-
-    mInternalDrawFB = mUserDrawFB = fb;
-    mGL->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, mInternalDrawFB);
-
-#ifdef DEBUG
-    mInInternalMode_DrawFB = true;
-#endif
-}
-
-void
-GLScreenBuffer::BindReadFB_Internal(GLuint fb)
-{
-    MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-
-    mInternalReadFB = mUserReadFB = fb;
-    mGL->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, mInternalReadFB);
-
-#ifdef DEBUG
-    mInInternalMode_ReadFB = true;
-#endif
-}
-
 
 GLuint
-GLScreenBuffer::GetDrawFB() const
+GLScreenBuffer::CurDrawFB() const
 {
 #ifdef DEBUG
-    MOZ_ASSERT(mGL->IsCurrent());
-    MOZ_ASSERT(!mInInternalMode_DrawFB);
-
     // Don't need a branch here, because:
-    // LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT == LOCAL_GL_FRAMEBUFFER_BINDING == 0x8CA6
-    // We use raw_ here because this is debug code and we need to see what
-    // the driver thinks.
+    // LOCAL_GL_DRAW_FRAMEBUFFER_BINDING == LOCAL_GL_FRAMEBUFFER_BINDING == 0x8CA6
     GLuint actual = 0;
-    mGL->raw_fGetIntegerv(LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT, (GLint*)&actual);
+    mGL->raw_fGetIntegerv(LOCAL_GL_FRAMEBUFFER_BINDING, (GLint*)&actual);
 
-    GLuint predicted = mInternalDrawFB;
+    const auto& predicted = mDriverDrawFB;
     if (predicted != actual) {
         printf_stderr("Misprediction: Bound draw FB predicted: %d. Was: %d.\n",
                       predicted, actual);
@@ -317,21 +220,16 @@ GLScreenBuffer::GetDrawFB() const
 }
 
 GLuint
-GLScreenBuffer::GetReadFB() const
+GLScreenBuffer::CurReadFB() const
 {
 #ifdef DEBUG
-    MOZ_ASSERT(mGL->IsCurrent());
-    MOZ_ASSERT(!mInInternalMode_ReadFB);
-
-    // We use raw_ here because this is debug code and we need to see what
-    // the driver thinks.
     GLuint actual = 0;
     if (mGL->IsSupported(GLFeature::split_framebuffer))
-        mGL->raw_fGetIntegerv(LOCAL_GL_READ_FRAMEBUFFER_BINDING_EXT, (GLint*)&actual);
+        mGL->raw_fGetIntegerv(LOCAL_GL_READ_FRAMEBUFFER_BINDING, (GLint*)&actual);
     else
         mGL->raw_fGetIntegerv(LOCAL_GL_FRAMEBUFFER_BINDING, (GLint*)&actual);
 
-    GLuint predicted = mInternalReadFB;
+    const auto& predicted = mDriverReadFB;
     if (predicted != actual) {
         printf_stderr("Misprediction: Bound read FB predicted: %d. Was: %d.\n",
                       predicted, actual);
@@ -341,28 +239,6 @@ GLScreenBuffer::GetReadFB() const
 
     return mUserReadFB;
 }
-
-GLuint
-GLScreenBuffer::GetFB() const
-{
-    MOZ_ASSERT(GetDrawFB() == GetReadFB());
-    return GetDrawFB();
-}
-
-
-void
-GLScreenBuffer::DeletingFB(GLuint fb)
-{
-    if (fb == mInternalDrawFB) {
-        mInternalDrawFB = 0;
-        mUserDrawFB = 0;
-    }
-    if (fb == mInternalReadFB) {
-        mInternalReadFB = 0;
-        mUserReadFB = 0;
-    }
-}
-
 
 void
 GLScreenBuffer::AfterDrawCall()
@@ -386,17 +262,12 @@ bool
 GLScreenBuffer::CopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x,
                                GLint y, GLsizei width, GLsizei height, GLint border)
 {
-    SharedSurface* surf;
-    if (GetReadFB() == 0) {
-        surf = SharedSurf();
-    } else {
-        surf = mGL->mFBOMapping[GetReadFB()];
-    }
-    if (surf) {
-        return surf->CopyTexImage2D(target, level, internalformat,  x, y, width, height, border);
-    }
+    if (CurReadFB() != 0)
+        return false;
 
-    return false;
+    const auto& surf = SharedSurf();
+    return surf->CopyTexImage2D(target, level, internalformat, x, y, width, height,
+                                border);
 }
 
 bool
@@ -405,22 +276,11 @@ GLScreenBuffer::ReadPixels(GLint x, GLint y,
                            GLenum format, GLenum type,
                            GLvoid* pixels)
 {
-    // If the currently bound framebuffer is backed by a SharedSurface
-    // then it might want to override how we read pixel data from it.
-    // This is normally only the default framebuffer, but we can also
-    // have SharedSurfaces bound to other framebuffers when doing
-    // readback for BasicLayers.
-    SharedSurface* surf;
-    if (GetReadFB() == 0) {
-        surf = SharedSurf();
-    } else {
-        surf = mGL->mFBOMapping[GetReadFB()];
-    }
-    if (surf) {
-        return surf->ReadPixels(x, y, width, height, format, type, pixels);
-    }
+    if (CurReadFB() != 0)
+        return false;
 
-    return false;
+    const auto& surf = SharedSurf();
+    return surf->ReadPixels(x, y, width, height, format, type, pixels);
 }
 
 void
@@ -434,39 +294,40 @@ GLScreenBuffer::AssureBlitted()
 {
     if (!mNeedsBlit)
         return;
-
-    if (mDraw) {
-        GLuint drawFB = DrawFB();
-        GLuint readFB = ReadFB();
-
-        MOZ_ASSERT(drawFB != 0);
-        MOZ_ASSERT(drawFB != readFB);
-        MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
-        MOZ_ASSERT(mDraw->mSize == mRead->Size());
-
-        ScopedBindFramebuffer boundFB(mGL);
-        ScopedGLState scissor(mGL, LOCAL_GL_SCISSOR_TEST, false);
-
-        BindReadFB_Internal(drawFB);
-        BindDrawFB_Internal(readFB);
-
-        if (mGL->IsSupported(GLFeature::framebuffer_blit)) {
-            const gfx::IntSize&  srcSize = mDraw->mSize;
-            const gfx::IntSize& destSize = mRead->Size();
-
-            mGL->raw_fBlitFramebuffer(0, 0,  srcSize.width,  srcSize.height,
-                                      0, 0, destSize.width, destSize.height,
-                                      LOCAL_GL_COLOR_BUFFER_BIT,
-                                      LOCAL_GL_NEAREST);
-        } else if (mGL->IsExtensionSupported(GLContext::APPLE_framebuffer_multisample)) {
-            mGL->fResolveMultisampleFramebufferAPPLE();
-        } else {
-            MOZ_CRASH("GFX: No available blit methods.");
-        }
-        // Done!
-    }
-
     mNeedsBlit = false;
+
+    if (!mDraw)
+        return;
+
+    GLuint drawFB = DrawFB();
+    GLuint readFB = ReadFB();
+
+    MOZ_ASSERT(drawFB != 0);
+    MOZ_ASSERT(drawFB != readFB);
+    MOZ_ASSERT(mGL->IsSupported(GLFeature::split_framebuffer));
+    MOZ_ASSERT(mDraw->mSize == mRead->Size());
+
+    const ScopedBindFramebuffer boundFB(mGL);
+    const ScopedGLState scissor(mGL, LOCAL_GL_SCISSOR_TEST, false);
+    const ScopedBypassScreen bypass(mGL);
+
+    mGL->fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER, drawFB);
+    mGL->fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER, readFB);
+
+    if (mGL->IsSupported(GLFeature::framebuffer_blit)) {
+        const gfx::IntSize&  srcSize = mDraw->mSize;
+        const gfx::IntSize& destSize = mRead->Size();
+
+        mGL->fBlitFramebuffer(0, 0,  srcSize.width,  srcSize.height,
+                              0, 0, destSize.width, destSize.height,
+                              LOCAL_GL_COLOR_BUFFER_BIT,
+                              LOCAL_GL_NEAREST);
+    } else if (mGL->IsExtensionSupported(GLContext::APPLE_framebuffer_multisample)) {
+        mGL->fResolveMultisampleFramebufferAPPLE();
+    } else {
+        MOZ_CRASH("GFX: No available blit methods.");
+    }
+    // Done!
 }
 
 void
@@ -530,20 +391,17 @@ GLScreenBuffer::Attach(SharedSurface* surf, const gfx::IntSize& size)
     // Check that we're all set up.
     MOZ_ASSERT(SharedSurf() == surf);
 
-    // Update the ReadBuffer mode.
+    BindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
+
     if (mGL->IsSupported(gl::GLFeature::read_buffer)) {
-        BindFB(0);
-        mRead->SetReadBuffer(mUserReadBufferMode);
+        SetReadBuffer(mUserReadBufferMode);
     }
 
-    // Update the DrawBuffer mode.
     if (mGL->IsSupported(gl::GLFeature::draw_buffers)) {
-        BindFB(0);
         SetDrawBuffer(mUserDrawBufferMode);
     }
 
     RequireBlit();
-
     return true;
 }
 
@@ -656,46 +514,51 @@ GLScreenBuffer::CreateRead(SharedSurface* surf)
     return ReadBuffer::Create(gl, caps, formats, surf);
 }
 
+static GLenum
+DriverModeForDriverFB(GLenum userMode, GLuint driverFB)
+{
+    if (userMode == LOCAL_GL_NONE)
+        return userMode;
+
+    MOZ_ASSERT(userMode == LOCAL_GL_BACK ||
+               userMode == LOCAL_GL_FRONT);
+
+    if (driverFB != 0)
+        return LOCAL_GL_COLOR_ATTACHMENT0;
+
+    return userMode;
+}
+
 void
 GLScreenBuffer::SetDrawBuffer(GLenum mode)
 {
     MOZ_ASSERT(mGL->IsSupported(gl::GLFeature::draw_buffers));
-    MOZ_ASSERT(GetDrawFB() == 0);
+    MOZ_ASSERT(CurDrawFB() == 0);
 
     if (!mGL->IsSupported(GLFeature::draw_buffers))
         return;
 
     mUserDrawBufferMode = mode;
 
-    GLuint fb = mDraw ? mDraw->mFB : mRead->mFB;
-    GLenum internalMode;
-
-    switch (mode) {
-    case LOCAL_GL_BACK:
-        internalMode = (fb == 0) ? LOCAL_GL_BACK
-                                 : LOCAL_GL_COLOR_ATTACHMENT0;
-        break;
-
-    case LOCAL_GL_NONE:
-        internalMode = LOCAL_GL_NONE;
-        break;
-
-    default:
-        MOZ_CRASH("GFX: Bad value.");
-    }
-
     mGL->MakeCurrent();
-    mGL->fDrawBuffers(1, &internalMode);
+    const GLenum driverMode = DriverModeForDriverFB(mode, DrawFB());
+    mGL->fDrawBuffers(1, &driverMode);
 }
 
 void
 GLScreenBuffer::SetReadBuffer(GLenum mode)
 {
     MOZ_ASSERT(mGL->IsSupported(gl::GLFeature::read_buffer));
-    MOZ_ASSERT(GetReadFB() == 0);
+    MOZ_ASSERT(CurReadFB() == 0);
+
+    if (!mGL->IsSupported(GLFeature::read_buffer))
+        return;
 
     mUserReadBufferMode = mode;
-    mRead->SetReadBuffer(mUserReadBufferMode);
+
+    mGL->MakeCurrent();
+    const GLenum driverMode = DriverModeForDriverFB(mode, DrawFB());
+    mGL->fReadBuffer(driverMode);
 }
 
 bool
@@ -934,7 +797,6 @@ ReadBuffer::Create(GLContext* gl,
     GLuint fb = 0;
     gl->fGenFramebuffers(1, &fb);
     gl->AttachBuffersToFB(colorTex, colorRB, depthRB, stencilRB, fb, target);
-    gl->mFBOMapping[fb] = surf;
 
     UniquePtr<ReadBuffer> ret( new ReadBuffer(gl, fb, depthRB,
                                               stencilRB, surf) );
@@ -972,8 +834,6 @@ ReadBuffer::~ReadBuffer()
 
     mGL->fDeleteFramebuffers(1, &fb);
     mGL->fDeleteRenderbuffers(2, rbs);
-
-    mGL->mFBOMapping.erase(mFB);
 }
 
 void
@@ -1002,7 +862,6 @@ ReadBuffer::Attach(SharedSurface* surf)
         }
 
         mGL->AttachBuffersToFB(colorTex, colorRB, 0, 0, mFB, target);
-        mGL->mFBOMapping[mFB] = surf;
         MOZ_ASSERT(mGL->IsFramebufferComplete(mFB));
     }
 
@@ -1013,33 +872,6 @@ const gfx::IntSize&
 ReadBuffer::Size() const
 {
     return mSurf->mSize;
-}
-
-void
-ReadBuffer::SetReadBuffer(GLenum userMode) const
-{
-    if (!mGL->IsSupported(GLFeature::read_buffer))
-        return;
-
-    GLenum internalMode;
-
-    switch (userMode) {
-    case LOCAL_GL_BACK:
-    case LOCAL_GL_FRONT:
-        internalMode = (mFB == 0) ? userMode
-                                  : LOCAL_GL_COLOR_ATTACHMENT0;
-        break;
-
-    case LOCAL_GL_NONE:
-        internalMode = LOCAL_GL_NONE;
-        break;
-
-    default:
-        MOZ_CRASH("GFX: Bad value.");
-    }
-
-    mGL->MakeCurrent();
-    mGL->fReadBuffer(internalMode);
 }
 
 } /* namespace gl */

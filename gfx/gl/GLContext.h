@@ -2348,23 +2348,22 @@ private:
 // Package XXX_framebuffer_blit
 public:
     // Draw/Read
-    void fBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {
+    void fBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0,
+                          GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask,
+                          GLenum filter)
+    {
         BeforeGLDrawCall();
         BeforeGLReadCall();
-        raw_fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+
+        BEFORE_GL_CALL;
+        ASSERT_SYMBOL_PRESENT(fBlitFramebuffer);
+        mSymbols.fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1,
+                                  mask, filter);
+        AFTER_GL_CALL;
+
         AfterGLReadCall();
         AfterGLDrawCall();
     }
-
-
-private:
-    void raw_fBlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) {
-        BEFORE_GL_CALL;
-        ASSERT_SYMBOL_PRESENT(fBlitFramebuffer);
-        mSymbols.fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
-        AFTER_GL_CALL;
-    }
-
 
 // -----------------------------------------------------------------------------
 // Package XXX_framebuffer_multisample
@@ -3239,9 +3238,6 @@ public:
      */
     virtual bool ReleaseTexImage() { return false; }
 
-    // Before reads from offscreen texture
-    void GuaranteeResolve();
-
     /*
      * Resize the current offscreen buffer.  Returns true on success.
      * If it returns false, the context should be treated as unusable
@@ -3260,25 +3256,6 @@ public:
      * Only valid if IsOffscreen() returns true.
      */
     const gfx::IntSize& OffscreenSize() const;
-
-    void BindFB(GLuint fb) {
-        fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, fb);
-        MOZ_ASSERT(!fb || fIsFramebuffer(fb));
-    }
-
-    void BindDrawFB(GLuint fb) {
-        fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER_EXT, fb);
-    }
-
-    void BindReadFB(GLuint fb) {
-        fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER_EXT, fb);
-    }
-
-    GLuint GetDrawFB();
-
-    GLuint GetReadFB();
-
-    GLuint GetFB();
 
 private:
     void GetShaderPrecisionFormatNonES2(GLenum shadertype, GLenum precisiontype, GLint* range, GLint* precision) {
@@ -3324,8 +3301,6 @@ public:
     GLint GetMaxTextureImageSize() { return mMaxTextureImageSize; }
 
 public:
-    std::map<GLuint, SharedSurface*> mFBOMapping;
-
     enum {
         DebugFlagEnabled = 1 << 0,
         DebugFlagTrace = 1 << 1,
@@ -3422,6 +3397,18 @@ protected:
     friend class GLScreenBuffer;
     UniquePtr<GLScreenBuffer> mScreen;
 
+    friend class ScopedBypassScreen;
+    bool mBypassScreen;
+
+public:
+    GLScreenBuffer* Screen() const {
+        if (!mScreen || mBypassScreen)
+            return nullptr;
+
+        return mScreen.get();
+    }
+
+protected:
     SharedSurface* mLockedSurface;
 
 public:
@@ -3441,10 +3428,6 @@ public:
 
     bool IsOffscreen() const {
         return mIsOffscreen;
-    }
-
-    GLScreenBuffer* Screen() const {
-        return mScreen.get();
     }
 
     /* Clear to transparent black, with 0 depth and stencil,

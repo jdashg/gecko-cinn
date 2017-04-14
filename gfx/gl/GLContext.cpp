@@ -267,7 +267,7 @@ GLContext::GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
     mDebugFlags(ChooseDebugFlags(flags)),
     mSharedContext(sharedContext),
     mCaps(caps),
-    mScreen(nullptr),
+    mBypassScreen(false),
     mLockedSurface(nullptr),
     mMaxTextureSize(0),
     mMaxCubeMapTextureSize(0),
@@ -1940,7 +1940,7 @@ GLContext::AssembleOffscreenFBs(const GLuint colorMSRB,
     if (texture) {
         readFB = 0;
         fGenFramebuffers(1, &readFB);
-        BindFB(readFB);
+        fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, readFB);
         fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
                               LOCAL_GL_COLOR_ATTACHMENT0,
                               LOCAL_GL_TEXTURE_2D,
@@ -1951,7 +1951,7 @@ GLContext::AssembleOffscreenFBs(const GLuint colorMSRB,
     if (colorMSRB) {
         drawFB = 0;
         fGenFramebuffers(1, &drawFB);
-        BindFB(drawFB);
+        fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, drawFB);
         fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER,
                                  LOCAL_GL_COLOR_ATTACHMENT0,
                                  LOCAL_GL_RENDERBUFFER,
@@ -1959,7 +1959,7 @@ GLContext::AssembleOffscreenFBs(const GLuint colorMSRB,
     } else {
         drawFB = readFB;
     }
-    MOZ_ASSERT(GetFB() == drawFB);
+    MOZ_ASSERT(GetIntAs<GLuint>(LOCAL_GL_FRAMEBUFFER_BINDING) == drawFB);
 
     if (depthRB) {
         fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER,
@@ -2323,15 +2323,6 @@ GLContext::ReportOutstandingNames()
 
 #endif /* DEBUG */
 
-void
-GLContext::GuaranteeResolve()
-{
-    if (mScreen) {
-        mScreen->AssureBlitted();
-    }
-    fFinish();
-}
-
 const gfx::IntSize&
 GLContext::OffscreenSize() const
 {
@@ -2589,8 +2580,9 @@ GLContext::Readback(SharedSurface* src, gfx::DataSourceSurface* dest)
 void
 GLContext::AfterGLDrawCall()
 {
-    if (mScreen) {
-        mScreen->AfterDrawCall();
+    const auto screen = Screen();
+    if (screen) {
+        screen->AfterDrawCall();
     }
     mHeavyGLCallsSinceLastFlush = true;
 }
@@ -2600,34 +2592,19 @@ GLContext::AfterGLDrawCall()
 void
 GLContext::BeforeGLReadCall()
 {
-    if (mScreen)
-        mScreen->BeforeReadCall();
+    const auto screen = Screen();
+    if (screen) {
+        screen->BeforeReadCall();
+    }
 }
 
 void
 GLContext::fBindFramebuffer(GLenum target, GLuint framebuffer)
 {
-    if (!mScreen) {
-        raw_fBindFramebuffer(target, framebuffer);
+    const auto screen = Screen();
+    if (screen) {
+        screen->BindFramebuffer(target, framebuffer);
         return;
-    }
-
-    switch (target) {
-        case LOCAL_GL_DRAW_FRAMEBUFFER_EXT:
-            mScreen->BindDrawFB(framebuffer);
-            return;
-
-        case LOCAL_GL_READ_FRAMEBUFFER_EXT:
-            mScreen->BindReadFB(framebuffer);
-            return;
-
-        case LOCAL_GL_FRAMEBUFFER:
-            mScreen->BindFB(framebuffer);
-            return;
-
-        default:
-            // Nothing we care about, likely an error.
-            break;
     }
 
     raw_fBindFramebuffer(target, framebuffer);
@@ -2648,9 +2625,10 @@ GLContext::fCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GL
 
     BeforeGLReadCall();
     bool didCopyTexImage2D = false;
-    if (mScreen) {
-        didCopyTexImage2D = mScreen->CopyTexImage2D(target, level, internalformat, x,
-                                                    y, width, height, border);
+    const auto screen = Screen();
+    if (screen) {
+        didCopyTexImage2D = screen->CopyTexImage2D(target, level, internalformat, x, y,
+                                                   width, height, border);
     }
 
     if (!didCopyTexImage2D) {
@@ -2661,59 +2639,62 @@ GLContext::fCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GL
 }
 
 void
-GLContext::fGetIntegerv(GLenum pname, GLint* params)
+GLContext::fGetIntegerv(const GLenum pname, GLint* const params)
 {
     switch (pname) {
         // LOCAL_GL_FRAMEBUFFER_BINDING is equal to
         // LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT,
         // so we don't need two cases.
-        case LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT:
-            if (mScreen) {
-                *params = mScreen->GetDrawFB();
-            } else {
-                raw_fGetIntegerv(pname, params);
+        case LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT: {
+            const auto screen = Screen();
+            if (screen) {
+                *params = screen->CurDrawFB();
+                return;
             }
             break;
+        }
 
-        case LOCAL_GL_READ_FRAMEBUFFER_BINDING_EXT:
-            if (mScreen) {
-                *params = mScreen->GetReadFB();
-            } else {
-                raw_fGetIntegerv(pname, params);
+        case LOCAL_GL_READ_FRAMEBUFFER_BINDING_EXT: {
+            const auto screen = Screen();
+            if (screen) {
+                *params = screen->CurReadFB();
+                return;
             }
             break;
+        }
 
         case LOCAL_GL_MAX_TEXTURE_SIZE:
             MOZ_ASSERT(mMaxTextureSize>0);
             *params = mMaxTextureSize;
-            break;
+            return;
 
         case LOCAL_GL_MAX_CUBE_MAP_TEXTURE_SIZE:
             MOZ_ASSERT(mMaxCubeMapTextureSize>0);
             *params = mMaxCubeMapTextureSize;
-            break;
+            return;
 
         case LOCAL_GL_MAX_RENDERBUFFER_SIZE:
             MOZ_ASSERT(mMaxRenderbufferSize>0);
             *params = mMaxRenderbufferSize;
-            break;
+            return;
 
         case LOCAL_GL_VIEWPORT:
             for (size_t i = 0; i < 4; i++) {
                 params[i] = mViewportRect[i];
             }
-            break;
+            return;
 
         case LOCAL_GL_SCISSOR_BOX:
             for (size_t i = 0; i < 4; i++) {
                 params[i] = mScissorRect[i];
             }
-            break;
+            return;
 
         default:
-            raw_fGetIntegerv(pname, params);
             break;
     }
+
+    raw_fGetIntegerv(pname, params);
 }
 
 void
@@ -2723,8 +2704,9 @@ GLContext::fReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum f
     BeforeGLReadCall();
 
     bool didReadPixels = false;
-    if (mScreen) {
-        didReadPixels = mScreen->ReadPixels(x, y, width, height, format, type, pixels);
+    const auto screen = Screen();
+    if (screen) {
+        didReadPixels = screen->ReadPixels(x, y, width, height, format, type, pixels);
     }
 
     if (!didReadPixels) {
@@ -2766,14 +2748,6 @@ GLContext::fReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum f
 void
 GLContext::fDeleteFramebuffers(GLsizei n, const GLuint* names)
 {
-    if (mScreen) {
-        // Notify mScreen which framebuffers we're deleting.
-        // Otherwise, we will get framebuffer binding mispredictions.
-        for (int i = 0; i < n; i++) {
-            mScreen->DeletingFB(names[i]);
-        }
-    }
-
     // Avoid crash by flushing before glDeleteFramebuffers. See bug 1194923.
     if (mNeedsFlushBeforeDeleteFB) {
         fFlush();
@@ -2834,47 +2808,6 @@ GLContext::fTexImage2D(GLenum target, GLint level, GLint internalformat,
     }
 #endif
     raw_fTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
-}
-
-GLuint
-GLContext::GetDrawFB()
-{
-    if (mScreen)
-        return mScreen->GetDrawFB();
-
-    GLuint ret = 0;
-    GetUIntegerv(LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT, &ret);
-    return ret;
-}
-
-GLuint
-GLContext::GetReadFB()
-{
-    if (mScreen)
-        return mScreen->GetReadFB();
-
-    GLenum bindEnum = IsSupported(GLFeature::split_framebuffer)
-                        ? LOCAL_GL_READ_FRAMEBUFFER_BINDING_EXT
-                        : LOCAL_GL_FRAMEBUFFER_BINDING;
-
-    GLuint ret = 0;
-    GetUIntegerv(bindEnum, &ret);
-    return ret;
-}
-
-GLuint
-GLContext::GetFB()
-{
-    if (mScreen) {
-        // This has a very important extra assert that checks that we're
-        // not accidentally ignoring a situation where the draw and read
-        // FBs differ.
-        return mScreen->GetFB();
-    }
-
-    GLuint ret = 0;
-    GetUIntegerv(LOCAL_GL_FRAMEBUFFER_BINDING, &ret);
-    return ret;
 }
 
 bool

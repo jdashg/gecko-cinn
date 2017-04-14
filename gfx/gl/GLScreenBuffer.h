@@ -122,8 +122,6 @@ public:
     SharedSurface* SharedSurf() const {
         return mSurf;
     }
-
-    void SetReadBuffer(GLenum mode) const;
 };
 
 
@@ -168,13 +166,8 @@ protected:
     // Below are the parts that help us pretend to be framebuffer 0:
     GLuint mUserDrawFB;
     GLuint mUserReadFB;
-    GLuint mInternalDrawFB;
-    GLuint mInternalReadFB;
-
-#ifdef DEBUG
-    bool mInInternalMode_DrawFB;
-    bool mInInternalMode_ReadFB;
-#endif
+    GLuint mDriverDrawFB;
+    GLuint mDriverReadFB;
 
     GLScreenBuffer(GLContext* gl,
                    const SurfaceCaps& caps,
@@ -220,15 +213,15 @@ public:
 
     uint32_t DepthBits() const;
 
-    void DeletingFB(GLuint fb);
-
     const gfx::IntSize& Size() const {
         MOZ_ASSERT(mRead);
         MOZ_ASSERT(!mDraw || mDraw->mSize == mRead->Size());
         return mRead->Size();
     }
 
-    void BindAsFramebuffer(GLContext* const gl, GLenum target) const;
+    void BindFramebuffer(GLenum target, GLuint userFB);
+    GLuint CurDrawFB() const;
+    GLuint CurReadFB() const;
 
     void RequireBlit();
     void AssureBlitted();
@@ -273,24 +266,6 @@ protected:
     UniquePtr<ReadBuffer> CreateRead(SharedSurface* surf);
 
 public:
-    /* `fb` in these functions is the framebuffer the GLContext is hoping to
-     * bind. When this is 0, we intercept the call and bind our own
-     * framebuffers. As a client of these functions, just bind 0 when you want
-     * to draw to the default framebuffer/'screen'.
-     */
-    void BindFB(GLuint fb);
-    void BindDrawFB(GLuint fb);
-    void BindReadFB(GLuint fb);
-    GLuint GetFB() const;
-    GLuint GetDrawFB() const;
-    GLuint GetReadFB() const;
-
-    // Here `fb` is the actual framebuffer you want bound. Binding 0 will
-    // bind the (generally useless) default framebuffer.
-    void BindFB_Internal(GLuint fb);
-    void BindDrawFB_Internal(GLuint fb);
-    void BindReadFB_Internal(GLuint fb);
-
     bool IsDrawFramebufferDefault() const;
     bool IsReadFramebufferDefault() const;
 };

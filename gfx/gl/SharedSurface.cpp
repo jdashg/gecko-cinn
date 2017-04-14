@@ -64,20 +64,20 @@ SharedSurface::ProdCopy(SharedSurface* src, SharedSurface* dest,
             GLuint destTex = dest->ProdTexture();
             GLenum destTarget = dest->ProdTextureTarget();
 
+            const ScopedBypassScreen bypass(gl);
             gl->BlitHelper()->BlitFramebufferToTexture(0, destTex,
                                                        src->mSize,
                                                        dest->mSize,
-                                                       destTarget,
-                                                       true);
+                                                       destTarget);
         } else if (dest->mAttachType == AttachmentType::GLRenderbuffer) {
             GLuint destRB = dest->ProdRenderbuffer();
             ScopedFramebufferForRenderbuffer destWrapper(gl, destRB);
 
+            const ScopedBypassScreen bypass(gl);
             gl->BlitHelper()->BlitFramebufferToFramebuffer(0,
                                                            destWrapper.FB(),
                                                            src->mSize,
-                                                           dest->mSize,
-                                                           true);
+                                                           dest->mSize);
         } else {
             MOZ_CRASH("GFX: Unhandled dest->mAttachType 1.");
         }
@@ -109,20 +109,20 @@ SharedSurface::ProdCopy(SharedSurface* src, SharedSurface* dest,
             GLuint srcTex = src->ProdTexture();
             GLenum srcTarget = src->ProdTextureTarget();
 
+            const ScopedBypassScreen bypass(gl);
             gl->BlitHelper()->BlitTextureToFramebuffer(srcTex, 0,
                                                        src->mSize,
                                                        dest->mSize,
-                                                       srcTarget,
-                                                       true);
+                                                       srcTarget);
         } else if (src->mAttachType == AttachmentType::GLRenderbuffer) {
             GLuint srcRB = src->ProdRenderbuffer();
             ScopedFramebufferForRenderbuffer srcWrapper(gl, srcRB);
 
+            const ScopedBypassScreen bypass(gl);
             gl->BlitHelper()->BlitFramebufferToFramebuffer(srcWrapper.FB(),
                                                            0,
                                                            src->mSize,
-                                                           dest->mSize,
-                                                           true);
+                                                           dest->mSize);
         } else {
             MOZ_CRASH("GFX: Unhandled src->mAttachType 2.");
         }
@@ -402,6 +402,7 @@ SurfaceFactory::Recycle(layers::SharedSurfaceTextureClient* texClient)
 ScopedReadbackFB::ScopedReadbackFB(SharedSurface* src)
     : mGL(src->mGL)
     , mAutoFB(mGL)
+    , mBypass(mGL)
     , mTempFB(0)
     , mTempTex(0)
     , mSurfToUnlock(nullptr)
@@ -444,10 +445,7 @@ ScopedReadbackFB::ScopedReadbackFB(SharedSurface* src)
                 mSurfToUnlock->LockProd();
             }
 
-            // TODO: This should just be BindFB, but we don't have
-            // the patch for this yet. (bug 1045955)
-            MOZ_ASSERT(mGL->Screen());
-            mGL->Screen()->BindReadFB_Internal(0);
+            mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
             break;
         }
     default:
