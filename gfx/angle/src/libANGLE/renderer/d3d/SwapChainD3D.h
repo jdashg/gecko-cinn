@@ -45,7 +45,7 @@ class SwapChainD3D : angle::NonCopyable
     GLenum getDepthBufferInternalFormat() const { return mDepthBufferFormat; }
 
     HANDLE getShareHandle() { return mShareHandle; }
-    IUnknown *getTexture() { return mD3DTexture; }
+    virtual IUnknown *getTexture() { return mD3DTexture; }
     virtual void *getKeyedMutex() = 0;
 
   protected:

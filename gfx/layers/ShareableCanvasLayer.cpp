@@ -43,40 +43,34 @@ ShareableCanvasLayer::Initialize(const Data& aData)
   if (!mGLContext)
     return;
 
-  gl::GLScreenBuffer* screen = mGLContext->Screen();
-
-  gl::SurfaceCaps caps;
-  if (mGLFrontbuffer) {
-    // The screen caps are irrelevant if we're using a separate frontbuffer.
-    caps = mGLFrontbuffer->mHasAlpha ? gl::SurfaceCaps::ForRGBA()
-                                     : gl::SurfaceCaps::ForRGB();
-  } else {
-    MOZ_ASSERT(screen);
-    caps = screen->mCaps;
-  }
-  MOZ_ASSERT(caps.alpha == aData.mHasAlpha);
-
-  auto forwarder = GetForwarder();
-
   mFlags = TextureFlags::ORIGIN_BOTTOM_LEFT;
   if (!aData.mIsGLAlphaPremult) {
     mFlags |= TextureFlags::NON_PREMULTIPLIED;
   }
 
-  UniquePtr<gl::SurfaceFactory> factory =
-    gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, mFlags);
+  const auto& screen = mGLContext->Screen();
+  const auto& forwarder = GetForwarder();
 
   if (mGLFrontbuffer || aData.mIsMirror) {
     // We're using a source other than the one in the default screen.
     // (SkiaGL)
-    mFactory = Move(factory);
+    gl::SurfaceCaps caps;
+    if (mGLFrontbuffer) {
+      // The screen caps are irrelevant if we're using a separate frontbuffer.
+      caps = mGLFrontbuffer->mHasAlpha ? gl::SurfaceCaps::ForRGBA()
+                                       : gl::SurfaceCaps::ForRGB();
+    } else {
+      MOZ_ASSERT(screen);
+      caps = screen->Factory()->mCaps;
+    }
+
+    mFactory = gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, mFlags);
     if (!mFactory) {
       // Absolutely must have a factory here, so create a basic one
-      mFactory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, caps, mFlags);
+      mFactory.reset(new gl::SurfaceFactory_Basic(mGLContext, caps, mFlags));
     }
   } else {
-    if (factory)
-      screen->Morph(Move(factory));
+    screen->Morph(forwarder);
   }
 }
 

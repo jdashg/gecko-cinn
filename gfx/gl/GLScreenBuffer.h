@@ -84,12 +84,12 @@ public:
     static UniquePtr<GLScreenBuffer> Create(GLContext* gl,
                                             const gfx::IntSize& size,
                                             const SurfaceCaps& caps);
-
     static UniquePtr<SurfaceFactory>
     CreateFactory(GLContext* gl,
                   const SurfaceCaps& caps,
                   layers::KnowsCompositor* compositorConnection,
                   const layers::TextureFlags& flags);
+private:
     static UniquePtr<SurfaceFactory>
     CreateFactory(GLContext* gl,
                   const SurfaceCaps& caps,
@@ -97,7 +97,6 @@ public:
                   const mozilla::layers::LayersBackend backend,
                   const layers::TextureFlags& flags);
 
-protected:
     GLContext* const mGL; // Owns us.
 public:
     const SurfaceCaps mCaps;
@@ -180,11 +179,13 @@ public:
                     GLenum format, GLenum type, GLvoid* pixels);
 
     // Morph changes the factory used to create surfaces.
-    void Morph(UniquePtr<SurfaceFactory> newFactory);
+    bool Morph(layers::KnowsCompositor* info, bool force = false);
 
 protected:
     // Returns the old mBack on success.
-    decltype(mBack) Swap(const gfx::IntSize& size);
+    bool Swap(const gfx::IntSize& size,
+              RefPtr<layers::SharedSurfaceTextureClient>* out_oldBack);
+    void RefreshFBBindings();
 
 public:
     bool PublishFrame();

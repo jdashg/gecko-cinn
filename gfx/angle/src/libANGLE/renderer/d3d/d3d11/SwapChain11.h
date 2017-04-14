@@ -50,6 +50,12 @@ class SwapChain11 final : public SwapChainD3D
     EGLint getHeight() const { return mHeight; }
     void *getKeyedMutex() override { return mKeyedMutex; }
 
+    IUnknown *getTexture() override {
+        if (mD3DTexture)
+            return mD3DTexture;
+        return getOffscreenTexture();
+    }
+
   private:
     void release();
     void initPassThroughResources();

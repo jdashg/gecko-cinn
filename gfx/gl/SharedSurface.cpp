@@ -165,6 +165,8 @@ SurfaceFactory::~SurfaceFactory()
 void
 SurfaceFactory::DeleteDepthStencil()
 {
+    mDepthStencilSize = gfx::IntSize(0, 0);
+
     if (mDepthRB) {
         mGL->fDeleteRenderbuffers(1, &mDepthRB);
         if (mStencilRB == mDepthRB) {
@@ -186,11 +188,11 @@ SurfaceFactory::NewSharedSurface(const gfx::IntSize& size)
         return nullptr;
 
     if (!surf->mFB)
-        return nullptr;
+        return Move(surf);
 
     if (size != mDepthStencilSize) {
         DeleteDepthStencil();
-        mDepthStencilSize = gfx::IntSize(0, 0);
+        mDepthStencilSize = size;
 
         const auto fnCreateRB = [&](GLenum format) {
             MOZ_ASSERT(format);
@@ -223,7 +225,6 @@ SurfaceFactory::NewSharedSurface(const gfx::IntSize& size)
             DeleteDepthStencil();
             return nullptr;
         }
-        mDepthStencilSize = size;
     }
 
     const ScopedBindFramebuffer bindFB(mGL, surf->mFB);

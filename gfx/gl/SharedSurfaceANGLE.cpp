@@ -55,7 +55,11 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
     if (!pbuffer)
         return nullptr;
 
-    // Declare everything before 'goto's.
+    // Make tex.
+    //gl->PushSurfaceLock(nullptr);
+    //const auto eglContext = (GLContextEGL*)gl;
+    //eglContext->SetEGLSurfaceOverride(pbuffer);
+
     HANDLE shareHandle = nullptr;
     IUnknown* maybeD3DTex = nullptr;
     MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(display, pbuffer,
@@ -64,6 +68,11 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
     MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(display, pbuffer,
                                                     LOCAL_EGL_D3D_TEXTURE_ANGLE,
                                                     (void**)&maybeD3DTex) );
+    MOZ_ASSERT(maybeD3DTex);
+
+    //eglContext->SetEGLSurfaceOverride(nullptr);
+    //gl->PopSurfaceLock();
+
     ID3D11Texture2D* d3dTex = nullptr;
     if (maybeD3DTex) {
         maybeD3DTex->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&d3dTex);

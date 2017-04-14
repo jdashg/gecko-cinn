@@ -337,26 +337,37 @@ GLScreenBuffer::AssureBlitted()
     // Done!
 }
 
-void
-GLScreenBuffer::Morph(UniquePtr<SurfaceFactory> newFactory)
+bool
+GLScreenBuffer::Morph(layers::KnowsCompositor* const info, const bool force)
 {
-    MOZ_RELEASE_ASSERT(newFactory, "newFactory must not be null");
+    if (mFactory->mType != SharedSurfaceType::Basic && !force)
+        return false;
+
+    auto newFactory = CreateFactory(mFactory->mGL, mFactory->mCaps, info,
+                                    mFactory->mFlags);
+    if (!newFactory)
+        return false;
+
     mFactory = Move(newFactory);
+    return true;
 }
 
-RefPtr<SharedSurfaceTextureClient>
-GLScreenBuffer::Swap(const gfx::IntSize& size)
+bool
+GLScreenBuffer::Swap(const gfx::IntSize& size,
+                     RefPtr<layers::SharedSurfaceTextureClient>* const out_oldBack)
 {
+    AssureBlitted();
+
     RefPtr<SharedSurfaceTextureClient> newBack = mFactory->NewTexClient(size);
     if (!newBack)
-        return nullptr;
+        return false;
 
     if (mCaps.antialias) {
         if (!mDraw || mDraw->mSize != size) {
             const auto& formats = mFactory->mFormats;
             UniquePtr<DrawBuffer> newDraw = DrawBuffer::Create(mGL, mCaps, formats, size);
             if (!newDraw)
-                return nullptr;
+                return false;
 
             mDraw = Move(newDraw);
         }
@@ -365,42 +376,55 @@ GLScreenBuffer::Swap(const gfx::IntSize& size)
     ////
     // Swap!
 
-
     if (mBack) {
         const auto& oldSurf = mBack->Surf();
         MOZ_ALWAYS_TRUE(mGL->PopSurfaceLock() == oldSurf);
+        mBack->Surf()->ProducerRelease();
     }
 
     RefPtr<SharedSurfaceTextureClient> oldBack = mBack;
     mBack = newBack;
 
-    const auto& newSurf = newBack->Surf();
-    mGL->PushSurfaceLock(newSurf);
-    newSurf->ProducerAcquire();
+    mGL->PushSurfaceLock(mBack->Surf());
+    mBack->Surf()->ProducerAcquire();
 
     RequireBlit();
 
     ////
     // Fixup
 
-    const ScopedBindFramebuffer(mGL, 0);
-
-    if (mGL->IsSupported(gl::GLFeature::read_buffer)) {
-        SetReadBuffer(mUserReadBufferMode);
-    }
-
     if (mGL->IsSupported(gl::GLFeature::draw_buffers)) {
+        mGL->raw_fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER, DrawFB());
         SetDrawBuffer(mUserDrawBufferMode);
     }
 
-    return oldBack;
+    if (mGL->IsSupported(gl::GLFeature::read_buffer)) {
+        mGL->raw_fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER, ReadFB());
+        SetReadBuffer(mUserReadBufferMode);
+    }
+
+    RefreshFBBindings();
+
+    *out_oldBack = oldBack;
+    return true;
+}
+
+void
+GLScreenBuffer::RefreshFBBindings()
+{
+    if (mUserDrawFB == mUserReadFB) {
+        BindFramebuffer(LOCAL_GL_FRAMEBUFFER, mUserDrawFB);
+    } else {
+        BindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER, mUserDrawFB);
+        BindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER, mUserReadFB);
+    }
 }
 
 bool
 GLScreenBuffer::PublishFrame()
 {
-    const auto oldBack = Swap(mBack->Surf()->mSize);
-    if (!oldBack)
+    RefPtr<layers::SharedSurfaceTextureClient> oldBack;
+    if (!Swap(mBack->Surf()->mSize, &oldBack))
         return false;
 
     mFront = oldBack;
@@ -416,8 +440,13 @@ GLScreenBuffer::PublishFrame()
 #ifdef DEBUG
         GLContext::LocalErrorScope errorScope(*mGL);
 #endif
+        const auto& frontSurf = mFront->Surf();
         mGL->PushSurfaceLock(nullptr);
-        mBack->Surf()->CopyFrom(mFront->Surf());
+        frontSurf->ProducerReadAcquire();
+
+        mBack->Surf()->CopyFrom(frontSurf);
+
+        frontSurf->ProducerReadRelease();
         mGL->PopSurfaceLock();
 
 #ifdef DEBUG
@@ -429,28 +458,14 @@ GLScreenBuffer::PublishFrame()
         //printf_stderr("After: src: 0x%08x, dest: 0x%08x\n", srcPixel, destPixel);
     }
 
-    // XXX: We would prefer to fence earlier on platforms that don't need
-    // the full ProducerAcquire/ProducerRelease semantics, so that the fence
-    // doesn't include the copy operation. Unfortunately, the current API
-    // doesn't expose a good way to do that.
-    if (mFront) {
-        mFront->Surf()->ProducerRelease();
-    }
-
     return true;
 }
 
 bool
 GLScreenBuffer::Resize(const gfx::IntSize& size)
 {
-    const auto oldBack = Swap(size);
-    if (!oldBack)
-        return false;
-
-    if (oldBack) {
-        oldBack->Surf()->ProducerRelease();
-    }
-    return true;
+    RefPtr<layers::SharedSurfaceTextureClient> oldBack;
+    return Swap(size, &oldBack);
 }
 
 static GLenum

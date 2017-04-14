@@ -145,22 +145,19 @@ OffscreenCanvas::GetContext(JSContext* aCx,
       mCanvasRenderer->mContext = mCurrentContext;
       mCanvasRenderer->SetActiveThread();
       mCanvasRenderer->mGLContext = gl;
-      mCanvasRenderer->SetIsAlphaPremultiplied(webGL->IsPremultAlpha() || !gl->Caps().alpha);
+
+      const auto& options = webGL->Options();
+      const bool treatAsPremult = (options.premultipliedAlpha || !options.alpha);
+      mCanvasRenderer->SetIsAlphaPremultiplied(treatAsPremult);
 
       if (RefPtr<ImageBridgeChild> imageBridge = ImageBridgeChild::GetSingleton()) {
         TextureFlags flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
         mCanvasClient = imageBridge->CreateCanvasClient(CanvasClient::CanvasClientTypeShSurf, flags);
         mCanvasRenderer->SetCanvasClient(mCanvasClient);
 
-        gl::GLScreenBuffer* screen = gl->Screen();
-        gl::SurfaceCaps caps = screen->mCaps;
-        auto forwarder = mCanvasClient->GetForwarder();
-
-        UniquePtr<gl::SurfaceFactory> factory =
-          gl::GLScreenBuffer::CreateFactory(gl, caps, forwarder, flags);
-
-        if (factory)
-          screen->Morph(Move(factory));
+        const auto& screen = gl->Screen();
+        const auto& forwarder = mCanvasClient->GetForwarder();
+        MOZ_ALWAYS_TRUE( screen->Morph(forwarder) );
       }
     }
   }

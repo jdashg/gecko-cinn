@@ -1381,12 +1381,15 @@ WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
     CanvasLayer::Data data;
     data.mGLContext = gl;
     data.mSize = nsIntSize(mWidth, mHeight);
-    data.mHasAlpha = gl->Caps().alpha;
-    data.mIsGLAlphaPremult = IsPremultAlpha() || !data.mHasAlpha;
+    data.mHasAlpha = Options().alpha;
+    data.mIsGLAlphaPremult = (Options().premultipliedAlpha || !data.mHasAlpha);
     data.mIsMirror = aMirror;
 
     canvasLayer->Initialize(data);
-    uint32_t flags = gl->Caps().alpha ? 0 : Layer::CONTENT_OPAQUE;
+    uint32_t flags = 0;
+    if (!data.mHasAlpha) {
+        flags |= Layer::CONTENT_OPAQUE;
+    }
     canvasLayer->SetContentFlags(flags);
     canvasLayer->Updated();
 
@@ -2357,27 +2360,15 @@ WebGLContext::GetVRFrame()
 bool
 WebGLContext::StartVRPresentation()
 {
-    VRManagerChild* vrmc = VRManagerChild::Get();
-    if (!vrmc) {
+    const auto& vrmc = VRManagerChild::Get();
+    if (!vrmc)
         return false;
-    }
-    gl::GLScreenBuffer* screen = gl->Screen();
-    if (!screen) {
+
+    const auto& screen = gl->Screen();
+    if (!screen)
         return false;
-    }
-    gl::SurfaceCaps caps = screen->mCaps;
 
-    UniquePtr<gl::SurfaceFactory> factory =
-        gl::GLScreenBuffer::CreateFactory(gl,
-            caps,
-            vrmc,
-            vrmc->GetBackendType(),
-            TextureFlags::ORIGIN_BOTTOM_LEFT);
-
-    if (factory) {
-        screen->Morph(Move(factory));
-    }
-    return true;
+    return screen->Morph(vrmc, true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

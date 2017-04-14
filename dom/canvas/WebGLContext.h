@@ -469,10 +469,6 @@ public:
 
     gl::GLContext* GL() const { return gl; }
 
-    bool IsPremultAlpha() const { return mOptions.premultipliedAlpha; }
-
-    bool IsPreservingDrawingBuffer() const { return mOptions.preserveDrawingBuffer; }
-
     bool PresentScreenBuffer();
 
     // Prepare the context for capture before compositing
