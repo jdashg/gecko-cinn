@@ -68,7 +68,6 @@ EXPORTS.mozilla.dom += [
     'ImageData.h',
     'OffscreenCanvas.h',
     'TextMetrics.h',
-    'WebGLVertexArrayObject.h',
 ]
 
 # Canvas 2D and common sources

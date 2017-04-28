@@ -1,14 +1,14 @@
 
 #include "GLImages.h"
+
+#include "mozilla/gfx/Logging.h"
 #include "GLContext.h"
 #include "GLContextProvider.h"
 #include "ScopedGLHelpers.h"
-#include "GLImages.h"
 #include "GLBlitHelper.h"
 #include "GLReadTexImageHelper.h"
 #include "GLLibraryEGL.h"
 
-using namespace mozilla;
 using namespace mozilla::gl;
 
 namespace mozilla {

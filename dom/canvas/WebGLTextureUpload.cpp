@@ -2160,7 +2160,9 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
     // Do the thing!
 
     mContext->gl->MakeCurrent();
-    mContext->OnBeforeReadCall();
+
+    if (!mContext->DoBindReadFB(funcName))
+        return;
 
     const bool isSubImage = false;
     if (!DoCopyTexOrSubImage(mContext, funcName, isSubImage, this, target, level, x, y,
@@ -2238,7 +2240,9 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
     // Do the thing!
 
     mContext->gl->MakeCurrent();
-    mContext->OnBeforeReadCall();
+
+    if (!mContext->DoBindReadFB(funcName))
+        return;
 
     bool uploadWillInitialize;
     if (!EnsureImageDataInitializedForUpload(this, funcName, target, level, xOffset,

@@ -11,9 +11,9 @@
 #include "nsCOMPtr.h"                   // for already_AddRefed
 #include "nsISupportsImpl.h"            // for Layer::AddRef, etc
 #include "gfx2DGlue.h"
-#include "GLScreenBuffer.h"
 #include "GLContext.h"
 #include "gfxUtils.h"
+#include "SharedSurface.h"
 #include "mozilla/layers/PersistentBufferProvider.h"
 #include "client/TextureClientSharedSurface.h"
 
@@ -28,37 +28,16 @@ namespace layers {
 already_AddRefed<SourceSurface>
 BasicCanvasLayer::UpdateSurface()
 {
-  if (mAsyncRenderer) {
-    MOZ_ASSERT(!mBufferProvider);
-    MOZ_ASSERT(!mGLContext);
-    return mAsyncRenderer->GetSurface();
-  }
-
-  if (!mGLContext) {
+  const auto& frontTex = GetFrontTex();
+  if (!frontTex) {
     return nullptr;
   }
+  const auto& frontSurf = frontTex->Surf();
 
-  SharedSurface* frontbuffer = nullptr;
-  if (mGLFrontbuffer) {
-    frontbuffer = mGLFrontbuffer.get();
-  } else {
-    GLScreenBuffer* screen = mGLContext->Screen();
-    const auto& front = screen->Front();
-    if (front) {
-      frontbuffer = front->Surf();
-    }
-  }
-
-  if (!frontbuffer) {
-    NS_WARNING("Null frame received.");
-    return nullptr;
-  }
-
-  IntSize readSize(frontbuffer->mSize);
+  IntSize readSize(frontSurf->mSize);
   SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
                           ? SurfaceFormat::B8G8R8X8
                           : SurfaceFormat::B8G8R8A8;
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
 
   RefPtr<DataSourceSurface> resultSurf = GetTempSurface(readSize, format);
   // There will already be a warning from inside of GetTempSurface, but
@@ -68,8 +47,8 @@ BasicCanvasLayer::UpdateSurface()
   }
 
   // Readback handles Flush/MarkDirty.
-  mGLContext->Readback(frontbuffer, resultSurf);
-  if (needsPremult) {
+  Readback(frontSurf, resultSurf);
+  if (!mIsAlphaPremultiplied) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
   MOZ_ASSERT(resultSurf);

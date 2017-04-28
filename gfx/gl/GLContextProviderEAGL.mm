@@ -70,7 +70,7 @@ bool
 GLContextEAGL::AttachToWindow(nsIWidget* aWidget)
 {
     // This should only be called once
-    MOZ_ASSERT(!mBackbufferFB && !mBackbufferRB);
+    MOZ_ASSERT(!GetDefaultFramebuffer());
 
     UIView* view =
         reinterpret_cast<UIView*>(aWidget->GetNativeData(NS_NATIVE_WIDGET));
@@ -81,7 +81,6 @@ GLContextEAGL::AttachToWindow(nsIWidget* aWidget)
 
     mLayer = [view layer];
 
-    fGenFramebuffers(1, &mBackbufferFB);
     return RecreateRB();
 }
 
@@ -92,24 +91,19 @@ GLContextEAGL::RecreateRB()
 
     CAEAGLLayer* layer = (CAEAGLLayer*)mLayer;
 
-    if (mBackbufferRB) {
-        // It doesn't seem to be enough to just call renderbufferStorage: below,
-        // we apparently have to recreate the RB.
-        fDeleteRenderbuffers(1, &mBackbufferRB);
-        mBackbufferRB = 0;
+    const auto newRB = CreateRenderbuffer();
+    {
+        const ScopedBindRenderbuffer bindRB(this, newRB);
+        [mContext renderbufferStorage:LOCAL_GL_RENDERBUFFER
+                  fromDrawable:layer];
     }
+    auto newFB = MozFramebuffer::CreateWith(this, gfx::IntSize(0, 0), 0, false,
+                                            LOCAL_GL_RENDERBUFFER, newRB);
+    if (!newFB)
+        return false;
 
-    fGenRenderbuffers(1, &mBackbufferRB);
-    fBindRenderbuffer(LOCAL_GL_RENDERBUFFER, mBackbufferRB);
-
-    [mContext renderbufferStorage:LOCAL_GL_RENDERBUFFER
-              fromDrawable:layer];
-
-    fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mBackbufferFB);
-    fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
-                             LOCAL_GL_RENDERBUFFER, mBackbufferRB);
-
-    return LOCAL_GL_FRAMEBUFFER_COMPLETE == fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
+    ResetFakeDefaultFB(Move(newFB));
+    return true;
 }
 
 bool
@@ -197,8 +191,7 @@ CreateEAGLContext(CreateContextFlags flags, bool aOffscreen, GLContextEAGL* shar
         return nullptr;
     }
 
-    RefPtr<GLContextEAGL> glContext = new GLContextEAGL(flags, SurfaceCaps::ForRGBA(),
-                                                        context, sharedContext,
+    RefPtr<GLContextEAGL> glContext = new GLContextEAGL(flags, context, sharedContext,
                                                         aOffscreen);
     if (!glContext->Init()) {
         glContext = nullptr;
@@ -239,20 +232,6 @@ GLContextProviderEAGL::CreateHeadless(CreateContextFlags flags,
                                       nsACString* const out_failureId)
 {
     return CreateEAGLContext(flags, true, GetGlobalContextEAGL());
-}
-
-already_AddRefed<GLContext>
-GLContextProviderEAGL::CreateOffscreen(const mozilla::gfx::IntSize& size,
-                                       const SurfaceCaps& caps,
-                                       CreateContextFlags flags,
-                                       nsACString* const out_failureId)
-{
-    RefPtr<GLContext> glContext = CreateHeadless(flags, out_failureId);
-    if (!glContext->InitOffscreen(size, caps)) {
-        return nullptr;
-    }
-
-    return glContext.forget();
 }
 
 static RefPtr<GLContext> gGlobalContext;

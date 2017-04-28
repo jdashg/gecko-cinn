@@ -9,7 +9,6 @@
 #include "gfxUtils.h"
 #include "GLContext.h"
 #include "GLReadTexImageHelper.h"
-#include "GLScreenBuffer.h"
 #include "mozilla/dom/HTMLCanvasElement.h"
 #include "mozilla/layers/BufferTexture.h"
 #include "mozilla/layers/CanvasClient.h"
@@ -18,6 +17,7 @@
 #include "mozilla/ReentrantMonitor.h"
 #include "nsIRunnable.h"
 #include "nsThreadUtils.h"
+#include "SharedSurface.h"
 
 namespace mozilla {
 namespace layers {
@@ -200,12 +200,7 @@ AsyncCanvasRenderer::UpdateTarget()
   }
 
   gl::SharedSurface* frontbuffer = nullptr;
-  gl::GLScreenBuffer* screen = mGLContext->Screen();
-  const auto& front = screen->Front();
-  if (front) {
-    frontbuffer = front->Surf();
-  }
-
+  MOZ_CRASH("fixme");
   if (!frontbuffer) {
     return nullptr;
   }
@@ -231,8 +226,7 @@ AsyncCanvasRenderer::UpdateTarget()
     return nullptr;
   }
 
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
-  if (needsPremult) {
+  if (!mIsAlphaPremultiplied) {
     gfxUtils::PremultiplyDataSurface(surface, surface);
   }
 

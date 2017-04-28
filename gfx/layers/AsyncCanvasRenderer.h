@@ -55,9 +55,10 @@ class AsyncCanvasRenderer final
 {
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(AsyncCanvasRenderer)
 
-public:
+private:
   AsyncCanvasRenderer();
 
+public:
   void NotifyElementAboutAttributesChanged();
   void NotifyElementAboutInvalidation();
 

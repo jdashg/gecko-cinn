@@ -10,7 +10,6 @@
 #include <iterator>
 
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "nsPrintfCString.h"
 #include "WebGLContext.h"
@@ -624,6 +623,7 @@ WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
 #ifdef ANDROID
     , mIsFB(false)
 #endif
+    , mColorDrawBufferEnums(1, LOCAL_GL_COLOR_ATTACHMENT0)
     , mDepthAttachment(this, LOCAL_GL_DEPTH_ATTACHMENT)
     , mStencilAttachment(this, LOCAL_GL_STENCIL_ATTACHMENT)
     , mDepthStencilAttachment(this, LOCAL_GL_DEPTH_STENCIL_ATTACHMENT)
@@ -1073,9 +1073,8 @@ WebGLFramebuffer::ResolveAttachmentData(const char* funcName) const
         }
 
         {
-            gl::ScopedBindFramebuffer autoBind(mContext->gl, mGLName);
-
-            mContext->ForceClearFramebufferWithDefaultValues(clearBits, false);
+            const gl::ScopedBindFramebuffer bindFB(mContext->gl, mGLName);
+            mContext->ClearCurFBToDefaultValues(LOCAL_GL_FRAMEBUFFER, mGLName, false);
         }
 
         if (hasDrawBuffers) {
@@ -1274,7 +1273,9 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
         return;
     }
 
+    std::vector<GLenum> newColorDrawBufferEnums;
     std::vector<const WebGLFBAttachPoint*> newColorDrawBuffers;
+    newColorDrawBufferEnums.reserve(buffers.Length());
     newColorDrawBuffers.reserve(buffers.Length());
 
     for (size_t i = 0; i < buffers.Length(); i++) {
@@ -1289,6 +1290,7 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
         // This means that if buffers.Length() isn't larger than MaxDrawBuffers, it won't
         // be larger than MaxColorAttachments.
         const auto& cur = buffers[i];
+        newColorDrawBufferEnums.push_back(cur);
         if (cur == LOCAL_GL_COLOR_ATTACHMENT0 + i) {
             const auto& attach = mColorAttachments[i];
             newColorDrawBuffers.push_back(&attach);
@@ -1313,6 +1315,7 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
 
     mContext->MakeContextCurrent();
 
+    mColorDrawBufferEnums.swap(newColorDrawBufferEnums);
     mColorDrawBuffers.swap(newColorDrawBuffers);
     RefreshDrawBuffers(); // Calls glDrawBuffers.
     RefreshResolvedData();
@@ -1599,33 +1602,6 @@ WebGLFramebuffer::GetAttachmentParameter(const char* funcName, JSContext* cx,
 
 ////////////////////
 
-static void
-GetBackbufferFormats(const WebGLContext* webgl,
-                     const webgl::FormatInfo** const out_color,
-                     const webgl::FormatInfo** const out_depth,
-                     const webgl::FormatInfo** const out_stencil)
-{
-    const auto& options = webgl->Options();
-
-    const auto effFormat = (options.alpha ? webgl::EffectiveFormat::RGBA8
-                                          : webgl::EffectiveFormat::RGB8);
-    *out_color = webgl::GetFormat(effFormat);
-
-    *out_depth = nullptr;
-    *out_stencil = nullptr;
-    if (options.depth && options.stencil) {
-        *out_depth = webgl::GetFormat(webgl::EffectiveFormat::DEPTH24_STENCIL8);
-        *out_stencil = *out_depth;
-    } else {
-        if (options.depth) {
-            *out_depth = webgl::GetFormat(webgl::EffectiveFormat::DEPTH_COMPONENT16);
-        }
-        if (options.stencil) {
-            *out_stencil = webgl::GetFormat(webgl::EffectiveFormat::STENCIL_INDEX8);
-        }
-    }
-}
-
 /*static*/ void
 WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
                                   const WebGLFramebuffer* srcFB, GLint srcX0, GLint srcY0,
@@ -1706,7 +1682,7 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
     } else {
         srcHasSamples = false; // Always false.
 
-        GetBackbufferFormats(webgl, &srcColorFormat, &srcDepthFormat, &srcStencilFormat);
+        webgl->BackbufferFormats(&srcColorFormat, &srcDepthFormat, &srcStencilFormat);
     }
 
     if (srcColorFormat) {
@@ -1743,10 +1719,10 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
         dstDepthFormat = fnGetFormat(dstDepthAttach, &dstHasSamples);
         dstStencilFormat = fnGetFormat(dstStencilAttach, &dstHasSamples);
     } else {
-        dstHasSamples = bool(gl->Screen()->Samples());
+        dstHasSamples = webgl->mOptions.antialias;
 
         const webgl::FormatInfo* dstColorFormat;
-        GetBackbufferFormats(webgl, &dstColorFormat, &dstDepthFormat, &dstStencilFormat);
+        webgl->BackbufferFormats(&dstColorFormat, &dstDepthFormat, &dstStencilFormat);
 
         fnCheckColorFormat(dstColorFormat);
     }
@@ -1906,8 +1882,6 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
     ////
 
     gl->MakeCurrent();
-    webgl->OnBeforeReadCall();
-    WebGLContext::ScopedDrawCallWrapper wrapper(*webgl);
     gl->fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1,
                          dstX0, dstY0, dstX1, dstY1,
                          mask, filter);

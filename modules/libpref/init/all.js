@@ -4538,7 +4538,7 @@ pref("canvas.image.cache.limit", 0);
 // Disable MSAA on mobile.
 pref("gl.msaa-level", 0);
 #else
-pref("gl.msaa-level", 2);
+pref("gl.msaa-level", 4); // 4 samples, 4xMSAA
 #endif
 pref("gl.require-hardware", false);
 #ifdef XP_MACOSX

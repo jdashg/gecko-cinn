@@ -19,7 +19,6 @@
 
 #include "GLBlitHelper.h"
 #include "GLReadTexImageHelper.h"
-#include "GLScreenBuffer.h"
 
 #include "gfxCrashReporterUtils.h"
 #include "gfxEnv.h"
@@ -128,6 +127,7 @@ static const char* const sExtensionNames[] = {
     "GL_EXT_color_buffer_float",
     "GL_EXT_color_buffer_half_float",
     "GL_EXT_copy_texture",
+    "GL_EXT_discard_framebuffer",
     "GL_EXT_disjoint_timer_query",
     "GL_EXT_draw_buffers",
     "GL_EXT_draw_buffers2",
@@ -254,9 +254,10 @@ ChooseDebugFlags(CreateContextFlags createFlags)
     return debugFlags;
 }
 
-GLContext::GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
-                     GLContext* sharedContext, bool isOffscreen)
-  : mIsOffscreen(isOffscreen),
+GLContext::GLContext(CreateContextFlags flags, GLContext* sharedContext,
+                     bool isOffscreen)
+  : mCreationFlags(flags),
+    mIsOffscreen(isOffscreen),
     mContextLost(false),
     mVersion(0),
     mProfile(ContextProfile::Unknown),
@@ -266,8 +267,6 @@ GLContext::GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
     mTopError(LOCAL_GL_NO_ERROR),
     mDebugFlags(ChooseDebugFlags(flags)),
     mSharedContext(sharedContext),
-    mCaps(caps),
-    mBypassScreen(false),
     mMaxTextureSize(0),
     mMaxCubeMapTextureSize(0),
     mMaxTextureImageSize(0),
@@ -939,12 +938,6 @@ GLContext::InitWithPrefixImpl(const char* prefix, bool trygl)
     // We're ready for final setup.
     fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
 
-    // TODO: Remove SurfaceCaps::any.
-    if (mCaps.any) {
-        mCaps.any = false;
-        mCaps.alpha = false;
-    }
-
     mTexGarbageBin = new TextureGarbageBin(this);
 
     MOZ_ASSERT(IsCurrent());
@@ -1495,6 +1488,14 @@ GLContext::LoadMoreSymbols(const char* prefix, bool trygl)
         fnLoadForExt(symbols, APPLE_framebuffer_multisample);
     }
 
+    if (IsExtensionSupported(EXT_discard_framebuffer)) {
+        const SymLoadStruct symbols[] = {
+            { (PRFuncPtr*) &mSymbols.fDiscardFramebufferEXT, { "DiscardFramebufferEXT", nullptr } },
+            END_SYMBOLS
+        };
+        fnLoadForExt(symbols, EXT_discard_framebuffer);
+    }
+
     // Load developer symbols, don't fail if we can't find them.
     const SymLoadStruct devSymbols[] = {
             { (PRFuncPtr*) &mSymbols.fGetTexImage, { "GetTexImage", nullptr } },
@@ -1773,83 +1774,6 @@ GLContext::ListHasExtension(const GLubyte* extensions, const char* extension)
     return false;
 }
 
-GLFormats
-GLContext::ChooseGLFormats(const SurfaceCaps& caps) const
-{
-    GLFormats formats;
-
-    // If we're on ES2 hardware and we have an explicit request for 16 bits of color or less
-    // OR we don't support full 8-bit color, return a 4444 or 565 format.
-    bool bpp16 = caps.bpp16;
-    if (IsGLES()) {
-        if (!IsExtensionSupported(OES_rgb8_rgba8))
-            bpp16 = true;
-    } else {
-        // RGB565 is uncommon on desktop, requiring ARB_ES2_compatibility.
-        // Since it's also vanishingly useless there, let's not support it.
-        bpp16 = false;
-    }
-
-    if (bpp16) {
-        MOZ_ASSERT(IsGLES());
-        if (caps.alpha) {
-            formats.color_texInternalFormat = LOCAL_GL_RGBA;
-            formats.color_texFormat = LOCAL_GL_RGBA;
-            formats.color_texType   = LOCAL_GL_UNSIGNED_SHORT_4_4_4_4;
-            formats.color_rbFormat  = LOCAL_GL_RGBA4;
-        } else {
-            formats.color_texInternalFormat = LOCAL_GL_RGB;
-            formats.color_texFormat = LOCAL_GL_RGB;
-            formats.color_texType   = LOCAL_GL_UNSIGNED_SHORT_5_6_5;
-            formats.color_rbFormat  = LOCAL_GL_RGB565;
-        }
-    } else {
-        formats.color_texType = LOCAL_GL_UNSIGNED_BYTE;
-
-        if (caps.alpha) {
-            formats.color_texInternalFormat = IsGLES() ? LOCAL_GL_RGBA : LOCAL_GL_RGBA8;
-            formats.color_texFormat = LOCAL_GL_RGBA;
-            formats.color_rbFormat  = LOCAL_GL_RGBA8;
-        } else {
-            formats.color_texInternalFormat = IsGLES() ? LOCAL_GL_RGB : LOCAL_GL_RGB8;
-            formats.color_texFormat = LOCAL_GL_RGB;
-            formats.color_rbFormat  = LOCAL_GL_RGB8;
-        }
-    }
-
-    uint32_t msaaLevel = gfxPrefs::MSAALevel();
-    GLsizei samples = msaaLevel * msaaLevel;
-    samples = std::min(samples, mMaxSamples);
-
-    // Bug 778765.
-    if (WorkAroundDriverBugs() && samples == 1) {
-        samples = 0;
-    }
-    formats.samples = samples;
-
-
-    // Be clear that these are 0 if unavailable.
-    formats.depthStencil = 0;
-    if (IsSupported(GLFeature::packed_depth_stencil)) {
-        formats.depthStencil = LOCAL_GL_DEPTH24_STENCIL8;
-    }
-
-    formats.depth = 0;
-    if (IsGLES()) {
-        if (IsExtensionSupported(OES_depth24)) {
-            formats.depth = LOCAL_GL_DEPTH_COMPONENT24;
-        } else {
-            formats.depth = LOCAL_GL_DEPTH_COMPONENT16;
-        }
-    } else {
-        formats.depth = LOCAL_GL_DEPTH_COMPONENT24;
-    }
-
-    formats.stencil = LOCAL_GL_STENCIL_INDEX8;
-
-    return formats;
-}
-
 bool
 GLContext::IsFramebufferComplete(GLuint fb, GLenum* pStatus)
 {
@@ -2012,86 +1936,6 @@ GLContext::AssembleOffscreenFBs(const GLuint colorMSRB,
     return isComplete;
 }
 
-
-void
-GLContext::ClearSafely()
-{
-    // bug 659349 --- we must be very careful here: clearing a GL framebuffer is nontrivial, relies on a lot of state,
-    // and in the case of the backbuffer of a WebGL context, state is exposed to scripts.
-    //
-    // The code here is taken from WebGLContext::ForceClearFramebufferWithDefaultValues, but I didn't find a good way of
-    // sharing code with it. WebGL's code is somewhat performance-critical as it is typically called on every frame, so
-    // WebGL keeps track of GL state to avoid having to query it everytime, and also tries to only do work for actually
-    // present buffers (e.g. stencil buffer). Doing that here seems like premature optimization,
-    // as ClearSafely() is called only when e.g. a canvas is resized, not on every animation frame.
-
-    realGLboolean scissorTestEnabled;
-    realGLboolean ditherEnabled;
-    realGLboolean colorWriteMask[4];
-    realGLboolean depthWriteMask;
-    GLint stencilWriteMaskFront, stencilWriteMaskBack;
-    GLfloat colorClearValue[4];
-    GLfloat depthClearValue;
-    GLint stencilClearValue;
-
-    // save current GL state
-    fGetBooleanv(LOCAL_GL_SCISSOR_TEST, &scissorTestEnabled);
-    fGetBooleanv(LOCAL_GL_DITHER, &ditherEnabled);
-    fGetBooleanv(LOCAL_GL_COLOR_WRITEMASK, colorWriteMask);
-    fGetBooleanv(LOCAL_GL_DEPTH_WRITEMASK, &depthWriteMask);
-    fGetIntegerv(LOCAL_GL_STENCIL_WRITEMASK, &stencilWriteMaskFront);
-    fGetIntegerv(LOCAL_GL_STENCIL_BACK_WRITEMASK, &stencilWriteMaskBack);
-    fGetFloatv(LOCAL_GL_COLOR_CLEAR_VALUE, colorClearValue);
-    fGetFloatv(LOCAL_GL_DEPTH_CLEAR_VALUE, &depthClearValue);
-    fGetIntegerv(LOCAL_GL_STENCIL_CLEAR_VALUE, &stencilClearValue);
-
-    // prepare GL state for clearing
-    fDisable(LOCAL_GL_SCISSOR_TEST);
-    fDisable(LOCAL_GL_DITHER);
-
-    fColorMask(1, 1, 1, 1);
-    fClearColor(0.f, 0.f, 0.f, 0.f);
-
-    fDepthMask(1);
-    fClearDepth(1.0f);
-
-    fStencilMask(0xffffffff);
-    fClearStencil(0);
-
-    // do clear
-    fClear(LOCAL_GL_COLOR_BUFFER_BIT |
-           LOCAL_GL_DEPTH_BUFFER_BIT |
-           LOCAL_GL_STENCIL_BUFFER_BIT);
-
-    // restore GL state after clearing
-    fColorMask(colorWriteMask[0],
-               colorWriteMask[1],
-               colorWriteMask[2],
-               colorWriteMask[3]);
-    fClearColor(colorClearValue[0],
-                colorClearValue[1],
-                colorClearValue[2],
-                colorClearValue[3]);
-
-    fDepthMask(depthWriteMask);
-    fClearDepth(depthClearValue);
-
-    fStencilMaskSeparate(LOCAL_GL_FRONT, stencilWriteMaskFront);
-    fStencilMaskSeparate(LOCAL_GL_BACK, stencilWriteMaskBack);
-    fClearStencil(stencilClearValue);
-
-    if (ditherEnabled)
-        fEnable(LOCAL_GL_DITHER);
-    else
-        fDisable(LOCAL_GL_DITHER);
-
-    if (scissorTestEnabled)
-        fEnable(LOCAL_GL_SCISSOR_TEST);
-    else
-        fDisable(LOCAL_GL_SCISSOR_TEST);
-
-}
-
 void
 GLContext::MarkDestroyed()
 {
@@ -2100,7 +1944,6 @@ GLContext::MarkDestroyed()
 
     // Null these before they're naturally nulled after dtor, as we want GLContext to
     // still be alive in *their* dtors.
-    mScreen = nullptr;
     mBlitHelper = nullptr;
     mReadTexImageHelper = nullptr;
 
@@ -2321,65 +2164,6 @@ GLContext::ReportOutstandingNames()
 
 #endif /* DEBUG */
 
-const gfx::IntSize&
-GLContext::OffscreenSize() const
-{
-    MOZ_ASSERT(IsOffscreen());
-    return mScreen->Size();
-}
-
-bool
-GLContext::CreateScreenBuffer(const IntSize& size, const SurfaceCaps& caps)
-{
-    if (!IsOffscreenSizeAllowed(size))
-        return false;
-
-    UniquePtr<GLScreenBuffer> newScreen = GLScreenBuffer::Create(this, size, caps);
-    if (!newScreen)
-        return false;
-
-    if (!newScreen->Resize(size)) {
-        return false;
-    }
-
-    // This will rebind to 0 (Screen) if needed when
-    // it falls out of scope.
-    ScopedBindFramebuffer autoFB(this);
-
-    mScreen = Move(newScreen);
-
-    return true;
-}
-
-bool
-GLContext::ResizeScreenBuffer(const IntSize& size)
-{
-    if (!IsOffscreenSizeAllowed(size))
-        return false;
-
-    return mScreen->Resize(size);
-}
-
-void
-GLContext::ForceDirtyScreen()
-{
-    ScopedBindFramebuffer autoFB(0);
-
-    BeforeGLDrawCall();
-    // no-op; just pretend we did something
-    AfterGLDrawCall();
-}
-
-void
-GLContext::CleanDirtyScreen()
-{
-    ScopedBindFramebuffer autoFB(0);
-
-    BeforeGLReadCall();
-    // no-op; we just want to make sure the Read FBO is updated if it needs to be
-    AfterGLReadCall();
-}
-
 void
 GLContext::EmptyTexGarbageBin()
 {
@@ -2488,96 +2272,6 @@ SplitByChar(const nsACString& str, const char delim, std::vector<nsCString>* con
 }
 
 void
-GLContext::Readback(SharedSurface* src, gfx::DataSourceSurface* dest)
-{
-    MOZ_ASSERT(src && dest);
-    MOZ_ASSERT(dest->GetSize() == src->mSize);
-    MOZ_ASSERT(dest->GetFormat() == (src->mHasAlpha ? SurfaceFormat::B8G8R8A8
-                                                    : SurfaceFormat::B8G8R8X8));
-
-    MakeCurrent();
-
-    PushSurfaceLock(src);
-
-    GLuint tempFB = 0;
-    GLuint tempTex = 0;
-
-    {
-        const ScopedBindFramebuffer autoFB(this, src->mFB);
-
-        // We're consuming from the producer side, so which do we use?
-        // Really, we just want a read-only lock, so ConsumerAcquire is the best match.
-        src->ProducerReadAcquire();
-
-        if (src->NeedsIndirectReads()) {
-            fGenTextures(1, &tempTex);
-            {
-                ScopedBindTexture autoTex(this, tempTex);
-
-                GLenum format = src->mHasAlpha ? LOCAL_GL_RGBA
-                                               : LOCAL_GL_RGB;
-                auto width = src->mSize.width;
-                auto height = src->mSize.height;
-                fCopyTexImage2D(LOCAL_GL_TEXTURE_2D, 0, format, 0, 0, width,
-                                height, 0);
-            }
-
-            fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
-                                  LOCAL_GL_COLOR_ATTACHMENT0,
-                                  LOCAL_GL_TEXTURE_2D, tempTex, 0);
-        }
-
-        ReadPixelsIntoDataSurface(this, dest);
-
-        src->ProducerReadRelease();
-    }
-
-    if (tempFB)
-        fDeleteFramebuffers(1, &tempFB);
-
-    if (tempTex) {
-        fDeleteTextures(1, &tempTex);
-    }
-
-    PopSurfaceLock();
-}
-
-// Do whatever tear-down is necessary after drawing to our offscreen FBO,
-// if it's bound.
-void
-GLContext::AfterGLDrawCall()
-{
-    const auto screen = Screen();
-    if (screen) {
-        screen->AfterDrawCall();
-    }
-    mHeavyGLCallsSinceLastFlush = true;
-}
-
-// Do whatever setup is necessary to read from our offscreen FBO, if it's
-// bound.
-void
-GLContext::BeforeGLReadCall()
-{
-    const auto screen = Screen();
-    if (screen) {
-        screen->BeforeReadCall();
-    }
-}
-
-void
-GLContext::fBindFramebuffer(GLenum target, GLuint framebuffer)
-{
-    const auto screen = Screen();
-    if (screen) {
-        screen->BindFramebuffer(target, framebuffer);
-        return;
-    }
-
-    raw_fBindFramebuffer(target, framebuffer);
-}
-
-void
 GLContext::fCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x,
                            GLint y, GLsizei width, GLsizei height, GLint border)
 {
@@ -2591,17 +2285,7 @@ GLContext::fCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GL
     }
 
     BeforeGLReadCall();
-    bool didCopyTexImage2D = false;
-    const auto screen = Screen();
-    if (screen) {
-        didCopyTexImage2D = screen->CopyTexImage2D(target, level, internalformat, x, y,
-                                                   width, height, border);
-    }
-
-    if (!didCopyTexImage2D) {
-        raw_fCopyTexImage2D(target, level, internalformat, x, y, width, height,
-                            border);
-    }
+    raw_fCopyTexImage2D(target, level, internalformat, x, y, width, height, border);
     AfterGLReadCall();
 }
 
@@ -2609,27 +2293,6 @@ void
 GLContext::fGetIntegerv(const GLenum pname, GLint* const params)
 {
     switch (pname) {
-        // LOCAL_GL_FRAMEBUFFER_BINDING is equal to
-        // LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT,
-        // so we don't need two cases.
-        case LOCAL_GL_DRAW_FRAMEBUFFER_BINDING_EXT: {
-            const auto screen = Screen();
-            if (screen) {
-                *params = screen->CurDrawFB();
-                return;
-            }
-            break;
-        }
-
-        case LOCAL_GL_READ_FRAMEBUFFER_BINDING_EXT: {
-            const auto screen = Screen();
-            if (screen) {
-                *params = screen->CurReadFB();
-                return;
-            }
-            break;
-        }
-
         case LOCAL_GL_MAX_TEXTURE_SIZE:
             MOZ_ASSERT(mMaxTextureSize>0);
             *params = mMaxTextureSize;
@@ -2669,17 +2332,7 @@ GLContext::fReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum f
                        GLenum type, GLvoid* pixels)
 {
     BeforeGLReadCall();
-
-    bool didReadPixels = false;
-    const auto screen = Screen();
-    if (screen) {
-        didReadPixels = screen->ReadPixels(x, y, width, height, format, type, pixels);
-    }
-
-    if (!didReadPixels) {
-        raw_fReadPixels(x, y, width, height, format, type, pixels);
-    }
-
+    raw_fReadPixels(x, y, width, height, format, type, pixels);
     AfterGLReadCall();
 
     // Check if GL is giving back 1.0 alpha for
@@ -2777,29 +2430,7 @@ GLContext::fTexImage2D(GLenum target, GLint level, GLint internalformat,
     raw_fTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
 }
 
-bool
-GLContext::InitOffscreen(const gfx::IntSize& size, const SurfaceCaps& caps)
-{
-    if (!CreateScreenBuffer(size, caps))
-        return false;
-
-    MakeCurrent();
-    fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
-    fScissor(0, 0, size.width, size.height);
-    fViewport(0, 0, size.width, size.height);
-
-    mCaps = mScreen->mCaps;
-    MOZ_ASSERT(!mCaps.any);
-
-    return true;
-}
-
-bool
-GLContext::IsDrawingToDefaultFramebuffer()
-{
-    return Screen()->IsDrawFramebufferDefault();
-}
-
+////////////////////
 
 void
 GLContext::LockTopSurface()
@@ -2824,6 +2455,37 @@ GLContext::UnlockTopSurface()
         top->UnlockProd();
     }
 }
+
+////////////////////
+
+void
+GLContext::fBindFramebuffer(const GLenum target, GLuint fb)
+{
+    if (!fb && mFakeDefaultFB) {
+        fb = mFakeDefaultFB->mFB;
+    }
+    raw_fBindFramebuffer(target, fb);
+}
+
+bool
+GLContext::ResizeFakeDefaultFB(const gfx::IntSize& size)
+{
+    const bool depthStencil = bool(mCreationFlags & CreateContextFlags::DEPTH_STENCIL_CONFIG);
+    auto newFB = MozFramebuffer::Create(this, size, 0, depthStencil);
+    if (!newFB)
+        return false;
+
+    ResetFakeDefaultFB(Move(newFB));
+    return true;
+}
+
+void
+GLContext::ResetFakeDefaultFB(UniquePtr<MozFramebuffer> newFB)
+{
+    mFakeDefaultFB = Move(newFB);
+}
+
+////////////////////
 
 GLuint
 CreateTexture(GLContext* aGL, GLenum aInternalFormat, GLenum aFormat,
@@ -2854,28 +2516,6 @@ CreateTexture(GLContext* aGL, GLenum aInternalFormat, GLenum aFormat,
                      nullptr);
 
     return tex;
-}
-
-GLuint
-CreateTextureForOffscreen(GLContext* aGL, const GLFormats& aFormats,
-                          const gfx::IntSize& aSize)
-{
-    MOZ_ASSERT(aFormats.color_texInternalFormat);
-    MOZ_ASSERT(aFormats.color_texFormat);
-    MOZ_ASSERT(aFormats.color_texType);
-
-    GLenum internalFormat = aFormats.color_texInternalFormat;
-    GLenum unpackFormat = aFormats.color_texFormat;
-    GLenum unpackType = aFormats.color_texType;
-    if (aGL->IsANGLE()) {
-        MOZ_ASSERT(internalFormat == LOCAL_GL_RGBA);
-        MOZ_ASSERT(unpackFormat == LOCAL_GL_RGBA);
-        MOZ_ASSERT(unpackType == LOCAL_GL_UNSIGNED_BYTE);
-        internalFormat = LOCAL_GL_BGRA_EXT;
-        unpackFormat = LOCAL_GL_BGRA_EXT;
-    }
-
-    return CreateTexture(aGL, internalFormat, unpackFormat, unpackType, aSize);
 }
 
 uint32_t

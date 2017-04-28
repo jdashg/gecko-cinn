@@ -39,6 +39,7 @@ class DrawTarget;
 } // namespace gfx
 
 namespace layers {
+class KnowsCompositor;
 class LayersIPCChannel;
 class SharedSurfaceTextureClient;
 enum class TextureFlags : uint32_t;
@@ -49,6 +50,7 @@ class TextureClient;
 namespace gl {
 
 class GLContext;
+class MozFramebuffer;
 class SurfaceFactory;
 class ShSurfHandle;
 
@@ -58,14 +60,13 @@ public:
     const SharedSurfaceType mType;
 
     const WeakPtr<GLContext> mGL;
-    const GLenum mTexTarget;
-    const GLuint mTex;
-    const bool mOwnsTex;
+    const gfx::IntSize mSize;
+    const bool mCanRecycle;
+protected:
+    const UniquePtr<MozFramebuffer> mMozFB;
+public:
     const GLuint mFB;
 
-    const gfx::IntSize mSize;
-    const bool mHasAlpha;
-    const bool mCanRecycle;
 protected:
     bool mIsLocked;
     bool mIsWriteAcquired;
@@ -76,18 +77,14 @@ protected:
 
     static GLuint CreateFB(GLContext* gl);
 
-    SharedSurface(SharedSurfaceType type,
-                  GLContext* gl,
-                  GLenum texTarget, GLuint tex, bool ownsTex,
-                  GLuint fbIfNoTex,
-                  const gfx::IntSize& size,
-                  bool hasAlpha,
-                  bool canRecycle);
+    SharedSurface(SharedSurfaceType type, GLContext* gl, const gfx::IntSize& size,
+                  bool canRecycle, UniquePtr<MozFramebuffer> mozFB);
 
 public:
     virtual ~SharedSurface();
 
-    virtual void CopyFrom(SharedSurface* src);
+    void CopyFrom(const MozFramebuffer* src);
+    void CopyFrom(SharedSurface* src);
     virtual bool CopyFromSameType(SharedSurface* src) { return false; }
 
     // Specifies to the TextureClient any flags which
@@ -269,10 +266,10 @@ public:
 
     const SharedSurfaceType mType;
     GLContext* const mGL;
-    const SurfaceCaps mCaps;
+    const bool mDepthStencil;
     const RefPtr<layers::LayersIPCChannel> mAllocator;
     const layers::TextureFlags mFlags;
-    const GLFormats mFormats;
+
     gfx::IntSize mDepthStencilSize;
     GLuint mDepthRB;
     GLuint mStencilRB;
@@ -281,9 +278,18 @@ protected:
     RefQueue<layers::SharedSurfaceTextureClient> mRecycleFreePool;
     RefSet<layers::SharedSurfaceTextureClient> mRecycleTotalPool;
 
-    SurfaceFactory(SharedSurfaceType type, GLContext* gl, const SurfaceCaps& caps,
-                   const RefPtr<layers::LayersIPCChannel>& allocator,
-                   const layers::TextureFlags& flags);
+public:
+    static UniquePtr<SurfaceFactory> Create(GLContext* gl, bool depthStencil,
+                                            layers::KnowsCompositor* compositor,
+                                            layers::TextureFlags flags);
+    static UniquePtr<SurfaceFactory> Create(GLContext* gl, bool depthStencil,
+                                            layers::LayersIPCChannel* ipcChannel,
+                                            layers::LayersBackend backend,
+                                            layers::TextureFlags flags);
+
+protected:
+    SurfaceFactory(SharedSurfaceType type, GLContext* gl, bool depthStencil,
+                   layers::LayersIPCChannel* allocator, layers::TextureFlags flags);
 
 public:
     virtual ~SurfaceFactory();
@@ -313,21 +319,46 @@ public:
     bool Recycle(layers::SharedSurfaceTextureClient* texClient);
 };
 
+////
+
+class MorphableSurfaceFactory final
+{
+    UniquePtr<SurfaceFactory> mFactory;
+
+public:
+    void Reset(UniquePtr<SurfaceFactory> factory) {
+        mFactory = Move(factory);
+    }
+
+    bool Morph(layers::KnowsCompositor* info, bool force = false);
+
+    operator bool() const { return bool(mFactory); }
+    SurfaceFactory* operator ->() const { return mFactory.get(); }
+};
+
 class ScopedReadbackFB
 {
     GLContext* const mGL;
     ScopedBindFramebuffer mAutoFB;
-    ScopedBypassScreen mBypass;
-    GLuint mTempFB;
-    GLuint mTempTex;
+    UniquePtr<MozFramebuffer> mIndirectFB;
 
 public:
     explicit ScopedReadbackFB(SharedSurface* src);
     ~ScopedReadbackFB();
 };
 
-bool ReadbackSharedSurface(SharedSurface* src, gfx::DrawTarget* dst);
+bool ReadbackSharedSurface(SharedSurface* src, gfx::DrawTarget* dest);
+void Readback(SharedSurface* src, gfx::DataSourceSurface* dest);
 uint32_t ReadPixel(SharedSurface* src);
+
+template<typename T>
+inline UniquePtr<T>
+AsUnique(T* const x)
+{
+    UniquePtr<T> ret;
+    ret.reset(x);
+    return Move(ret);
+}
 
 } // namespace gl
 } // namespace mozilla

@@ -41,8 +41,8 @@ CreatePBufferSurface(GLLibraryEGL* egl,
 }
 
 /*static*/ UniquePtr<SharedSurface_ANGLEShareHandle>
-SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
-                                       const gfx::IntSize& size, bool hasAlpha)
+SharedSurface_ANGLEShareHandle::Create(GLContext* const gl, const EGLConfig config,
+                                       const gfx::IntSize& size)
 {
     GLLibraryEGL* egl = &sEGLLibrary;
     MOZ_ASSERT(egl);
@@ -55,11 +55,6 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
     if (!pbuffer)
         return nullptr;
 
-    // Make tex.
-    //gl->PushSurfaceLock(nullptr);
-    //const auto eglContext = (GLContextEGL*)gl;
-    //eglContext->SetEGLSurfaceOverride(pbuffer);
-
     HANDLE shareHandle = nullptr;
     IUnknown* maybeD3DTex = nullptr;
     MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(display, pbuffer,
@@ -69,9 +64,6 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
                                                     LOCAL_EGL_D3D_TEXTURE_ANGLE,
                                                     (void**)&maybeD3DTex) );
     MOZ_ASSERT(maybeD3DTex);
-
-    //eglContext->SetEGLSurfaceOverride(nullptr);
-    //gl->PopSurfaceLock();
 
     ID3D11Texture2D* d3dTex = nullptr;
     if (maybeD3DTex) {
@@ -83,15 +75,8 @@ SharedSurface_ANGLEShareHandle::Create(GLContext* gl, EGLConfig config,
         return nullptr;
     }
 
-    return UniquePtr<SharedSurface_ANGLEShareHandle>(
-        new SharedSurface_ANGLEShareHandle(gl, egl, size, hasAlpha, pbuffer, shareHandle,
-                                           d3dTex) );
-}
-
-EGLDisplay
-SharedSurface_ANGLEShareHandle::Display()
-{
-    return mEGL->Display();
+    return AsUnique(new SharedSurface_ANGLEShareHandle(gl, egl, size, pbuffer,
+                                                       shareHandle, d3dTex));
 }
 
 static ID3D11DeviceContext*
@@ -114,7 +99,7 @@ D3DContext(GLLibraryEGL* egl)
 }
 
 static IDXGIKeyedMutex*
-KeyedMutex(GLLibraryEGL* egl, EGLSurface pbuffer)
+KeyedMutex(GLLibraryEGL* const egl, const EGLSurface pbuffer)
 {
     IDXGIKeyedMutex* keyedMutex = nullptr;
     MOZ_ALWAYS_TRUE( egl->fQuerySurfacePointerANGLE(egl->Display(), pbuffer,
@@ -123,32 +108,25 @@ KeyedMutex(GLLibraryEGL* egl, EGLSurface pbuffer)
     return keyedMutex;
 }
 
-SharedSurface_ANGLEShareHandle::SharedSurface_ANGLEShareHandle(GLContext* gl,
-                                                               GLLibraryEGL* egl,
+SharedSurface_ANGLEShareHandle::SharedSurface_ANGLEShareHandle(GLContext* const gl,
+                                                               GLLibraryEGL* const egl,
                                                                const gfx::IntSize& size,
-                                                               bool hasAlpha,
-                                                               EGLSurface pbuffer,
-                                                               HANDLE shareHandle,
-                                                               ID3D11Texture2D* d3dTex)
-    : SharedSurface(SharedSurfaceType::EGLSurfaceANGLE,
-                    gl,
-                    0, 0, false, 0,
-                    size,
-                    hasAlpha,
-                    true)
+                                                               const EGLSurface pbuffer,
+                                                               const HANDLE shareHandle,
+                                                               ID3D11Texture2D* const angleTex)
+    : SharedSurface(SharedSurfaceType::EGLSurfaceANGLE, gl, size, true, nullptr)
     , mEGL(egl)
     , mPBuffer(pbuffer)
+    , mANGLETex(angleTex)
+    , mANGLEKeyedMutex(KeyedMutex(egl, pbuffer))
     , mShareHandle(shareHandle)
-    , mD3DTex(d3dTex)
     , mD3DContext(D3DContext(egl))
-    , mKeyedMutex(KeyedMutex(egl, pbuffer))
 {
 }
 
-
 SharedSurface_ANGLEShareHandle::~SharedSurface_ANGLEShareHandle()
 {
-    mEGL->fDestroySurface(Display(), mPBuffer);
+    mEGL->fDestroySurface(mEGL->Display(), mPBuffer);
 }
 
 void
@@ -165,8 +143,8 @@ SharedSurface_ANGLEShareHandle::UnlockProdImpl()
 void
 SharedSurface_ANGLEShareHandle::ProducerAcquireImpl()
 {
-    if (mKeyedMutex) {
-        HRESULT hr = mKeyedMutex->AcquireSync(0, 10000);
+    if (mANGLEKeyedMutex) {
+        HRESULT hr = mANGLEKeyedMutex->AcquireSync(0, 10000);
         if (hr == WAIT_TIMEOUT) {
             MOZ_CRASH("GFX: ANGLE share handle timeout");
         }
@@ -176,12 +154,12 @@ SharedSurface_ANGLEShareHandle::ProducerAcquireImpl()
 void
 SharedSurface_ANGLEShareHandle::ProducerReleaseImpl()
 {
-    if (mKeyedMutex) {
+    if (mANGLEKeyedMutex) {
         // XXX: ReleaseSync() has an implicit flush of the D3D commands
         // whether we need Flush() or not depends on the ANGLE semantics.
         // For now, we'll just do it
         mGL->fFlush();
-        mKeyedMutex->ReleaseSync(0);
+        mANGLEKeyedMutex->ReleaseSync(0);
         return;
     }
     mGL->fFinish();
@@ -196,8 +174,8 @@ SharedSurface_ANGLEShareHandle::ProducerReadAcquireImpl()
 void
 SharedSurface_ANGLEShareHandle::ProducerReadReleaseImpl()
 {
-    if (mKeyedMutex) {
-        mKeyedMutex->ReleaseSync(0);
+    if (mANGLEKeyedMutex) {
+        mANGLEKeyedMutex->ReleaseSync(0);
         return;
     }
 }
@@ -208,21 +186,21 @@ bool
 SharedSurface_ANGLEShareHandle::CopyFromSameType(SharedSurface* const opaqueSrc)
 {
     const auto src = (SharedSurface_ANGLEShareHandle*)opaqueSrc;
-    mD3DContext->CopyResource(mD3DTex, src->mD3DTex);
+    mD3DContext->CopyResource(mANGLETex, src->mANGLETex);
     return true;
 }
 
-////////////////////
+////
 
 bool
 SharedSurface_ANGLEShareHandle::ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor)
 {
-    gfx::SurfaceFormat format = mHasAlpha ? gfx::SurfaceFormat::B8G8R8A8
-                                          : gfx::SurfaceFormat::B8G8R8X8;
-    *out_descriptor = layers::SurfaceDescriptorD3D10((WindowsHandle)mShareHandle, format,
-                                                     mSize);
+    *out_descriptor = layers::SurfaceDescriptorD3D10((WindowsHandle)mShareHandle,
+                                                     gfx::SurfaceFormat::B8G8R8A8, mSize);
     return true;
 }
+
+////////////////////
 
 class ScopedLockTexture final
 {
@@ -372,36 +350,33 @@ SharedSurface_ANGLEShareHandle::ReadbackBySharedHandle(gfx::DataSourceSurface* o
 // Factory
 
 /*static*/ UniquePtr<SurfaceFactory_ANGLEShareHandle>
-SurfaceFactory_ANGLEShareHandle::Create(GLContext* gl, const SurfaceCaps& caps,
-                                        const RefPtr<layers::LayersIPCChannel>& allocator,
-                                        const layers::TextureFlags& flags)
+SurfaceFactory_ANGLEShareHandle::Create(GLContext* const gl, const bool depthStencil,
+                                        layers::LayersIPCChannel* allocator,
+                                        const layers::TextureFlags flags)
 {
-    GLLibraryEGL* egl = &sEGLLibrary;
+    // Enable surface sharing only if ANGLE and compositing devices
+    // are both WARP or both not WARP
+    gfx::DeviceManagerDx* const dm = gfx::DeviceManagerDx::Get();
+    if (!gl->IsANGLE() ||
+        gl->IsWARP() != dm->IsWARP() ||
+        !dm->TextureSharingWorks())
+    {
+        return nullptr;
+    }
+
+    const auto& egl = &sEGLLibrary;
     if (!egl)
         return nullptr;
 
-    auto ext = GLLibraryEGL::ANGLE_surface_d3d_texture_2d_share_handle;
+    const auto ext = GLLibraryEGL::ANGLE_surface_d3d_texture_2d_share_handle;
     if (!egl->IsExtensionSupported(ext))
         return nullptr;
 
-    EGLConfig config = GLContextEGL::Cast(gl)->mConfig;
+    const auto& config = GLContextEGL::Cast(gl)->mConfig;
 
-    typedef SurfaceFactory_ANGLEShareHandle ptrT;
-    UniquePtr<ptrT> ret( new ptrT(gl, caps, allocator, flags, egl, config) );
-    return Move(ret);
+    return AsUnique(new SurfaceFactory_ANGLEShareHandle(gl, depthStencil, allocator,
+                                                        flags, egl, config));
 }
-
-SurfaceFactory_ANGLEShareHandle::SurfaceFactory_ANGLEShareHandle(GLContext* gl,
-                                                                 const SurfaceCaps& caps,
-                                                                 const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                                 const layers::TextureFlags& flags,
-                                                                 GLLibraryEGL* egl,
-                                                                 EGLConfig config)
-    : SurfaceFactory(SharedSurfaceType::EGLSurfaceANGLE, gl, caps, allocator, flags)
-    , mProdGL(gl)
-    , mEGL(egl)
-    , mConfig(config)
-{ }
 
 } /* namespace gl */
 } /* namespace mozilla */

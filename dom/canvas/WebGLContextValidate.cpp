@@ -458,6 +458,7 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
     // Bindings, etc.
     mActiveTexture = 0;
     mDefaultFB_DrawBuffer0 = LOCAL_GL_BACK;
+    mDefaultFB_ReadBuffer = LOCAL_GL_BACK;
 
     mEmitContextLostErrorOnce = true;
     mWebGLError = LOCAL_GL_NO_ERROR;

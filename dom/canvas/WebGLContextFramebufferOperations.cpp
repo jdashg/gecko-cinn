@@ -8,7 +8,6 @@
 #include "WebGLRenderbuffer.h"
 #include "WebGLFramebuffer.h"
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 
 namespace mozilla {
 
@@ -33,9 +32,6 @@ WebGLContext::Clear(GLbitfield mask)
     }
 
     if (mBoundDrawFramebuffer) {
-        if (!mBoundDrawFramebuffer->ValidateAndInitAttachments(funcName))
-            return;
-
         if (mask & LOCAL_GL_COLOR_BUFFER_BIT) {
             for (const auto& cur : mBoundDrawFramebuffer->ColorDrawBuffers()) {
                 if (!cur->IsDefined())
@@ -57,7 +53,9 @@ WebGLContext::Clear(GLbitfield mask)
         }
     }
 
-    ScopedDrawCallWrapper wrapper(*this);
+    if (!DoBindDrawFB(funcName))
+        return;
+
     gl->fClear(mask);
 }
 
@@ -132,7 +130,7 @@ WebGLContext::ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b, WebGLboo
     mColorWriteMask[1] = g;
     mColorWriteMask[2] = b;
     mColorWriteMask[3] = a;
-    gl->fColorMask(r, g, b, a);
+    InvalidateDrawState(); // gl->fColorMask(r, g, b, a);
 }
 
 void
@@ -151,6 +149,11 @@ WebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers)
 {
     const char funcName[] = "drawBuffers";
     if (IsContextLost())
+        return;
+
+    gl->MakeCurrent();
+
+    if (!DoBindDrawFB(funcName))
         return;
 
     if (mBoundDrawFramebuffer) {
@@ -183,7 +186,12 @@ WebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers)
     }
 
     mDefaultFB_DrawBuffer0 = buffers[0];
-    gl->Screen()->SetDrawBuffer(buffers[0]);
+
+    auto driverMode = mDefaultFB_DrawBuffer0;
+    if (DefaultDrawFB() != 0 && driverMode == LOCAL_GL_BACK) {
+        driverMode = LOCAL_GL_COLOR_ATTACHMENT0;
+    }
+    gl->fDrawBuffers(1, &driverMode);
 }
 
 void

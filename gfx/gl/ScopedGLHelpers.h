@@ -362,31 +362,20 @@ protected:
     void UnwrapImpl();
 };
 
-struct ScopedBindPBO final
-    : public ScopedGLWrapper<ScopedBindPBO>
+struct ScopedUnbindPBO final
+    : public ScopedGLWrapper<ScopedUnbindPBO>
 {
-    friend struct ScopedGLWrapper<ScopedBindPBO>;
+    friend struct ScopedGLWrapper<ScopedUnbindPBO>;
 
-protected:
+private:
     const GLenum mTarget;
-    const GLuint mPBO;
+    GLuint mPBO;
 
 public:
-    ScopedBindPBO(GLContext* gl, GLenum target);
+    ScopedUnbindPBO(GLContext* gl, GLenum target);
 
-protected:
+private:
     void UnwrapImpl();
-};
-
-////
-
-class ScopedBypassScreen final
-{
-    GLContext* const mGL;
-
-public:
-    explicit ScopedBypassScreen(GLContext* gl);
-    ~ScopedBypassScreen();
 };
 
 } /* namespace gl */

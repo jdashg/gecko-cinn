@@ -28,16 +28,20 @@
 #include "mozilla/EnumeratedArray.h"
 #include "FilterSupport.h"
 #include "nsSVGEffects.h"
-#include "Layers.h"
 #include "nsBidi.h"
+#include "SharedSurface.h"
 
 class nsGlobalWindow;
 class nsXULElement;
 
 namespace mozilla {
-namespace gl {
+namespace gfx {
 class SourceSurface;
-} // namespace gl
+} // namespace gfx
+
+namespace layers {
+class PersistentBufferProvider;
+} // namespace layers
 
 namespace dom {
 class HTMLImageElementOrHTMLCanvasElementOrHTMLVideoElementOrImageBitmap;
@@ -409,7 +413,7 @@ public:
   }
 
   void DrawWindow(nsGlobalWindow& aWindow, double aX, double aY,
-		  double aW, double aH,
+      double aW, double aH,
                   const nsAString& aBgColor, uint32_t aFlags,
                   mozilla::ErrorResult& aError);
 
@@ -426,8 +430,8 @@ public:
 
   nsresult Redraw();
 
-  virtual int32_t GetWidth() const override;
-  virtual int32_t GetHeight() const override;
+  virtual int32_t GetWidth() override { return mWidth; }
+  virtual int32_t GetHeight() override { return mHeight; }
   gfx::IntSize GetSize() const { return gfx::IntSize(mWidth, mHeight); }
 
   // nsICanvasRenderingContextInternal
@@ -467,6 +471,10 @@ public:
                                          Layer* aOldLayer,
                                          LayerManager* aManager,
                                          bool aMirror = false) override;
+
+  gl::MorphableSurfaceFactory mSurfFactory;
+  RefPtr<layers::SharedSurfaceTextureClient> GetFrontBuffer();
+
   virtual bool ShouldForceInactiveLayer(LayerManager* aManager) override;
   void MarkContextClean() override;
   void MarkContextCleanForFrameCapture() override;

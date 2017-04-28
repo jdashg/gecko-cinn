@@ -33,7 +33,6 @@
 #include "GLContextGLX.h"
 #include "gfxUtils.h"
 #include "gfx2DGlue.h"
-#include "GLScreenBuffer.h"
 #include "gfxPrefs.h"
 
 #include "gfxCrashReporterUtils.h"
@@ -1046,32 +1045,6 @@ GLContextProviderGLX::CreateHeadless(CreateContextFlags flags,
     IntSize dummySize = IntSize(16, 16);
     SurfaceCaps dummyCaps = SurfaceCaps::Any();
     return CreateOffscreenPixmapContext(flags, dummySize, dummyCaps, out_failureId);
-}
-
-/*static*/ already_AddRefed<GLContext>
-GLContextProviderGLX::CreateOffscreen(const IntSize& size,
-                                      const SurfaceCaps& minCaps,
-                                      CreateContextFlags flags,
-                                      nsACString* const out_failureId)
-{
-    SurfaceCaps minBackbufferCaps = minCaps;
-    if (minCaps.antialias) {
-        minBackbufferCaps.antialias = false;
-        minBackbufferCaps.depth = false;
-        minBackbufferCaps.stencil = false;
-    }
-
-    RefPtr<GLContext> gl;
-    gl = CreateOffscreenPixmapContext(flags, size, minBackbufferCaps, out_failureId);
-    if (!gl)
-        return nullptr;
-
-    if (!gl->InitOffscreen(size, minCaps)) {
-        *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_GLX_INIT");
-        return nullptr;
-    }
-
-    return gl.forget();
 }
 
 /*static*/ GLContext*

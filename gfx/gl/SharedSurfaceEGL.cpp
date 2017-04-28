@@ -16,40 +16,8 @@
 namespace mozilla {
 namespace gl {
 
-/*static*/ UniquePtr<SharedSurface_EGLImage>
-SharedSurface_EGLImage::Create(GLContext* prodGL,
-                               const GLFormats& formats,
-                               const gfx::IntSize& size,
-                               bool hasAlpha,
-                               EGLContext context)
-{
-    GLLibraryEGL* egl = &sEGLLibrary;
-    MOZ_ASSERT(egl);
-    MOZ_ASSERT(context);
-
-    if (!HasExtensions(egl, prodGL))
-        return nullptr;
-
-    MOZ_ALWAYS_TRUE(prodGL->MakeCurrent());
-    GLuint prodTex = CreateTextureForOffscreen(prodGL, formats, size);
-    if (!prodTex)
-        return nullptr;
-
-    EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(uintptr_t(prodTex));
-    EGLImage image = egl->fCreateImage(egl->Display(), context,
-                                       LOCAL_EGL_GL_TEXTURE_2D, buffer,
-                                       nullptr);
-    if (!image) {
-        prodGL->fDeleteTextures(1, &prodTex);
-        return nullptr;
-    }
-
-    return UniquePtr<SharedSurface_EGLImage>(
-        new SharedSurface_EGLImage(prodGL, prodTex, size, hasAlpha, egl, formats, image));
-}
-
-bool
-SharedSurface_EGLImage::HasExtensions(GLLibraryEGL* egl, GLContext* gl)
+static bool
+HasExtensions(GLLibraryEGL* const egl, GLContext* const gl)
 {
     return egl->HasKHRImageBase() &&
            egl->IsExtensionSupported(GLLibraryEGL::KHR_gl_texture_2D_image) &&
@@ -57,48 +25,60 @@ SharedSurface_EGLImage::HasExtensions(GLLibraryEGL* egl, GLContext* gl)
             gl->IsExtensionSupported(GLContext::OES_EGL_image));
 }
 
-SharedSurface_EGLImage::SharedSurface_EGLImage(GLContext* gl,
-                                               GLuint tex,
+/*static*/ UniquePtr<SharedSurface_EGLImage>
+SharedSurface_EGLImage::Create(GLContext* const gl, const gfx::IntSize& size,
+                               const bool depthStencil, const EGLContext context)
+{
+    const auto& egl = &sEGLLibrary;
+    MOZ_ASSERT(egl);
+    MOZ_ASSERT(context);
+
+    if (!HasExtensions(egl, gl))
+        return nullptr;
+
+    gl->MakeCurrent();
+    auto mozFB = MozFramebuffer::Create(gl, size, 0, depthStencil);
+    if (!mozFB)
+        return nullptr;
+
+    const auto& tex = EGLClientBuffer(uintptr_t(mozFB->ColorTex()));
+    EGLImage image = egl->fCreateImage(egl->Display(), context,
+                                       LOCAL_EGL_GL_TEXTURE_2D, tex,
+                                       nullptr);
+    if (!image)
+        return nullptr;
+
+    return AsUnique(new SharedSurface_EGLImage(gl, size, Move(mozFB), egl, image));
+}
+
+SharedSurface_EGLImage::SharedSurface_EGLImage(GLContext* const gl,
                                                const gfx::IntSize& size,
-                                               bool hasAlpha,
-                                               GLLibraryEGL* egl,
-                                               const GLFormats& formats,
-                                               EGLImage image)
-    : SharedSurface(SharedSurfaceType::EGLImageShare,
-                    gl,
-                    LOCAL_GL_TEXTURE_2D, tex, true, 0,
-                    size,
-                    hasAlpha,
-                    false) // Can't recycle, as mSync changes never update TextureHost.
-    , mMutex("SharedSurface_EGLImage mutex")
+                                               UniquePtr<MozFramebuffer> mozFB,
+                                               GLLibraryEGL* const egl,
+                                               const EGLImage image)
+    : SharedSurface(SharedSurfaceType::EGLImageShare, gl, size,
+                    false, // Can't recycle, as mSync changes never updates TextureHost.
+                    Move(mozFB))
     , mEGL(egl)
-    , mFormats(formats)
     , mImage(image)
     , mSync(0)
-{}
+{ }
 
 SharedSurface_EGLImage::~SharedSurface_EGLImage()
 {
-    mEGL->fDestroyImage(Display(), mImage);
+    mEGL->fDestroyImage(mEGL->Display(), mImage);
 
     if (mSync) {
         // We can't call this unless we have the ext, but we will always have
         // the ext if we have something to destroy.
-        mEGL->fDestroySync(Display(), mSync);
+        mEGL->fDestroySync(mEGL->Display(), mSync);
         mSync = 0;
     }
-}
-
-layers::TextureFlags
-SharedSurface_EGLImage::GetTextureFlags() const
-{
-    return layers::TextureFlags::DEALLOCATE_CLIENT;
 }
 
 void
 SharedSurface_EGLImage::ProducerReleaseImpl()
 {
-    MutexAutoLock lock(mMutex);
     mGL->MakeCurrent();
 
     if (mEGL->IsExtensionSupported(GLLibraryEGL::KHR_fence_sync) &&
@@ -106,11 +86,11 @@ SharedSurface_EGLImage::ProducerReleaseImpl()
     {
         if (mSync) {
             MOZ_RELEASE_ASSERT(false, "GFX: Non-recycleable should not Fence twice.");
-            MOZ_ALWAYS_TRUE( mEGL->fDestroySync(Display(), mSync) );
+            MOZ_ALWAYS_TRUE( mEGL->fDestroySync(mEGL->Display(), mSync) );
             mSync = 0;
         }
 
-        mSync = mEGL->fCreateSync(Display(),
+        mSync = mEGL->fCreateSync(mEGL->Display(),
                                   LOCAL_EGL_SYNC_FENCE,
                                   nullptr);
         if (mSync) {
@@ -128,21 +108,16 @@ SharedSurface_EGLImage::ProducerReadAcquireImpl()
 {
     // Wait on the fence, because presumably we're going to want to read this surface
     if (mSync) {
-        mEGL->fClientWaitSync(Display(), mSync, 0, LOCAL_EGL_FOREVER);
+        mEGL->fClientWaitSync(mEGL->Display(), mSync, 0, LOCAL_EGL_FOREVER);
     }
-}
-
-EGLDisplay
-SharedSurface_EGLImage::Display() const
-{
-    return mEGL->Display();
 }
 
 bool
 SharedSurface_EGLImage::ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor)
 {
-    *out_descriptor = layers::EGLImageDescriptor((uintptr_t)mImage, (uintptr_t)mSync,
-                                                 mSize, mHasAlpha);
+    const bool hasAlpha = true;
+    *out_descriptor = layers::EGLImageDescriptor(uintptr_t(mImage), uintptr_t(mSync),
+                                                 mSize, hasAlpha);
     return true;
 }
 
@@ -151,27 +126,23 @@ SharedSurface_EGLImage::ReadbackBySharedHandle(gfx::DataSourceSurface* out_surfa
 {
     MOZ_ASSERT(out_surface);
     MOZ_ASSERT(NS_IsMainThread());
-    return sEGLLibrary.ReadbackEGLImage(mImage, out_surface);
+    return mEGL->ReadbackEGLImage(mImage, out_surface);
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 /*static*/ UniquePtr<SurfaceFactory_EGLImage>
-SurfaceFactory_EGLImage::Create(GLContext* prodGL, const SurfaceCaps& caps,
-                                const RefPtr<layers::LayersIPCChannel>& allocator,
-                                const layers::TextureFlags& flags)
+SurfaceFactory_EGLImage::Create(GLContext* const gl, const bool depthStencil,
+                                layers::LayersIPCChannel* const allocator,
+                                const layers::TextureFlags flags)
 {
-    EGLContext context = GLContextEGL::Cast(prodGL)->mContext;
+    const auto& egl = &sEGLLibrary;
+    if (!HasExtensions(egl, gl))
+        return nullptr;
 
-    typedef SurfaceFactory_EGLImage ptrT;
-    UniquePtr<ptrT> ret;
-
-    GLLibraryEGL* egl = &sEGLLibrary;
-    if (SharedSurface_EGLImage::HasExtensions(egl, prodGL)) {
-        ret.reset( new ptrT(prodGL, caps, allocator, flags, context) );
-    }
-
-    return Move(ret);
+    const auto& context = GLContextEGL::Cast(gl)->mContext;
+    return AsUnique(new SurfaceFactory_EGLImage(gl, depthStencil, allocator, flags,
+                                                context));
 }
 
 } // namespace gl

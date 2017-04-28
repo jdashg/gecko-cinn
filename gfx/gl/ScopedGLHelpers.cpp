@@ -533,57 +533,39 @@ ScopedPackState::UnwrapImpl()
 ////////////////////////////////////////////////////////////////////////
 // ScopedBindPBO
 
-static GLuint
-GetPBOBinding(GLContext* gl, GLenum target)
+ScopedUnbindPBO::ScopedUnbindPBO(GLContext* const gl, const GLenum target)
+    : ScopedGLWrapper<ScopedUnbindPBO>(gl)
+    , mTarget(target)
+    , mPBO(0)
 {
-    if (!gl->HasPBOState())
-        return 0;
+    if (!mGL->HasPBOState())
+        return;
 
-    GLenum targetBinding;
+    GLenum pnameForGet;
     switch (target) {
     case LOCAL_GL_PIXEL_PACK_BUFFER:
-        targetBinding = LOCAL_GL_PIXEL_PACK_BUFFER_BINDING;
+        pnameForGet = LOCAL_GL_PIXEL_PACK_BUFFER_BINDING;
         break;
 
     case LOCAL_GL_PIXEL_UNPACK_BUFFER:
-        targetBinding = LOCAL_GL_PIXEL_UNPACK_BUFFER_BINDING;
+        pnameForGet = LOCAL_GL_PIXEL_UNPACK_BUFFER_BINDING;
         break;
 
     default:
         MOZ_CRASH();
     }
 
-    return gl->GetIntAs<GLuint>(targetBinding);
+    mPBO = mGL->GetIntAs<GLuint>(pnameForGet);
+    mGL->fBindBuffer(mTarget, 0);
 }
 
-ScopedBindPBO::ScopedBindPBO(GLContext* gl, GLenum target)
-    : ScopedGLWrapper<ScopedBindPBO>(gl)
-    , mTarget(target)
-    , mPBO(GetPBOBinding(mGL, mTarget))
-{ }
-
 void
-ScopedBindPBO::UnwrapImpl()
+ScopedUnbindPBO::UnwrapImpl()
 {
     if (!mGL->HasPBOState())
         return;
 
     mGL->fBindBuffer(mTarget, mPBO);
-}
-
-////
-
-ScopedBypassScreen::ScopedBypassScreen(GLContext* gl)
-    : mGL(gl)
-{
-    MOZ_ASSERT(!mGL->mBypassScreen);
-    mGL->mBypassScreen = true;
-}
-
-ScopedBypassScreen::~ScopedBypassScreen()
-{
-    MOZ_ASSERT(mGL->mBypassScreen);
-    mGL->mBypassScreen = false;
 }
 
 } /* namespace gl */

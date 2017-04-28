@@ -34,14 +34,14 @@ public:
 
   void* GetNativeData(uint32_t aDataType) override {
     if (aDataType == NS_NATIVE_OPENGL_CONTEXT) {
-      mozilla::gl::SurfaceCaps caps = mozilla::gl::SurfaceCaps::ForRGB();
-      caps.preserve = false;
-      caps.bpp16 = false;
       nsCString discardFailureId;
-      RefPtr<GLContext> context = GLContextProvider::CreateOffscreen(
-        IntSize(mCompWidth, mCompHeight), caps,
+      RefPtr<GLContext> context = GLContextProvider::CreateHeadless(
         CreateContextFlags::REQUIRE_COMPAT_PROFILE,
         &discardFailureId);
+      const IntSize compSize(mCompWidth, mCompHeight);
+      if (context && !context->ResizeFakeDefaultFB(compSize)) {
+        context = nullptr;
+      }
       return context.forget().take();
     }
     return nullptr;

@@ -7,7 +7,6 @@
 
 #include "BasicLayersImpl.h"            // for FillWithMask, etc
 #include "GLContext.h"                  // for GLContext
-#include "GLScreenBuffer.h"             // for GLScreenBuffer
 #include "SharedSurface.h"              // for SharedSurface
 #include "SharedSurfaceGL.h"              // for SharedSurface
 #include "gfxPattern.h"                 // for gfxPattern, etc
@@ -15,6 +14,7 @@
 #include "gfxRect.h"                    // for gfxRect
 #include "gfxUtils.h"                   // for gfxUtils
 #include "gfx2DGlue.h"                  // for thebes --> moz2d transition
+#include "mozilla/dom/CanvasRenderingContext2D.h"
 #include "mozilla/gfx/BaseSize.h"       // for BaseSize
 #include "mozilla/gfx/Tools.h"
 #include "mozilla/gfx/Point.h"          // for IntSize
@@ -25,6 +25,7 @@
 #include "nsRect.h"                     // for mozilla::gfx::IntRect
 #include "gfxUtils.h"
 #include "client/TextureClientSharedSurface.h"
+#include "../../dom/canvas/WebGLContext.h"
 
 namespace mozilla {
 namespace layers {
@@ -32,12 +33,18 @@ namespace layers {
 using namespace mozilla::gfx;
 using namespace mozilla::gl;
 
+CanvasLayer::Data::Data(const gfx::IntSize& size, const bool isAlphaPremult)
+  : mSize(size)
+  , mIsAlphaPremult(isAlphaPremult)
+  , mBufferProvider(nullptr)
+{ }
+CanvasLayer::Data::~Data() = default;
+
+
 CopyableCanvasLayer::CopyableCanvasLayer(LayerManager* aLayerManager, void *aImplData) :
   CanvasLayer(aLayerManager, aImplData)
-  , mGLFrontbuffer(nullptr)
   , mIsAlphaPremultiplied(true)
   , mOriginPos(gl::OriginPos::TopLeft)
-  , mIsMirror(false)
 {
   MOZ_COUNT_CTOR(CopyableCanvasLayer);
 }
@@ -50,36 +57,27 @@ CopyableCanvasLayer::~CopyableCanvasLayer()
 void
 CopyableCanvasLayer::Initialize(const Data& aData)
 {
-  if (aData.mGLContext) {
-    mGLContext = aData.mGLContext;
-    mIsAlphaPremultiplied = aData.mIsGLAlphaPremult;
-    mOriginPos = gl::OriginPos::BottomLeft;
-    mIsMirror = aData.mIsMirror;
-
-    MOZ_ASSERT(mGLContext->IsOffscreen(), "canvas gl context isn't offscreen");
-
-    if (aData.mFrontbufferGLTex) {
-      gfx::IntSize size(aData.mSize.width, aData.mSize.height);
-      mGLFrontbuffer = SharedSurface_Basic::Wrap(aData.mGLContext, size, aData.mHasAlpha,
-                                                 aData.mFrontbufferGLTex);
-      mBufferProvider = aData.mBufferProvider;
-    }
-  } else if (aData.mBufferProvider) {
-    mBufferProvider = aData.mBufferProvider;
-  } else if (aData.mRenderer) {
-    mAsyncRenderer = aData.mRenderer;
-    mOriginPos = gl::OriginPos::BottomLeft;
-  } else {
-    MOZ_CRASH("GFX: CanvasLayer created without BufferProvider, DrawTarget or GLContext?");
-  }
-
   mBounds.SetRect(0, 0, aData.mSize.width, aData.mSize.height);
+  mIsAlphaPremultiplied = aData.mIsAlphaPremult;
+
+  mBufferProvider = aData.mBufferProvider;
+  mWebGL = aData.mWebGL;
+  mCanvas2D = aData.mCanvas2D;
+
+  if (bool(mBufferProvider) + bool(mWebGL) + bool(mCanvas2D) != 1) {
+    MOZ_CRASH("GFX: must have exactly one CanvasLayer source");
+  }
 }
 
 bool
 CopyableCanvasLayer::IsDataValid(const Data& aData)
 {
-  return mGLContext == aData.mGLContext;
+  return aData.mSize.width == mBounds.width &&
+         aData.mSize.height == mBounds.height &&
+         aData.mIsAlphaPremult == mIsAlphaPremultiplied &&
+         aData.mBufferProvider == mBufferProvider;
+         aData.mWebGL == mWebGL;
+         aData.mCanvas2D == mCanvas2D;
 }
 
 DataSourceSurface*
@@ -96,6 +94,26 @@ CopyableCanvasLayer::GetTempSurface(const IntSize& aSize,
   }
 
   return mCachedTempSurface;
+}
+
+RefPtr<layers::SharedSurfaceTextureClient>
+CopyableCanvasLayer::GetFrontTex() const
+{
+  RefPtr<SharedSurfaceTextureClient> frontTex;
+  if (mWebGL) {
+    frontTex = mWebGL->FrontBuffer();
+  } else if (mCanvas2D) {
+    frontTex = mCanvas2D->GetFrontBuffer();
+  } else {
+    // Don't warn.
+    return nullptr;
+  }
+
+  if (!frontTex) {
+    NS_WARNING("Null frame received.");
+    return nullptr;
+  }
+  return frontTex;
 }
 
 } // namespace layers

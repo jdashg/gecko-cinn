@@ -167,24 +167,6 @@ protected:
   RefPtr<gfx::SourceSurface > mSnapshot;
 };
 
-struct AutoReturnSnapshot
-{
-  PersistentBufferProvider* mBufferProvider;
-  RefPtr<gfx::SourceSurface>* mSnapshot;
-
-  explicit AutoReturnSnapshot(PersistentBufferProvider* aProvider = nullptr)
-  : mBufferProvider(aProvider)
-  , mSnapshot(nullptr)
-  {}
-
-  ~AutoReturnSnapshot()
-  {
-    if (mBufferProvider) {
-      mBufferProvider->ReturnSnapshot(mSnapshot ? mSnapshot->forget() : nullptr);
-    }
-  }
-};
-
 } // namespace layers
 } // namespace mozilla
 

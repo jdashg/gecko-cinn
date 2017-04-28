@@ -93,6 +93,7 @@
 #include "mozilla/ipc/DocumentRendererParent.h"
 #include "mozilla/ipc/PDocumentRendererParent.h"
 #include "mozilla/layers/PersistentBufferProvider.h"
+#include "mozilla/layers/TextureClientSharedSurface.h"
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/Telemetry.h"
@@ -131,6 +132,7 @@
 #ifdef USE_SKIA
 #include "SurfaceTypes.h"
 #include "GLBlitHelper.h"
+#include "SharedSurfaceGL.h"
 #endif
 
 using mozilla::gl::GLContext;
@@ -1832,6 +1834,12 @@ CanvasRenderingContext2D::TrySkiaGLTarget(RefPtr<gfx::DrawTarget>& aOutDT,
   AddDemotableContext(this);
   aOutProvider = new PersistentBufferProviderBasic(aOutDT);
   mIsSkiaGL = true;
+
+  const auto& gl = glue->GetGLContext();
+  const bool depthStencil = false;
+  mSurfFactory.Reset(AsUnique(new gl::SurfaceFactory_Basic(gl, depthStencil, nullptr,
+                                                           layers::TextureFlags(0))));
+
   // Drop a note in the debug builds if we ever use accelerated Skia canvas.
   gfxWarningOnce() << "Using SkiaGL canvas.";
 #endif
@@ -1889,18 +1897,6 @@ CanvasRenderingContext2D::TryBasicTarget(RefPtr<gfx::DrawTarget>& aOutDT,
 
   aOutProvider = new PersistentBufferProviderBasic(aOutDT);
   return true;
-}
-
-int32_t
-CanvasRenderingContext2D::GetWidth() const
-{
-  return mWidth;
-}
-
-int32_t
-CanvasRenderingContext2D::GetHeight() const
-{
-  return mHeight;
 }
 
 NS_IMETHODIMP
@@ -5843,28 +5839,23 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
     return nullptr;
   }
 
+
+
+  CanvasLayer::Data layerData(GetSize(), true);
+  if (mIsSkiaGL) {
+    layerData.mCanvas2D = this;
+  } else {
+    layerData.mBufferProvider = mBufferProvider;
+  }
+
   if (!mResetLayer && aOldLayer) {
     CanvasRenderingContext2DUserData* userData =
       static_cast<CanvasRenderingContext2DUserData*>(
         aOldLayer->GetUserData(&g2DContextLayerUserData));
 
-    CanvasLayer::Data data;
-
-    if (mIsSkiaGL) {
-      GLuint skiaGLTex = SkiaGLTex();
-      if (skiaGLTex) {
-        SkiaGLGlue* glue = gfxPlatform::GetPlatform()->GetSkiaGLGlue();
-        MOZ_ASSERT(glue);
-        data.mGLContext = glue->GetGLContext();
-        data.mFrontbufferGLTex = skiaGLTex;
-      }
-    }
-
-    data.mBufferProvider = mBufferProvider;
-
     if (userData &&
         userData->IsForContext(this) &&
-        static_cast<CanvasLayer*>(aOldLayer)->IsDataValid(data)) {
+        static_cast<CanvasLayer*>(aOldLayer)->IsDataValid(layerData)) {
       RefPtr<Layer> ret = aOldLayer;
       return ret.forget();
     }
@@ -5895,27 +5886,10 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
           CanvasRenderingContext2DUserData::DidTransactionCallback, userData);
   canvasLayer->SetUserData(&g2DContextLayerUserData, userData);
 
-  CanvasLayer::Data data;
-  data.mSize = GetSize();
-  data.mHasAlpha = !mOpaque;
-
   canvasLayer->SetPreTransactionCallback(
           CanvasRenderingContext2DUserData::PreTransactionCallback, userData);
 
-
-  if (mIsSkiaGL) {
-      GLuint skiaGLTex = SkiaGLTex();
-      if (skiaGLTex) {
-        SkiaGLGlue* glue = gfxPlatform::GetPlatform()->GetSkiaGLGlue();
-        MOZ_ASSERT(glue);
-        data.mGLContext = glue->GetGLContext();
-        data.mFrontbufferGLTex = skiaGLTex;
-      }
-  }
-
-  data.mBufferProvider = mBufferProvider;
-
-  canvasLayer->Initialize(data);
+  canvasLayer->Initialize(layerData);
   uint32_t flags = mOpaque ? Layer::CONTENT_OPAQUE : 0;
   canvasLayer->SetContentFlags(flags);
   canvasLayer->Updated();
@@ -5923,6 +5897,34 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
   mResetLayer = false;
 
   return canvasLayer.forget();
+}
+
+RefPtr<layers::SharedSurfaceTextureClient>
+CanvasRenderingContext2D::GetFrontBuffer()
+{
+  const auto& skiaGLTex = SkiaGLTex();
+  MOZ_ASSERT(skiaGLTex);
+  const auto& glue = gfxPlatform::GetPlatform()->GetSkiaGLGlue();
+  MOZ_ASSERT(glue);
+  const auto& gl = glue->GetGLContext();
+
+  if (mSurfFactory)
+    return nullptr;
+
+  const gfx::IntSize srcSize(mWidth, mHeight);
+  const auto& texClient = mSurfFactory->NewTexClient(srcSize);
+  if (!texClient)
+    return nullptr;
+  const auto& dest = texClient->Surf();
+
+  gl->PushSurfaceLock(dest);
+  dest->ProducerAcquire();
+  gl->BlitHelper()->DrawBlitTextureToFramebuffer(skiaGLTex, dest->mFB, srcSize,
+                                                 dest->mSize);
+  dest->ProducerRelease();
+  MOZ_ALWAYS_TRUE( gl->PopSurfaceLock() == dest );
+
+  return texClient;
 }
 
 void

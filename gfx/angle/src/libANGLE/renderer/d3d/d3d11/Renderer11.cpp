@@ -927,7 +927,7 @@ egl::ConfigSet Renderer11::generateConfigs()
     std::vector<GLenum> colorBufferFormats;
 
     // 32-bit supported formats
-    colorBufferFormats.push_back(GL_BGRA8_EXT);
+    //colorBufferFormats.push_back(GL_BGRA8_EXT);
     colorBufferFormats.push_back(GL_RGBA8_OES);
 
     // 24-bit supported formats

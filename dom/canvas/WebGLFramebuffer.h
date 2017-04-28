@@ -181,6 +181,7 @@ protected:
 
     ////
 
+    std::vector<GLenum> mColorDrawBufferEnums;
     std::vector<const WebGLFBAttachPoint*> mColorDrawBuffers; // Non-null
     const WebGLFBAttachPoint* mColorReadBuffer; // Null if NONE
 

@@ -19,38 +19,27 @@ namespace gl {
 class GLContext;
 class GLLibraryEGL;
 
-class SharedSurface_ANGLEShareHandle
+class SharedSurface_ANGLEShareHandle final
     : public SharedSurface
 {
+    GLLibraryEGL* const mEGL;
+    const EGLSurface mPBuffer;
+    const RefPtr<IDXGIKeyedMutex> mANGLEKeyedMutex;
+    const RefPtr<ID3D11Texture2D> mANGLETex;
+    const HANDLE mShareHandle;
+    const RefPtr<ID3D11DeviceContext> mD3DContext;
+
 public:
     static UniquePtr<SharedSurface_ANGLEShareHandle> Create(GLContext* gl,
                                                             EGLConfig config,
-                                                            const gfx::IntSize& size,
-                                                            bool hasAlpha);
-
-protected:
-    GLLibraryEGL* const mEGL;
-    const EGLSurface mPBuffer;
+                                                            const gfx::IntSize& size);
+private:
+    SharedSurface_ANGLEShareHandle(GLContext* gl, GLLibraryEGL* egl,
+                                   const gfx::IntSize& size, EGLSurface pbuffer,
+                                   HANDLE shareHandle, ID3D11Texture2D* d3dTex);
 public:
-    const HANDLE mShareHandle;
-    const RefPtr<ID3D11Texture2D> mD3DTex;
-    const RefPtr<ID3D11DeviceContext> mD3DContext;
-protected:
-    RefPtr<IDXGIKeyedMutex> mKeyedMutex;
-
-    SharedSurface_ANGLEShareHandle(GLContext* gl,
-                                   GLLibraryEGL* egl,
-                                   const gfx::IntSize& size,
-                                   bool hasAlpha,
-                                   EGLSurface pbuffer,
-                                   HANDLE shareHandle,
-                                   ID3D11Texture2D* d3dTex);
-
-    EGLDisplay Display();
-
-public:
-    virtual ~SharedSurface_ANGLEShareHandle();
-
+    virtual ~SharedSurface_ANGLEShareHandle() override;
+private:
     virtual void LockProdImpl() override;
     virtual void UnlockProdImpl() override;
 
@@ -66,32 +55,34 @@ public:
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
 };
 
+////
 
-
-class SurfaceFactory_ANGLEShareHandle
+class SurfaceFactory_ANGLEShareHandle final
     : public SurfaceFactory
 {
-protected:
-    GLContext* const mProdGL;
     GLLibraryEGL* const mEGL;
     const EGLConfig mConfig;
 
 public:
     static UniquePtr<SurfaceFactory_ANGLEShareHandle> Create(GLContext* gl,
-                                                             const SurfaceCaps& caps,
-                                                             const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                             const layers::TextureFlags& flags);
+                                                             bool depthStencil,
+                                                             layers::LayersIPCChannel* allocator,
+                                                             layers::TextureFlags flags);
 
-protected:
-    SurfaceFactory_ANGLEShareHandle(GLContext* gl, const SurfaceCaps& caps,
-                                    const RefPtr<layers::LayersIPCChannel>& allocator,
-                                    const layers::TextureFlags& flags, GLLibraryEGL* egl,
-                                    EGLConfig config);
+private:
+    SurfaceFactory_ANGLEShareHandle(GLContext* const gl, const bool depthStencil,
+                                    layers::LayersIPCChannel* const allocator,
+                                    const layers::TextureFlags flags,
+                                    GLLibraryEGL* const egl, const EGLConfig config)
+        : SurfaceFactory(SharedSurfaceType::EGLSurfaceANGLE, gl, depthStencil, allocator,
+                         flags)
+        , mEGL(egl)
+        , mConfig(config)
+    { }
 
     virtual UniquePtr<SharedSurface>
     NewSharedSurfaceImpl(const gfx::IntSize& size) override {
-        return SharedSurface_ANGLEShareHandle::Create(mProdGL, mConfig, size,
-                                                      mCaps.alpha);
+        return SharedSurface_ANGLEShareHandle::Create(mGL, mConfig, size);
     }
 };
 

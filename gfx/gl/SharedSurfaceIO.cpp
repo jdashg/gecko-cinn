@@ -14,20 +14,13 @@
 namespace mozilla {
 namespace gl {
 
-/*static*/ UniquePtr<SharedSurface_IOSurface>
-SharedSurface_IOSurface::Create(const RefPtr<MacIOSurface>& ioSurf,
-                                GLContext* gl,
-                                bool hasAlpha)
-{
-    MOZ_ASSERT(ioSurf);
-    MOZ_ASSERT(gl);
-
-    auto size = gfx::IntSize::Truncate(ioSurf->GetWidth(), ioSurf->GetHeight());
-
-    typedef SharedSurface_IOSurface ptrT;
-    UniquePtr<ptrT> ret( new ptrT(ioSurf, gl, size, hasAlpha) );
-    return Move(ret);
-}
+SharedSurface_IOSurface::SharedSurface_IOSurface(GLContext* const gl,
+                                                 const gfx::IntSize& size,
+                                                 UniquePtr<MozFramebuffer>&& mozFB,
+                                                 MacIOSurface* const ioSurf)
+    : SharedSurface(SharedSurfaceType::IOSurface, gl, size, true, mozFB)
+    , mIOSurf(ioSurf)
+{ }
 
 void
 SharedSurface_IOSurface::ProducerReleaseImpl()
@@ -119,40 +112,10 @@ SharedSurface_IOSurface::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei hei
     return true;
 }
 
-static GLuint
-TexForIOSurf(GLContext* gl, MacIOSurface* ioSurf)
-{
-    gl->MakeCurrent();
-
-    GLuint tex = 0;
-    gl->fGenTextures(1, &tex);
-    ScopedBindTexture texture(gl, tex, LOCAL_GL_TEXTURE_RECTANGLE_ARB);
-    gl->TexParams_SetClampNoMips(LOCAL_GL_TEXTURE_RECTANGLE_ARB);
-
-    CGLContextObj cgl = GLContextCGL::Cast(gl)->GetCGLContext();
-    MOZ_ASSERT(cgl);
-
-    ioSurf->CGLTexImageIOSurface2D(cgl);
-}
-
-SharedSurface_IOSurface::SharedSurface_IOSurface(const RefPtr<MacIOSurface>& ioSurf,
-                                                 GLContext* gl,
-                                                 const gfx::IntSize& size,
-                                                 bool hasAlpha)
-  : SharedSurface(SharedSurfaceType::IOSurface,
-                  gl,
-                  LOCAL_GL_TEXTURE_RECTANGLE_ARB, TexForIOSurf(gl, ioSurf), true, 0,
-                  size,
-                  hasAlpha,
-                  true)
-  , mIOSurf(ioSurf)
-{
-}
-
 bool
 SharedSurface_IOSurface::ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor)
 {
-    bool isOpaque = !mHasAlpha;
+    bool isOpaque = false;
     *out_descriptor = layers::SurfaceDescriptorMacIOSurface(mIOSurf->GetIOSurfaceID(),
                                                             mIOSurf->GetContentsScaleFactor(),
                                                             isOpaque);
@@ -187,17 +150,11 @@ SharedSurface_IOSurface::ReadbackBySharedHandle(gfx::DataSourceSurface* out_surf
 ////////////////////////////////////////////////////////////////////////
 // SurfaceFactory_IOSurface
 
-/*static*/ UniquePtr<SurfaceFactory_IOSurface>
-SurfaceFactory_IOSurface::Create(GLContext* gl, const SurfaceCaps& caps,
-                                 const RefPtr<layers::LayersIPCChannel>& allocator,
-                                 const layers::TextureFlags& flags)
+/*static*/ gfx::IntSize
+SurfaceFactory_IOSurface::MaxIOSurfaceSize()
 {
-    auto maxDims = gfx::IntSize::Truncate(MacIOSurface::GetMaxWidth(),
-                                          MacIOSurface::GetMaxHeight());
-
-    typedef SurfaceFactory_IOSurface ptrT;
-    UniquePtr<ptrT> ret( new ptrT(gl, caps, allocator, flags, maxDims) );
-    return Move(ret);
+    return gfx::IntSize::Truncate(MacIOSurface::GetMaxWidth(),
+                                  MacIOSurface::GetMaxHeight());
 }
 
 UniquePtr<SharedSurface>
@@ -209,17 +166,33 @@ SurfaceFactory_IOSurface::NewSharedSurfaceImpl(const gfx::IntSize& size)
         return nullptr;
     }
 
-    const auto& hasAlpha = mCaps.alpha;
-    RefPtr<MacIOSurface> ioSurf;
-    ioSurf = MacIOSurface::CreateIOSurface(size.width, size.height, 1.0,
-                                           hasAlpha);
-
+    const auto& hasAlpha = true;
+    RefPtr<MacIOSurface> ioSurf = MacIOSurface::CreateIOSurface(size.width, size.height,
+                                                                1.0, hasAlpha);
     if (!ioSurf) {
         NS_WARNING("Failed to create MacIOSurface.");
         return nullptr;
     }
 
-    return SharedSurface_IOSurface::Create(ioSurf, mGL, hasAlpha);
+    mGL->MakeCurrent();
+
+    const GLenum target = LOCAL_GL_TEXTURE_RECTANGLE_ARB;
+    const GLuint tex = mGL->CreateTexture();
+    {
+        const ScopedBindTexture texture(mGL, tex, target);
+        mGL->TexParams_SetClampNoMips(target);
+
+        const auto& cglContext = GLContextCGL::Cast(mGL)->GetCGLContext();
+        MOZ_ASSERT(cglContext);
+        ioSurf->CGLTexImageIOSurface2D(cglContext);
+    }
+
+    const auto& mozFB = MozFramebuffer::CreateWith(gl, size, 0, mDepthStencil, target,
+                                                   tex);
+    if (!mozFB)
+        return nullptr;
+
+    return new SharedSurface_IOSurface(mGL, size, mozFB, ioSurf);
 }
 
 } // namespace gl

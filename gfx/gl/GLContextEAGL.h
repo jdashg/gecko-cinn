@@ -55,19 +55,12 @@ public:
 
     virtual void GetWSIInfo(nsCString* const out) const override;
 
-    virtual GLuint GetDefaultFramebuffer() override {
-        return mBackbufferFB;
-    }
-
     virtual bool RenewSurface(nsIWidget* aWidget) override {
         // FIXME: should use the passed widget instead of the existing one.
         return RecreateRB();
     }
 
 private:
-    GLuint mBackbufferRB;
-    GLuint mBackbufferFB;
-
     void* mLayer;
 
     bool RecreateRB();

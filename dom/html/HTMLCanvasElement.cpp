@@ -867,31 +867,34 @@ HTMLCanvasElement::TransferControlToOffscreen(ErrorResult& aRv)
     return nullptr;
   }
 
-  if (!mOffscreenCanvas) {
-    nsIntSize sz = GetWidthHeight();
-    RefPtr<AsyncCanvasRenderer> renderer = GetAsyncCanvasRenderer();
-    renderer->SetWidth(sz.width);
-    renderer->SetHeight(sz.height);
-
-    nsCOMPtr<nsIGlobalObject> global =
-      do_QueryInterface(OwnerDoc()->GetInnerWindow());
-    mOffscreenCanvas = new OffscreenCanvas(global,
-                                           sz.width,
-                                           sz.height,
-                                           GetCompositorBackendType(),
-                                           renderer);
-    if (mWriteOnly) {
-      mOffscreenCanvas->SetWriteOnly();
-    }
-
-    if (!mContextObserver) {
-      mContextObserver = new HTMLCanvasElementObserver(this);
-    }
-  } else {
+  if (mOffscreenCanvas) {
     aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
+    return mOffscreenCanvas;
   }
 
-  return mOffscreenCanvas;
+  aRv.Throw(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
+  return nullptr;
+  /*
+  nsIntSize sz = GetWidthHeight();
+  RefPtr<AsyncCanvasRenderer> renderer = GetAsyncCanvasRenderer();
+  renderer->SetWidth(sz.width);
+  renderer->SetHeight(sz.height);
+
+  nsCOMPtr<nsIGlobalObject> global =
+    do_QueryInterface(OwnerDoc()->GetInnerWindow());
+  mOffscreenCanvas = new OffscreenCanvas(global,
+                                         sz.width,
+                                         sz.height,
+                                         GetCompositorBackendType(),
+                                         renderer);
+  if (mWriteOnly) {
+    mOffscreenCanvas->SetWriteOnly();
+  }
+
+  if (!mContextObserver) {
+    mContextObserver = new HTMLCanvasElementObserver(this);
+  }
+  */
 }
 
 already_AddRefed<File>
@@ -1143,6 +1146,8 @@ HTMLCanvasElement::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
   }
 
   if (mOffscreenCanvas) {
+    return nullptr;
+    /*
     if (!mResetLayer &&
         aOldLayer && aOldLayer->HasUserData(&sOffscreenCanvasLayerUserDataDummy)) {
       RefPtr<Layer> ret = aOldLayer;
@@ -1158,13 +1163,14 @@ HTMLCanvasElement::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
     LayerUserData* userData = nullptr;
     layer->SetUserData(&sOffscreenCanvasLayerUserDataDummy, userData);
 
-    CanvasLayer::Data data;
+    CanvasLayer::Data data(GetWidthHeight(), true);
     data.mRenderer = GetAsyncCanvasRenderer();
     data.mSize = GetWidthHeight();
     layer->Initialize(data);
 
     layer->Updated();
     return layer.forget();
+    */
   }
 
   return nullptr;
@@ -1319,12 +1325,15 @@ HTMLCanvasElement::GetSurfaceSnapshot(bool* aPremultAlpha)
 AsyncCanvasRenderer*
 HTMLCanvasElement::GetAsyncCanvasRenderer()
 {
+  MOZ_CRASH("GetAsyncCanvasRenderer");
+  /*
   if (!mAsyncCanvasRenderer) {
     mAsyncCanvasRenderer = new AsyncCanvasRenderer();
     mAsyncCanvasRenderer->mHTMLCanvasElement = this;
   }
 
   return mAsyncCanvasRenderer;
+  */
 }
 
 layers::LayersBackend

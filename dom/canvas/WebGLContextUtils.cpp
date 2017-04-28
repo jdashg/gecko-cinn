@@ -57,7 +57,7 @@ StringValue(JSContext* cx, const char* chars, ErrorResult& rv)
 }
 
 void
-WebGLContext::GenerateWarning(const char* fmt, ...)
+WebGLContext::GenerateWarning(const char* fmt, ...) const
 {
     va_list ap;
     va_start(ap, fmt);
@@ -68,7 +68,7 @@ WebGLContext::GenerateWarning(const char* fmt, ...)
 }
 
 void
-WebGLContext::GenerateWarning(const char* fmt, va_list ap)
+WebGLContext::GenerateWarning(const char* fmt, va_list ap) const
 {
     if (!ShouldGenerateWarnings())
         return;
@@ -147,7 +147,7 @@ WebGLContext::GeneratePerfWarning(const char* fmt, ...) const
 }
 
 void
-WebGLContext::SynthesizeGLError(GLenum err)
+WebGLContext::SynthesizeGLError(GLenum err) const
 {
     /* ES2 section 2.5 "GL Errors" states that implementations can have
      * multiple 'flags', as errors might be caught in different parts of
@@ -160,7 +160,7 @@ WebGLContext::SynthesizeGLError(GLenum err)
 }
 
 void
-WebGLContext::SynthesizeGLError(GLenum err, const char* fmt, ...)
+WebGLContext::SynthesizeGLError(GLenum err, const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -171,7 +171,7 @@ WebGLContext::SynthesizeGLError(GLenum err, const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorInvalidEnum(const char* fmt, ...)
+WebGLContext::ErrorInvalidEnum(const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -182,7 +182,7 @@ WebGLContext::ErrorInvalidEnum(const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorInvalidEnumInfo(const char* info, GLenum enumValue)
+WebGLContext::ErrorInvalidEnumInfo(const char* info, GLenum enumValue) const
 {
     nsCString name;
     EnumName(enumValue, &name);
@@ -192,7 +192,7 @@ WebGLContext::ErrorInvalidEnumInfo(const char* info, GLenum enumValue)
 
 void
 WebGLContext::ErrorInvalidEnumInfo(const char* info, const char* funcName,
-                                   GLenum enumValue)
+                                   GLenum enumValue) const
 {
     nsCString name;
     EnumName(enumValue, &name);
@@ -202,7 +202,7 @@ WebGLContext::ErrorInvalidEnumInfo(const char* info, const char* funcName,
 }
 
 void
-WebGLContext::ErrorInvalidOperation(const char* fmt, ...)
+WebGLContext::ErrorInvalidOperation(const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -213,7 +213,7 @@ WebGLContext::ErrorInvalidOperation(const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorInvalidValue(const char* fmt, ...)
+WebGLContext::ErrorInvalidValue(const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -224,7 +224,7 @@ WebGLContext::ErrorInvalidValue(const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorInvalidFramebufferOperation(const char* fmt, ...)
+WebGLContext::ErrorInvalidFramebufferOperation(const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -235,7 +235,7 @@ WebGLContext::ErrorInvalidFramebufferOperation(const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorOutOfMemory(const char* fmt, ...)
+WebGLContext::ErrorOutOfMemory(const char* fmt, ...) const
 {
     va_list va;
     va_start(va, fmt);
@@ -246,7 +246,7 @@ WebGLContext::ErrorOutOfMemory(const char* fmt, ...)
 }
 
 void
-WebGLContext::ErrorImplementationBug(const char* fmt, ...)
+WebGLContext::ErrorImplementationBug(const char* fmt, ...) const
 {
     const nsPrintfCString warning("Implementation bug, please file at %s! %s",
                                   "https://bugzilla.mozilla.org/", fmt);
@@ -261,7 +261,7 @@ WebGLContext::ErrorImplementationBug(const char* fmt, ...)
     return SynthesizeGLError(LOCAL_GL_OUT_OF_MEMORY);
 }
 
-const char*
+/*static*/ const char*
 WebGLContext::ErrorName(GLenum error)
 {
     switch(error) {
@@ -626,7 +626,7 @@ WebGLContext::EnumName(GLenum val, nsCString* out_name)
 }
 
 void
-WebGLContext::ErrorInvalidEnumArg(const char* funcName, const char* argName, GLenum val)
+WebGLContext::ErrorInvalidEnumArg(const char* funcName, const char* argName, GLenum val) const
 {
     nsCString enumName;
     EnumName(val, &enumName);
@@ -673,7 +673,7 @@ IsTextureFormatCompressed(TexInternalFormat format)
 }
 
 GLenum
-WebGLContext::GetAndFlushUnderlyingGLErrors()
+WebGLContext::GetAndFlushUnderlyingGLErrors() const
 {
     // Get and clear GL error in ALL cases.
     GLenum error = gl->fGetError();
@@ -687,45 +687,15 @@ WebGLContext::GetAndFlushUnderlyingGLErrors()
 }
 
 #ifdef DEBUG
-// For NaNs, etc.
-static bool
-IsCacheCorrect(float cached, float actual)
-{
-    if (IsNaN(cached)) {
-        // GL is allowed to do anything it wants for NaNs, so if we're shadowing
-        // a NaN, then whatever `actual` is might be correct.
-        return true;
-    }
-
-    return cached == actual;
-}
-
 void
 AssertUintParamCorrect(gl::GLContext* gl, GLenum pname, GLuint shadow)
 {
     GLuint val = 0;
     gl->GetUIntegerv(pname, &val);
     if (val != shadow) {
-      printf_stderr("Failed 0x%04x shadow: Cached 0x%x/%u, should be 0x%x/%u.\n",
-                    pname, shadow, shadow, val, val);
-      MOZ_ASSERT(false, "Bad cached value.");
-    }
-}
-
-void
-AssertMaskedUintParamCorrect(gl::GLContext* gl, GLenum pname, GLuint mask,
-                             GLuint shadow)
-{
-    GLuint val = 0;
-    gl->GetUIntegerv(pname, &val);
-
-    const GLuint valMasked = val & mask;
-    const GLuint shadowMasked = shadow & mask;
-
-    if (valMasked != shadowMasked) {
-      printf_stderr("Failed 0x%04x shadow: Cached 0x%x/%u, should be 0x%x/%u.\n",
-                    pname, shadowMasked, shadowMasked, valMasked, valMasked);
-      MOZ_ASSERT(false, "Bad cached value.");
+        printf_stderr("Failed 0x%04x shadow: Cached 0x%x/%u, should be 0x%x/%u.\n",
+                      pname, shadow, shadow, val, val);
+        MOZ_ASSERT(false, "Bad cached value.");
     }
 }
 #else
@@ -734,153 +704,6 @@ AssertUintParamCorrect(gl::GLContext*, GLenum, GLuint)
 {
 }
 #endif
-
-void
-WebGLContext::AssertCachedBindings()
-{
-#ifdef DEBUG
-    MakeContextCurrent();
-
-    GetAndFlushUnderlyingGLErrors();
-
-    if (IsWebGL2() || IsExtensionEnabled(WebGLExtensionID::OES_vertex_array_object)) {
-        GLuint bound = mBoundVertexArray ? mBoundVertexArray->GLName() : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_VERTEX_ARRAY_BINDING, bound);
-    }
-
-    // Framebuffers
-    if (IsWebGL2()) {
-        GLuint bound = mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
-                                             : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_DRAW_FRAMEBUFFER_BINDING, bound);
-
-        bound = mBoundReadFramebuffer ? mBoundReadFramebuffer->mGLName : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_READ_FRAMEBUFFER_BINDING, bound);
-    } else {
-        MOZ_ASSERT(mBoundDrawFramebuffer == mBoundReadFramebuffer);
-        GLuint bound = mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
-                                             : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_FRAMEBUFFER_BINDING, bound);
-    }
-
-    GLint stencilBits = 0;
-    if (GetStencilBits(&stencilBits)) { // Depends on current draw framebuffer.
-        const GLuint stencilRefMask = (1 << stencilBits) - 1;
-
-        AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_REF,      stencilRefMask, mStencilRefFront);
-        AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_BACK_REF, stencilRefMask, mStencilRefBack);
-    }
-
-    // Program
-    GLuint bound = mCurrentProgram ? mCurrentProgram->mGLName : 0;
-    AssertUintParamCorrect(gl, LOCAL_GL_CURRENT_PROGRAM, bound);
-
-    // Textures
-    GLenum activeTexture = mActiveTexture + LOCAL_GL_TEXTURE0;
-    AssertUintParamCorrect(gl, LOCAL_GL_ACTIVE_TEXTURE, activeTexture);
-
-    WebGLTexture* curTex = ActiveBoundTextureForTarget(LOCAL_GL_TEXTURE_2D);
-    bound = curTex ? curTex->mGLName : 0;
-    AssertUintParamCorrect(gl, LOCAL_GL_TEXTURE_BINDING_2D, bound);
-
-    curTex = ActiveBoundTextureForTarget(LOCAL_GL_TEXTURE_CUBE_MAP);
-    bound = curTex ? curTex->mGLName : 0;
-    AssertUintParamCorrect(gl, LOCAL_GL_TEXTURE_BINDING_CUBE_MAP, bound);
-
-    // Buffers
-    bound = mBoundArrayBuffer ? mBoundArrayBuffer->mGLName : 0;
-    AssertUintParamCorrect(gl, LOCAL_GL_ARRAY_BUFFER_BINDING, bound);
-
-    MOZ_ASSERT(mBoundVertexArray);
-    WebGLBuffer* curBuff = mBoundVertexArray->mElementArrayBuffer;
-    bound = curBuff ? curBuff->mGLName : 0;
-    AssertUintParamCorrect(gl, LOCAL_GL_ELEMENT_ARRAY_BUFFER_BINDING, bound);
-
-    MOZ_ASSERT(!GetAndFlushUnderlyingGLErrors());
-#endif
-
-    // We do not check the renderbuffer binding, because we never rely on it matching.
-}
-
-void
-WebGLContext::AssertCachedGlobalState()
-{
-#ifdef DEBUG
-    MakeContextCurrent();
-
-    GetAndFlushUnderlyingGLErrors();
-
-    ////////////////
-
-    // Draw state
-    MOZ_ASSERT(gl->fIsEnabled(LOCAL_GL_DEPTH_TEST) == mDepthTestEnabled);
-    MOZ_ASSERT(gl->fIsEnabled(LOCAL_GL_DITHER) == mDitherEnabled);
-    MOZ_ASSERT_IF(IsWebGL2(),
-                  gl->fIsEnabled(LOCAL_GL_RASTERIZER_DISCARD) == mRasterizerDiscardEnabled);
-    MOZ_ASSERT(gl->fIsEnabled(LOCAL_GL_SCISSOR_TEST) == mScissorTestEnabled);
-    MOZ_ASSERT(gl->fIsEnabled(LOCAL_GL_STENCIL_TEST) == mStencilTestEnabled);
-
-    realGLboolean colorWriteMask[4] = {0, 0, 0, 0};
-    gl->fGetBooleanv(LOCAL_GL_COLOR_WRITEMASK, colorWriteMask);
-    MOZ_ASSERT(colorWriteMask[0] == mColorWriteMask[0] &&
-               colorWriteMask[1] == mColorWriteMask[1] &&
-               colorWriteMask[2] == mColorWriteMask[2] &&
-               colorWriteMask[3] == mColorWriteMask[3]);
-
-    GLfloat colorClearValue[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    gl->fGetFloatv(LOCAL_GL_COLOR_CLEAR_VALUE, colorClearValue);
-    MOZ_ASSERT(IsCacheCorrect(mColorClearValue[0], colorClearValue[0]) &&
-               IsCacheCorrect(mColorClearValue[1], colorClearValue[1]) &&
-               IsCacheCorrect(mColorClearValue[2], colorClearValue[2]) &&
-               IsCacheCorrect(mColorClearValue[3], colorClearValue[3]));
-
-    realGLboolean depthWriteMask = 0;
-    gl->fGetBooleanv(LOCAL_GL_DEPTH_WRITEMASK, &depthWriteMask);
-    MOZ_ASSERT(depthWriteMask == mDepthWriteMask);
-
-    GLfloat depthClearValue = 0.0f;
-    gl->fGetFloatv(LOCAL_GL_DEPTH_CLEAR_VALUE, &depthClearValue);
-    MOZ_ASSERT(IsCacheCorrect(mDepthClearValue, depthClearValue));
-
-    const int maxStencilBits = 8;
-    const GLuint maxStencilBitsMask = (1 << maxStencilBits) - 1;
-    AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_CLEAR_VALUE, maxStencilBitsMask, mStencilClearValue);
-
-    // GLES 3.0.4, $4.1.4, p177:
-    //   [...] the front and back stencil mask are both set to the value `2^s - 1`, where
-    //   `s` is greater than or equal to the number of bits in the deepest stencil buffer
-    //   supported by the GL implementation.
-    AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_VALUE_MASK,      maxStencilBitsMask, mStencilValueMaskFront);
-    AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_BACK_VALUE_MASK, maxStencilBitsMask, mStencilValueMaskBack);
-
-    AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_WRITEMASK,       maxStencilBitsMask, mStencilWriteMaskFront);
-    AssertMaskedUintParamCorrect(gl, LOCAL_GL_STENCIL_BACK_WRITEMASK,  maxStencilBitsMask, mStencilWriteMaskBack);
-
-    // Viewport
-    GLint int4[4] = {0, 0, 0, 0};
-    gl->fGetIntegerv(LOCAL_GL_VIEWPORT, int4);
-    MOZ_ASSERT(int4[0] == mViewportX &&
-               int4[1] == mViewportY &&
-               int4[2] == mViewportWidth &&
-               int4[3] == mViewportHeight);
-
-    AssertUintParamCorrect(gl, LOCAL_GL_PACK_ALIGNMENT, mPixelStore_PackAlignment);
-    AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_ALIGNMENT, mPixelStore_UnpackAlignment);
-
-    if (IsWebGL2()) {
-        AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_IMAGE_HEIGHT, mPixelStore_UnpackImageHeight);
-        AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_SKIP_IMAGES , mPixelStore_UnpackSkipImages);
-        AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_ROW_LENGTH  , mPixelStore_UnpackRowLength);
-        AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_SKIP_ROWS   , mPixelStore_UnpackSkipRows);
-        AssertUintParamCorrect(gl, LOCAL_GL_UNPACK_SKIP_PIXELS , mPixelStore_UnpackSkipPixels);
-        AssertUintParamCorrect(gl, LOCAL_GL_PACK_ROW_LENGTH    , mPixelStore_PackRowLength);
-        AssertUintParamCorrect(gl, LOCAL_GL_PACK_SKIP_ROWS     , mPixelStore_PackSkipRows);
-        AssertUintParamCorrect(gl, LOCAL_GL_PACK_SKIP_PIXELS   , mPixelStore_PackSkipPixels);
-    }
-
-    MOZ_ASSERT(!GetAndFlushUnderlyingGLErrors());
-#endif
-}
 
 const char*
 InfoFrom(WebGLTexImageFunc func, WebGLTexDimensions dims)

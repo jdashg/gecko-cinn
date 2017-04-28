@@ -15,7 +15,6 @@
 #include "mozilla/Telemetry.h"
 #include "CanvasRenderingContext2D.h"
 #include "CanvasUtils.h"
-#include "GLScreenBuffer.h"
 #include "WebGL1Context.h"
 #include "WebGL2Context.h"
 
@@ -136,7 +135,10 @@ OffscreenCanvas::GetContext(JSContext* aCx,
   if (!mCurrentContext) {
     return nullptr;
   }
-
+  // De-implemented for now.
+  aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
+  return nullptr;
+/*
   if (mCanvasRenderer) {
     if (contextType == CanvasContextType::WebGL1 ||
         contextType == CanvasContextType::WebGL2) {
@@ -155,14 +157,15 @@ OffscreenCanvas::GetContext(JSContext* aCx,
         mCanvasClient = imageBridge->CreateCanvasClient(CanvasClient::CanvasClientTypeShSurf, flags);
         mCanvasRenderer->SetCanvasClient(mCanvasClient);
 
-        const auto& screen = gl->Screen();
         const auto& forwarder = mCanvasClient->GetForwarder();
-        MOZ_ALWAYS_TRUE( screen->Morph(forwarder) );
+        MOZ_CRASH("fixme");
+        //MOZ_ALWAYS_TRUE( webGL->MorphSurfFactory(forwarder) );
       }
     }
   }
 
   return result;
+  */
 }
 
 already_AddRefed<nsICanvasRenderingContextInternal>
@@ -170,7 +173,7 @@ OffscreenCanvas::CreateContext(CanvasContextType aContextType)
 {
   RefPtr<nsICanvasRenderingContextInternal> ret =
     CanvasRenderingContextHelper::CreateContext(aContextType);
-
+  MOZ_CRASH("OffscreenCanvas::CreateContext");
   ret->SetOffscreenCanvas(this);
   return ret.forget();
 }
@@ -224,8 +227,9 @@ OffscreenCanvas::TransferToImageBitmap()
   if ((mCurrentContextType == CanvasContextType::WebGL1 ||
        mCurrentContextType == CanvasContextType::WebGL2))
   {
-    WebGLContext* webGL = static_cast<WebGLContext*>(mCurrentContext.get());
-    webGL->ClearScreen();
+    MOZ_CRASH("fixme");
+    //WebGLContext* webGL = static_cast<WebGLContext*>(mCurrentContext.get());
+    //webGL->ClearScreen();
   }
 
   return result.forget();

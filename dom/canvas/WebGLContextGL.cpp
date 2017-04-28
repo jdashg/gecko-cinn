@@ -1571,7 +1571,8 @@ WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth, GLsizei rawHeig
     ////////////////
     // Now that the errors are out of the way, on to actually reading!
 
-    OnBeforeReadCall();
+    if (!DoBindReadFB("readPixels"))
+        return;
 
     if (!rwWidth || !rwHeight) {
         // Disjoint rects, so we're done already.

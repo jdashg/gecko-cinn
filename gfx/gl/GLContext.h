@@ -298,15 +298,12 @@ public:
 
     virtual bool IsCurrent() const = 0;
 
-    /**
-     * Get the default framebuffer for this context.
-     */
-    virtual GLuint GetDefaultFramebuffer() {
-        return 0;
-    }
+    virtual bool IsConfigDepthStencilFlexible() const { return true; }
 
+public:
+    const CreateContextFlags mCreationFlags;
+    const bool mIsOffscreen;
 protected:
-    bool mIsOffscreen;
     bool mContextLost;
 
     /**
@@ -393,6 +390,7 @@ public:
         EXT_color_buffer_float,
         EXT_color_buffer_half_float,
         EXT_copy_texture,
+        EXT_discard_framebuffer,
         EXT_disjoint_timer_query,
         EXT_draw_buffers,
         EXT_draw_buffers2,
@@ -602,21 +600,18 @@ public:
             mHasBeenChecked = true;
 
             const GLenum ret = mGL.fGetError();
-
             while (mGL.fGetError()) {}
+
+            // Reset
+            MOZ_ASSERT(mGL.mLocalErrorScopeStack.top() == this);
+            mGL.mLocalErrorScopeStack.pop();
+            mGL.mTopError = mOldTop;
 
             return ret;
         }
 
         ~LocalErrorScope() {
-            MOZ_ASSERT(mHasBeenChecked);
-
-            MOZ_ASSERT(mGL.fGetError() == LOCAL_GL_NO_ERROR);
-
-            MOZ_ASSERT(mGL.mLocalErrorScopeStack.top() == this);
-            mGL.mLocalErrorScopeStack.pop();
-
-            mGL.mTopError = mOldTop;
+            MOZ_RELEASE_ASSERT(mHasBeenChecked);
         }
     };
 
@@ -771,22 +766,13 @@ private:
                 }\
             } while (0)
 
-    // Do whatever setup is necessary to draw to our offscreen FBO, if it's
-    // bound.
     void BeforeGLDrawCall() { }
+    void AfterGLDrawCall() {
+        mHeavyGLCallsSinceLastFlush = true;
+    }
 
-    // Do whatever tear-down is necessary after drawing to our offscreen FBO,
-    // if it's bound.
-    void AfterGLDrawCall();
-
-    // Do whatever setup is necessary to read from our offscreen FBO, if it's
-    // bound.
-    void BeforeGLReadCall();
-
-    // Do whatever tear-down is necessary after reading from our offscreen FBO,
-    // if it's bound.
+    void BeforeGLReadCall() { }
     void AfterGLReadCall() { }
-
 
 // -----------------------------------------------------------------------------
 // GL official entry points
@@ -822,8 +808,6 @@ public:
         mSymbols.fBindBuffer(target, buffer);
         AFTER_GL_CALL;
     }
-
-    void fBindFramebuffer(GLenum target, GLuint framebuffer);
 
     void fInvalidateFramebuffer(GLenum target, GLsizei numAttachments, const GLenum* attachments) {
         BeforeGLDrawCall();
@@ -1893,17 +1877,15 @@ public:
         mSymbols.fShaderSource(shader, count, strings, lengths);
         AFTER_GL_CALL;
     }
-
 private:
-    friend class SharedSurface;
-
     void raw_fBindFramebuffer(GLenum target, GLuint framebuffer) {
         BEFORE_GL_CALL;
         mSymbols.fBindFramebuffer(target, framebuffer);
         AFTER_GL_CALL;
     }
-
 public:
+    void fBindFramebuffer(GLenum target, GLuint fb);
+
     void fBindRenderbuffer(GLenum target, GLuint renderbuffer) {
         BEFORE_GL_CALL;
         mSymbols.fBindRenderbuffer(target, renderbuffer);
@@ -2153,7 +2135,6 @@ private:
     }
 
 public:
-
     void fDeleteProgram(GLuint program) {
         raw_fDeleteProgram(program);
         TRACKING_CONTEXT(DeletedProgram(this, program));
@@ -3139,6 +3120,18 @@ public:
     }
 
 // -----------------------------------------------------------------------------
+// EXT_discard_framebuffer
+
+    void fDiscardFramebufferEXT(const GLenum target, const GLsizei numAttachments,
+                                const GLenum* const attachments) const
+    {
+        BEFORE_GL_CALL;
+        ASSERT_SYMBOL_PRESENT(fDiscardFramebufferEXT);
+        mSymbols.fDiscardFramebufferEXT(target, numAttachments, attachments);
+        AFTER_GL_CALL;
+    }
+
+// -----------------------------------------------------------------------------
 // prim_restart
 
     void fPrimitiveRestartIndex(GLuint index) {
@@ -3151,8 +3144,7 @@ public:
 // -----------------------------------------------------------------------------
 // Constructor
 protected:
-    explicit GLContext(CreateContextFlags flags, const SurfaceCaps& caps,
-                       GLContext* sharedContext = nullptr,
+    explicit GLContext(CreateContextFlags flags, GLContext* sharedContext = nullptr,
                        bool isOffscreen = false);
 
 
@@ -3238,25 +3230,6 @@ public:
      */
     virtual bool ReleaseTexImage() { return false; }
 
-    /*
-     * Resize the current offscreen buffer.  Returns true on success.
-     * If it returns false, the context should be treated as unusable
-     * and should be recreated.  After the resize, the viewport is not
-     * changed; glViewport should be called as appropriate.
-     *
-     * Only valid if IsOffscreen() returns true.
-     */
-    bool ResizeOffscreen(const gfx::IntSize& size) {
-        return ResizeScreenBuffer(size);
-    }
-
-    /*
-     * Return size of this offscreen context.
-     *
-     * Only valid if IsOffscreen() returns true.
-     */
-    const gfx::IntSize& OffscreenSize() const;
-
 private:
     void GetShaderPrecisionFormatNonES2(GLenum shadertype, GLenum precisiontype, GLint* range, GLint* precision) {
         switch (precisiontype) {
@@ -3281,10 +3254,6 @@ private:
     }
 
 public:
-
-    void ForceDirtyScreen();
-    void CleanDirtyScreen();
-
     virtual GLenum GetPreferredARGB32Format() const { return LOCAL_GL_RGBA; }
 
     virtual GLenum GetPreferredEGLImageTextureTarget() const {
@@ -3350,25 +3319,7 @@ public:
         return thisShared == otherShared;
     }
 
-    bool InitOffscreen(const gfx::IntSize& size, const SurfaceCaps& caps);
-
-protected:
-    // Note that it does -not- clear the resized buffers.
-    bool CreateScreenBuffer(const gfx::IntSize& size, const SurfaceCaps& caps);
-
-public:
-    bool ResizeScreenBuffer(const gfx::IntSize& size);
-
-protected:
-    SurfaceCaps mCaps;
-
-public:
-    const SurfaceCaps& Caps() const {
-        return mCaps;
-    }
-
-    // Only varies based on bpp16 and alpha.
-    GLFormats ChooseGLFormats(const SurfaceCaps& caps) const;
+    ////
 
     bool IsFramebufferComplete() const {
         const auto status = fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
@@ -3390,20 +3341,42 @@ public:
                               GLuint* drawFB,
                               GLuint* readFB);
 
-protected:
-    friend class GLScreenBuffer;
-    UniquePtr<GLScreenBuffer> mScreen;
-
-    friend class ScopedBypassScreen;
-    bool mBypassScreen;
-
-public:
-    GLScreenBuffer* Screen() const {
-        if (!mScreen || mBypassScreen)
-            return nullptr;
-
-        return mScreen.get();
+    GLuint CreateFramebuffer() {
+        GLuint ret = 0;
+        fGenFramebuffers(1, &ret);
+        return ret;
     }
+    GLuint CreateRenderbuffer() {
+        GLuint ret = 0;
+        fGenRenderbuffers(1, &ret);
+        return ret;
+    }
+    GLuint CreateTexture() {
+        GLuint ret = 0;
+        fGenTextures(1, &ret);
+        return ret;
+    }
+    void DeleteFramebuffer(const GLuint& name) {
+        fDeleteFramebuffers(1, &name);
+    }
+    void DeleteRenderbuffer(const GLuint& name) {
+        fDeleteRenderbuffers(1, &name);
+    }
+    void DeleteTexture(const GLuint& name) {
+        fDeleteTextures(1, &name);
+    }
+
+    ////
+
+    void SetEnable(const GLenum pname, const bool val) {
+        if (val) {
+            fEnable(pname);
+        } else {
+            fDisable(pname);
+        }
+    }
+
+    ////////////////
 
 protected:
     std::stack<SharedSurface*> mSurfaceLockStack;
@@ -3429,19 +3402,18 @@ public:
         return top;
     }
 
-    bool IsOffscreen() const {
-        return mIsOffscreen;
-    }
+    ////////////////
 
-    /* Clear to transparent black, with 0 depth and stencil,
-     * while preserving current ClearColor etc. values.
-     * Useful for resizing offscreen buffers.
-     */
-    void ClearSafely();
+private:
+    UniquePtr<MozFramebuffer> mFakeDefaultFB;
+
+public:
+    bool ResizeFakeDefaultFB(const gfx::IntSize& size);
+    void ResetFakeDefaultFB(UniquePtr<MozFramebuffer> newOffscreenFB);
+
+    ////////////////
 
     bool WorkAroundDriverBugs() const { return mWorkAroundDriverBugs; }
-
-    bool IsDrawingToDefaultFramebuffer();
 
 protected:
     RefPtr<TextureGarbageBin> mTexGarbageBin;
@@ -3637,15 +3609,6 @@ MarkBitfieldByStrings(const std::vector<nsCString>& strList,
             printf_stderr("  %s%s\n", str.BeginReading(), wasMarked ? "(*)" : "");
     }
 }
-
-/**
- * Helper function that creates a 2D texture aSize.width x aSize.height with
- * storage type specified by aFormats. Returns GL texture object id.
- *
- * See mozilla::gl::CreateTexture.
- */
-GLuint CreateTextureForOffscreen(GLContext* aGL, const GLFormats& aFormats,
-                                 const gfx::IntSize& aSize);
 
 /**
  * Helper function that creates a 2D texture aSize.width x aSize.height with

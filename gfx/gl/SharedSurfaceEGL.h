@@ -17,42 +17,32 @@ class GLContext;
 class GLLibraryEGL;
 class TextureGarbageBin;
 
-class SharedSurface_EGLImage
+class SharedSurface_EGLImage final
     : public SharedSurface
 {
-public:
-    static UniquePtr<SharedSurface_EGLImage> Create(GLContext* prodGL,
-                                                    const GLFormats& formats,
-                                                    const gfx::IntSize& size,
-                                                    bool hasAlpha,
-                                                    EGLContext context);
-
-    static bool HasExtensions(GLLibraryEGL* egl, GLContext* gl);
-
-protected:
-    mutable Mutex mMutex;
     GLLibraryEGL* const mEGL;
-    const GLFormats mFormats;
 public:
     const EGLImage mImage;
-protected:
+private:
     EGLSync mSync;
 
-    SharedSurface_EGLImage(GLContext* gl,
-                           GLuint tex,
-                           const gfx::IntSize& size,
-                           bool hasAlpha,
-                           GLLibraryEGL* egl,
-                           const GLFormats& formats,
+public:
+    static UniquePtr<SharedSurface_EGLImage> Create(GLContext* gl,
+                                                    const gfx::IntSize& size,
+                                                    bool depthStencil,
+                                                    EGLContext context);
+
+private:
+    SharedSurface_EGLImage(GLContext* gl, const gfx::IntSize& size,
+                           UniquePtr<MozFramebuffer> mozFB, GLLibraryEGL* egl,
                            EGLImage image);
-
-    EGLDisplay Display() const;
-    void UpdateProdTexture(const MutexAutoLock& curAutoLock);
-
 public:
     virtual ~SharedSurface_EGLImage();
 
-    virtual layers::TextureFlags GetTextureFlags() const override;
+private:
+    virtual layers::TextureFlags GetTextureFlags() const override {
+        return layers::TextureFlags::DEALLOCATE_CLIENT;
+    }
 
     virtual void LockProdImpl() override {}
     virtual void UnlockProdImpl() override {}
@@ -72,31 +62,28 @@ public:
 
 
 
-class SurfaceFactory_EGLImage
+class SurfaceFactory_EGLImage final
     : public SurfaceFactory
 {
-public:
-    // Fallible:
-    static UniquePtr<SurfaceFactory_EGLImage> Create(GLContext* prodGL,
-                                                     const SurfaceCaps& caps,
-                                                     const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                     const layers::TextureFlags& flags);
-
-protected:
     const EGLContext mContext;
 
-    SurfaceFactory_EGLImage(GLContext* prodGL, const SurfaceCaps& caps,
-                            const RefPtr<layers::LayersIPCChannel>& allocator,
-                            const layers::TextureFlags& flags,
-                            EGLContext context)
-        : SurfaceFactory(SharedSurfaceType::EGLImageShare, prodGL, caps, allocator, flags)
+public:
+    static UniquePtr<SurfaceFactory_EGLImage> Create(GLContext* gl, bool depthStencil,
+                                                     layers::LayersIPCChannel* allocator,
+                                                     layers::TextureFlags flags);
+
+private:
+    SurfaceFactory_EGLImage(GLContext* const gl, const bool depthStencil,
+                            layers::LayersIPCChannel* const allocator,
+                            const layers::TextureFlags flags, const EGLContext context)
+        : SurfaceFactory(SharedSurfaceType::EGLImageShare, gl, depthStencil, allocator,
+                         flags)
         , mContext(context)
     { }
 
-public:
     virtual UniquePtr<SharedSurface>
     NewSharedSurfaceImpl(const gfx::IntSize& size) override {
-        return SharedSurface_EGLImage::Create(mGL, mFormats, size, mCaps.alpha, mContext);
+        return SharedSurface_EGLImage::Create(mGL, size, mDepthStencil, mContext);
     }
 };
 

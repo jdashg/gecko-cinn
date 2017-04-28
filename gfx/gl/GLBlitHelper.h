@@ -126,10 +126,9 @@ public:
     void BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                       const gfx::IntSize& srcSize,
                                       const gfx::IntSize& destSize);
-    void BlitFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
+    void CopyFramebufferToFramebuffer(GLuint srcFB, GLuint destFB,
                                       const gfx::IntSize& srcSize,
-                                      const gfx::IntSize& destSize,
-                                      const GLFormats& srcFormats);
+                                      const gfx::IntSize& destSize);
     void BlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
                                   const gfx::IntSize& srcSize,
                                   const gfx::IntSize& destSize,

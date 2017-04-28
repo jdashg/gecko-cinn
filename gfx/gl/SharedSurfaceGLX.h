@@ -14,15 +14,20 @@ class gfxXlibSurface;
 namespace mozilla {
 namespace gl {
 
-class SharedSurface_GLXDrawable
+class SharedSurface_GLXDrawable final
     : public SharedSurface
 {
+    const RefPtr<gfxXlibSurface> mXlibSurface;
+    const bool mInSameProcess;
+
 public:
-    static UniquePtr<SharedSurface_GLXDrawable> Create(GLContext* prodGL,
-                                                       const SurfaceCaps& caps,
+    static UniquePtr<SharedSurface_GLXDrawable> Create(GLContext* gl,
                                                        const gfx::IntSize& size,
-                                                       bool deallocateClient,
+                                                       layers::TextureFlags flags,
                                                        bool inSameProcess);
+private:
+    SharedSurface_GLXDrawable(GLContext* gl, const gfx::IntSize& size,
+                              bool inSameProcess, gfxXlibSurface* xlibSurface);
 
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
@@ -35,34 +40,26 @@ public:
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
 
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
-private:
-    SharedSurface_GLXDrawable(GLContext* gl,
-                              const gfx::IntSize& size,
-                              bool inSameProcess,
-                              const RefPtr<gfxXlibSurface>& xlibSurface);
-
-    RefPtr<gfxXlibSurface> mXlibSurface;
-    bool mInSameProcess;
 };
 
-class SurfaceFactory_GLXDrawable
+class SurfaceFactory_GLXDrawable final
     : public SurfaceFactory
 {
 public:
-    static UniquePtr<SurfaceFactory_GLXDrawable> Create(GLContext* prodGL,
-                                                        const SurfaceCaps& caps,
-                                                        const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                        const layers::TextureFlags& flags);
-
-    virtual UniquePtr<SharedSurface>
-    NewSharedSurfaceImpl(const gfx::IntSize& size) override;
+    SurfaceFactory_GLXDrawable(GLContext* const gl, const bool depthStencil,
+                               layers::LayersIPCChannel* const allocator,
+                               const layers::TextureFlags flags)
+        : SurfaceFactory(SharedSurfaceType::GLXDrawable, gl, depthStencil, allocator,
+                         flags)
+    {
+        const bool contextDepthStencil = (gl->mCreateFlags & CreateContextFlags::DEPTH_STENCIL_CONFIG);
+        MOZ_ALWAYS_TRUE(mDepthStencil == contextDepthStencil ||
+                        gl->IsConfigDepthStencilFlexible());
+    }
 
 private:
-    SurfaceFactory_GLXDrawable(GLContext* prodGL, const SurfaceCaps& caps,
-                               const RefPtr<layers::LayersIPCChannel>& allocator,
-                               const layers::TextureFlags& flags)
-        : SurfaceFactory(SharedSurfaceType::GLXDrawable, prodGL, caps, allocator, flags)
-    { }
+    virtual UniquePtr<SharedSurface>
+    NewSharedSurfaceImpl(const gfx::IntSize& size) override;
 };
 
 } // namespace gl

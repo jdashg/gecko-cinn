@@ -44,21 +44,22 @@ public:
 
   virtual bool IsDataValid(const Data& aData) override;
 
-  bool IsGLLayer() { return !!mGLContext; }
+  bool IsGLLayer() const { return mWebGL || mCanvas2D; }
 
 protected:
-  RefPtr<gl::GLContext> mGLContext;
   RefPtr<PersistentBufferProvider> mBufferProvider;
-  UniquePtr<gl::SharedSurface> mGLFrontbuffer;
+  RefPtr<WebGLContext> mWebGL;
+  RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
 
   bool mIsAlphaPremultiplied;
   gl::OriginPos mOriginPos;
-  bool mIsMirror;
 
   RefPtr<gfx::DataSourceSurface> mCachedTempSurface;
 
   gfx::DataSourceSurface* GetTempSurface(const gfx::IntSize& aSize,
                                          const gfx::SurfaceFormat aFormat);
+
+  RefPtr<layers::SharedSurfaceTextureClient> GetFrontTex() const;
 };
 
 } // namespace layers

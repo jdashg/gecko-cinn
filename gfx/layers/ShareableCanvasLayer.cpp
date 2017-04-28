@@ -5,11 +5,11 @@
 
 #include "ShareableCanvasLayer.h"
 
-#include "GLContext.h"                  // for GLContext
-#include "GLScreenBuffer.h"             // for GLScreenBuffer
-#include "SharedSurfaceGL.h"            // for SurfaceFactory_GLTexture, etc
+#include "mozilla/dom/CanvasRenderingContext2D.h"
 #include "mozilla/layers/AsyncCanvasRenderer.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
+#include "SharedSurfaceGL.h"            // for SurfaceFactory_GLTexture, etc
+#include "../../dom/canvas/WebGLContext.h"
 
 namespace mozilla {
 namespace layers {
@@ -40,37 +40,11 @@ ShareableCanvasLayer::Initialize(const Data& aData)
 
   mCanvasClient = nullptr;
 
-  if (!mGLContext)
-    return;
-
-  mFlags = TextureFlags::ORIGIN_BOTTOM_LEFT;
-  if (!aData.mIsGLAlphaPremult) {
-    mFlags |= TextureFlags::NON_PREMULTIPLIED;
-  }
-
-  const auto& screen = mGLContext->Screen();
   const auto& forwarder = GetForwarder();
-
-  if (mGLFrontbuffer || aData.mIsMirror) {
-    // We're using a source other than the one in the default screen.
-    // (SkiaGL)
-    gl::SurfaceCaps caps;
-    if (mGLFrontbuffer) {
-      // The screen caps are irrelevant if we're using a separate frontbuffer.
-      caps = mGLFrontbuffer->mHasAlpha ? gl::SurfaceCaps::ForRGBA()
-                                       : gl::SurfaceCaps::ForRGB();
-    } else {
-      MOZ_ASSERT(screen);
-      caps = screen->Factory()->mCaps;
-    }
-
-    mFactory = gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, mFlags);
-    if (!mFactory) {
-      // Absolutely must have a factory here, so create a basic one
-      mFactory.reset(new gl::SurfaceFactory_Basic(mGLContext, caps, mFlags));
-    }
-  } else {
-    screen->Morph(forwarder);
+  if (mWebGL) {
+    mWebGL->mSurfFactory.Morph(forwarder);
+  } else if (mCanvas2D) {
+    mCanvas2D->mSurfFactory.Morph(forwarder);
   }
 }
 
@@ -82,51 +56,28 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
     return false;
   }
 
-  RefPtr<SourceSurface> surface;
-
-  if (!mGLContext) {
-    AutoReturnSnapshot autoReturn;
-
-    if (mAsyncRenderer) {
-      surface = mAsyncRenderer->GetSurface();
-    } else if (mBufferProvider) {
-      surface = mBufferProvider->BorrowSnapshot();
-      autoReturn.mSnapshot = &surface;
-      autoReturn.mBufferProvider = mBufferProvider;
-    }
-
-    MOZ_ASSERT(surface);
-    if (!surface) {
+  const auto& frontTex = GetFrontTex();
+  if (!frontTex) {
+    MOZ_ASSERT(mBufferProvider);
+    if (!mBufferProvider) {
       return false;
     }
-
-    aDestTarget->CopySurface(surface,
-                             IntRect(0, 0, mBounds.width, mBounds.height),
-                             IntPoint(0, 0));
-    return true;
-  }
-
-  gl::SharedSurface* frontbuffer = nullptr;
-  if (mGLFrontbuffer) {
-    frontbuffer = mGLFrontbuffer.get();
-  } else {
-    gl::GLScreenBuffer* screen = mGLContext->Screen();
-    const auto& front = screen->Front();
-    if (front) {
-      frontbuffer = front->Surf();
+    bool success = false;
+    RefPtr<SourceSurface> surface = mBufferProvider->BorrowSnapshot();
+    MOZ_ASSERT(surface);
+    if (surface) {
+      aDestTarget->CopySurface(surface,
+                               IntRect(0, 0, mBounds.width, mBounds.height),
+                               IntPoint(0, 0));
+      success = true;
     }
+    mBufferProvider->ReturnSnapshot(surface.forget());
+    return success;
   }
+  const auto& frontSurf = frontTex->Surf();
 
-  if (!frontbuffer) {
-    NS_WARNING("Null frame received.");
-    return false;
-  }
-
-  IntSize readSize(frontbuffer->mSize);
-  SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
-                          ? SurfaceFormat::B8G8R8X8
-                          : SurfaceFormat::B8G8R8A8;
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
+  const auto& readSize = frontSurf->mSize;
+  const SurfaceFormat format = SurfaceFormat::B8G8R8A8;
 
   // Try to read back directly into aDestTarget's output buffer
   uint8_t* destData;
@@ -137,8 +88,8 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
     if (destSize == readSize && destFormat == format) {
       RefPtr<DataSourceSurface> data =
         Factory::CreateWrappingDataSourceSurface(destData, destStride, destSize, destFormat);
-      mGLContext->Readback(frontbuffer, data);
-      if (needsPremult) {
+      Readback(frontSurf, data);
+      if (!mIsAlphaPremultiplied) {
         gfxUtils::PremultiplyDataSurface(data, data);
       }
       aDestTarget->ReleaseBits(destData);
@@ -155,8 +106,8 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
   }
 
   // Readback handles Flush/MarkDirty.
-  mGLContext->Readback(frontbuffer, resultSurf);
-  if (needsPremult) {
+  Readback(frontSurf, resultSurf);
+  if (!mIsAlphaPremultiplied) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
 
@@ -174,7 +125,7 @@ ShareableCanvasLayer::GetCanvasClientType()
     return CanvasClient::CanvasClientAsync;
   }
 
-  if (mGLContext) {
+  if (mWebGL || mCanvas2D) {
     return CanvasClient::CanvasClientTypeShSurf;
   }
   return CanvasClient::CanvasClientSurface;

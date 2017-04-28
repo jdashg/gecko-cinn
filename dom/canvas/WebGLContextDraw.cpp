@@ -113,8 +113,6 @@ ScopedResolveTexturesForDraw::ScopedResolveTexturesForDraw(WebGLContext* webgl,
         }
 
         attachList = &(fb->ResolvedCompleteData()->texDrawBuffers);
-    } else {
-        webgl->ClearBackbufferIfNeeded();
     }
 
     MOZ_ASSERT(mWebGL->mActiveProgramLinkInfo);
@@ -335,13 +333,9 @@ public:
 
         MOZ_ASSERT(mWebGL->gl->IsCurrent());
 
-        if (mWebGL->mBoundDrawFramebuffer) {
-            if (!mWebGL->mBoundDrawFramebuffer->ValidateAndInitAttachments(funcName)) {
-                *out_error = true;
-                return;
-            }
-        } else {
-            mWebGL->ClearBackbufferIfNeeded();
+        if (!mWebGL->DoBindDrawFB(funcName)) {
+            *out_error = true;
+            return;
         }
 
         ////
@@ -575,10 +569,7 @@ WebGLContext::DrawArrays(GLenum mode, GLint first, GLsizei vertCount)
     if (error)
         return;
 
-    {
-        ScopedDrawCallWrapper wrapper(*this);
-        gl->fDrawArrays(mode, first, vertCount);
-    }
+    gl->fDrawArrays(mode, first, vertCount);
 
     Draw_cleanup(funcName);
     scopedTF.Advance();
@@ -614,10 +605,7 @@ WebGLContext::DrawArraysInstanced(GLenum mode, GLint first, GLsizei vertCount,
     if (error)
         return;
 
-    {
-        ScopedDrawCallWrapper wrapper(*this);
-        gl->fDrawArraysInstanced(mode, first, vertCount, instanceCount);
-    }
+    gl->fDrawArraysInstanced(mode, first, vertCount, instanceCount);
 
     Draw_cleanup(funcName);
     scopedTF.Advance();
@@ -797,20 +785,17 @@ WebGLContext::DrawElements(GLenum mode, GLsizei vertCount, GLenum type,
         return;
 
     {
-        ScopedDrawCallWrapper wrapper(*this);
-        {
-            UniquePtr<gl::GLContext::LocalErrorScope> errorScope;
+        UniquePtr<gl::GLContext::LocalErrorScope> errorScope;
 
-            if (gl->IsANGLE()) {
-                errorScope.reset(new gl::GLContext::LocalErrorScope(*gl));
-            }
+        if (gl->IsANGLE()) {
+            errorScope.reset(new gl::GLContext::LocalErrorScope(*gl));
+        }
 
-            gl->fDrawElements(mode, vertCount, type,
-                              reinterpret_cast<GLvoid*>(byteOffset));
+        gl->fDrawElements(mode, vertCount, type,
+                          reinterpret_cast<GLvoid*>(byteOffset));
 
-            if (errorScope) {
-                HandleDrawElementsErrors(this, funcName, *errorScope);
-            }
+        if (errorScope) {
+            HandleDrawElementsErrors(this, funcName, *errorScope);
         }
     }
 
@@ -844,20 +829,17 @@ WebGLContext::DrawElementsInstanced(GLenum mode, GLsizei vertCount, GLenum type,
         return;
 
     {
-        ScopedDrawCallWrapper wrapper(*this);
-        {
-            UniquePtr<gl::GLContext::LocalErrorScope> errorScope;
+        UniquePtr<gl::GLContext::LocalErrorScope> errorScope;
 
-            if (gl->IsANGLE()) {
-                errorScope.reset(new gl::GLContext::LocalErrorScope(*gl));
-            }
+        if (gl->IsANGLE()) {
+            errorScope.reset(new gl::GLContext::LocalErrorScope(*gl));
+        }
 
-            gl->fDrawElementsInstanced(mode, vertCount, type,
-                                       reinterpret_cast<GLvoid*>(byteOffset),
-                                       instanceCount);
-            if (errorScope) {
-                HandleDrawElementsErrors(this, funcName, *errorScope);
-            }
+        gl->fDrawElementsInstanced(mode, vertCount, type,
+                                   reinterpret_cast<GLvoid*>(byteOffset),
+                                   instanceCount);
+        if (errorScope) {
+            HandleDrawElementsErrors(this, funcName, *errorScope);
         }
     }
 

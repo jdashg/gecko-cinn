@@ -7,8 +7,8 @@
 
 #include "ClientCanvasLayer.h"          // for ClientCanvasLayer
 #include "GLContext.h"                  // for GLContext
-#include "GLScreenBuffer.h"             // for GLScreenBuffer
 #include "ScopedGLHelpers.h"
+#include "SharedSurface.h"
 #include "gfx2DGlue.h"                  // for ImageFormatToSurfaceFormat
 #include "gfxPlatform.h"                // for gfxPlatform
 #include "GLReadTexImageHelper.h"
@@ -271,7 +271,7 @@ TexClientFromReadback(SharedSurface* src, CompositableForwarder* allocator,
                       TextureFlags baseFlags, LayersBackend layersBackend)
 {
   auto backendType = gfx::BackendType::CAIRO;
-  TexClientFactory factory(allocator, src->mHasAlpha, src->mSize, backendType,
+  TexClientFactory factory(allocator, true, src->mSize, backendType,
                            baseFlags, layersBackend);
 
   RefPtr<TextureClient> texClient;
@@ -376,73 +376,36 @@ CanvasClientSharedSurface::UpdateAsync(AsyncCanvasRenderer* aRenderer)
 void
 CanvasClientSharedSurface::UpdateRenderer(gfx::IntSize aSize, Renderer& aRenderer)
 {
-  GLContext* gl = nullptr;
   ShareableCanvasLayer* layer = nullptr;
   AsyncCanvasRenderer* asyncRenderer = nullptr;
   if (aRenderer.constructed<ShareableCanvasLayer*>()) {
     layer = aRenderer.ref<ShareableCanvasLayer*>();
-    gl = layer->mGLContext;
   } else {
     asyncRenderer = aRenderer.ref<AsyncCanvasRenderer*>();
-    gl = asyncRenderer->mGLContext;
+    MOZ_CRASH("GFX: unexpected AsyncCanvasRenderer");
   }
-  gl->MakeCurrent();
+  if (!layer)
+    return;
 
-  RefPtr<TextureClient> newFront;
+  mShSurfClient = layer->GetFrontTex();
+  if (!mShSurfClient)
+    return;
+  const auto& frontSurf = mShSurfClient->Surf();
 
-  if (layer && layer->mGLFrontbuffer) {
-    mShSurfClient = layer->mFactory->CloneTexClient(layer->mGLFrontbuffer.get());
-    if (!mShSurfClient) {
-      gfxCriticalError() << "Invalid canvas front buffer";
-      return;
-    }
-  } else if (layer && layer->mIsMirror) {
-    mShSurfClient = layer->mFactory->CloneTexClient(gl->Screen()->Front()->Surf());
-    if (!mShSurfClient) {
-      return;
-    }
-  } else {
-    mShSurfClient = gl->Screen()->Front();
-    if (mShSurfClient && mShSurfClient->GetAllocator() &&
-        mShSurfClient->GetAllocator() != GetForwarder()->GetTextureForwarder())
-    {
-      mShSurfClient = gl->Screen()->Factory()->CloneTexClient(mShSurfClient->Surf());
-    }
-    if (!mShSurfClient) {
-      return;
-    }
-  }
-  MOZ_ASSERT(mShSurfClient);
-
-  newFront = mShSurfClient;
-
-  SharedSurface* surf = mShSurfClient->Surf();
+  RefPtr<TextureClient> newFront = mShSurfClient;
 
   // Readback if needed.
   mReadbackClient = nullptr;
 
-  auto forwarder = GetForwarder();
-
-  bool needsReadback = (surf->mType == SharedSurfaceType::Basic);
+  const bool needsReadback = (frontSurf->mType == SharedSurfaceType::Basic);
   if (needsReadback) {
-    TextureFlags flags = TextureFlags::IMMUTABLE;
-
-    CompositableForwarder* shadowForwarder = nullptr;
-    if (layer) {
-      flags |= layer->Flags();
-      shadowForwarder = layer->GetForwarder();
-    } else {
-      MOZ_ASSERT(asyncRenderer);
-      flags |= mTextureFlags;
-      shadowForwarder = GetForwarder();
-    }
-
-    auto layersBackend = shadowForwarder->GetCompositorBackendType();
-    mReadbackClient = TexClientFromReadback(surf, forwarder, flags, layersBackend);
-
+    const auto& forwarder = GetForwarder();
+    const TextureFlags readbackFlags = (layer->Flags() |
+                                        TextureFlags::IMMUTABLE);
+    const auto& layersBackend = forwarder->GetCompositorBackendType();
+    mReadbackClient = TexClientFromReadback(frontSurf, forwarder, readbackFlags,
+                                            layersBackend);
     newFront = mReadbackClient;
-  } else {
-    mReadbackClient = nullptr;
   }
 
   if (asyncRenderer) {

@@ -20,8 +20,7 @@ class SharedSurface_D3D11Interop
     : public SharedSurface
 {
 public:
-    const GLuint mInteropFB;
-    const GLuint mInteropRB;
+    const UniquePtr<MozFramebuffer> mIndirectInteropFB;
     const RefPtr<DXInterop2Device> mInterop;
     const HANDLE mLockHandle;
     const RefPtr<ID3D11Texture2D> mTexD3D;
@@ -32,22 +31,17 @@ protected:
     bool mLockedForGL;
 
 public:
-    static UniquePtr<SharedSurface_D3D11Interop> Create(DXInterop2Device* interop,
-                                                        GLContext* gl,
+    static UniquePtr<SharedSurface_D3D11Interop> Create(GLContext* gl,
                                                         const gfx::IntSize& size,
-                                                        bool hasAlpha);
+                                                        bool depthStencil,
+                                                        DXInterop2Device* interop);
 
 protected:
-    SharedSurface_D3D11Interop(GLContext* gl,
-                               GLuint prodTex, GLuint prodFB,
-                               const gfx::IntSize& size,
-                               bool hasAlpha,
-                               GLuint interopFB,
-                               GLuint interopRB,
-                               DXInterop2Device* interop,
-                               HANDLE lockHandle,
-                               ID3D11Texture2D* texD3D,
-                               HANDLE dxgiHandle);
+    SharedSurface_D3D11Interop(GLContext* gl, const gfx::IntSize& size,
+                               UniquePtr<MozFramebuffer> primaryFB,
+                               UniquePtr<MozFramebuffer> indirectInteropFB,
+                               DXInterop2Device* interop, HANDLE lockHandle,
+                               ID3D11Texture2D* texD3D, HANDLE dxgiHandle);
 
 public:
     virtual ~SharedSurface_D3D11Interop() override;
@@ -61,30 +55,28 @@ public:
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
 };
 
-class SurfaceFactory_D3D11Interop
+class SurfaceFactory_D3D11Interop final
     : public SurfaceFactory
 {
 public:
     const RefPtr<DXInterop2Device> mInterop;
 
-    static UniquePtr<SurfaceFactory_D3D11Interop> Create(GLContext* gl,
-                                                         const SurfaceCaps& caps,
+    static UniquePtr<SurfaceFactory_D3D11Interop> Create(GLContext* gl, bool depthStencil,
                                                          layers::LayersIPCChannel* allocator,
-                                                         const layers::TextureFlags& flags);
+                                                         layers::TextureFlags flags);
 
-protected:
-    SurfaceFactory_D3D11Interop(GLContext* gl, const SurfaceCaps& caps,
+private:
+    SurfaceFactory_D3D11Interop(GLContext* gl, bool depthStencil,
                                 layers::LayersIPCChannel* allocator,
-                                const layers::TextureFlags& flags,
-                                DXInterop2Device* interop);
+                                layers::TextureFlags flags, DXInterop2Device* interop);
 
 public:
     virtual ~SurfaceFactory_D3D11Interop() override;
 
-protected:
+private:
     virtual UniquePtr<SharedSurface>
     NewSharedSurfaceImpl(const gfx::IntSize& size) override {
-        return SharedSurface_D3D11Interop::Create(mInterop, mGL, size, mCaps.alpha);
+        return SharedSurface_D3D11Interop::Create(mGL, size, mDepthStencil, mInterop);
     }
 };
 

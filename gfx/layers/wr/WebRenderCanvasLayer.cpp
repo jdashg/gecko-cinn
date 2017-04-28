@@ -9,7 +9,6 @@
 #include "gfxPrefs.h"
 #include "gfxUtils.h"
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "LayersLogging.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
@@ -29,19 +28,6 @@ WebRenderCanvasLayer::~WebRenderCanvasLayer()
   if (mExternalImageId) {
     WrBridge()->DeallocExternalImageId(mExternalImageId);
   }
-}
-
-void
-WebRenderCanvasLayer::Initialize(const Data& aData)
-{
-  ShareableCanvasLayer::Initialize(aData);
-
-  // XXX: Use basic surface factory until we support shared surface.
-  if (!mGLContext || mGLFrontbuffer)
-    return;
-
-  //const auto& screen = mGLContext->Screen();
-  //screen->Morph(info);
 }
 
 void

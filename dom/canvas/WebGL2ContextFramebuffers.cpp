@@ -6,7 +6,6 @@
 #include "WebGL2Context.h"
 
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "WebGLContextUtils.h"
 #include "WebGLFormats.h"
 #include "WebGLFramebuffer.h"
@@ -56,9 +55,8 @@ WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY
 
     ////
 
-    if (!mBoundReadFramebuffer) {
-        ClearBackbufferIfNeeded();
-    }
+    if (!DoBindBothFBs("blitFramebuffer"))
+        return;
 
     WebGLFramebuffer::BlitFramebuffer(this,
                                       readFB, srcX0, srcY0, srcX1, srcY1,
@@ -172,17 +170,26 @@ WebGLContext::ValidateInvalidateFramebuffer(const char* funcName, GLenum target,
         return false;
 
     const WebGLFramebuffer* fb;
-    bool isDefaultFB;
+    bool isDefaultFB = false;
     switch (target) {
-    case LOCAL_GL_FRAMEBUFFER:
     case LOCAL_GL_DRAW_FRAMEBUFFER:
+    case LOCAL_GL_FRAMEBUFFER: // GLES 3.0.5 p219: (InvalidateSubFramebuffer)
+                               // "`FRAMEBUFFER` is equivalent to `DRAW_FRAMEBUFFER`."
         fb = mBoundDrawFramebuffer;
-        isDefaultFB = gl->Screen()->IsDrawFramebufferDefault();
+        if (!fb) {
+            if (!EnsureDefaultDrawFB(funcName))
+                return false;
+            isDefaultFB = (DefaultDrawFB() == 0);
+        }
         break;
 
     case LOCAL_GL_READ_FRAMEBUFFER:
         fb = mBoundReadFramebuffer;
-        isDefaultFB = gl->Screen()->IsReadFramebufferDefault();
+        if (!fb) {
+            if (!EnsureDefaultReadFB(funcName))
+                return false;
+            isDefaultFB = (DefaultReadFB() == 0);
+        }
         break;
 
     default:
@@ -231,14 +238,6 @@ WebGLContext::ValidateInvalidateFramebuffer(const char* funcName, GLenum target,
 
     ////
 
-    if (!fb) {
-        ClearBackbufferIfNeeded();
-
-        // Don't do more validation after these.
-        Invalidate();
-        mShouldPresent = true;
-    }
-
     return true;
 }
 
@@ -261,12 +260,14 @@ WebGL2Context::InvalidateFramebuffer(GLenum target,
     ////
 
     // Some drivers (like OSX 10.9 GL) just don't support invalidate_framebuffer.
+    /* TODO: Support this properly.
     const bool useFBInvalidation = (mAllowFBInvalidation &&
                                     gl->IsSupported(gl::GLFeature::invalidate_framebuffer));
     if (useFBInvalidation) {
         gl->fInvalidateFramebuffer(target, glNumAttachments, glAttachments);
         return;
     }
+    */
 
     // Use clear instead?
     // No-op for now.
@@ -297,6 +298,7 @@ WebGL2Context::InvalidateSubFramebuffer(GLenum target, const dom::Sequence<GLenu
     ////
 
     // Some drivers (like OSX 10.9 GL) just don't support invalidate_framebuffer.
+    /* TODO: Support this properly.
     const bool useFBInvalidation = (mAllowFBInvalidation &&
                                     gl->IsSupported(gl::GLFeature::invalidate_framebuffer));
     if (useFBInvalidation) {
@@ -304,6 +306,7 @@ WebGL2Context::InvalidateSubFramebuffer(GLenum target, const dom::Sequence<GLenu
                                       width, height);
         return;
     }
+    */
 
     // Use clear instead?
     // No-op for now.
@@ -314,6 +317,9 @@ WebGL2Context::ReadBuffer(GLenum mode)
 {
     const char funcName[] = "readBuffer";
     if (IsContextLost())
+        return;
+
+    if (!DoBindReadFB(funcName))
         return;
 
     if (mBoundReadFramebuffer) {
@@ -333,7 +339,11 @@ WebGL2Context::ReadBuffer(GLenum mode)
         return;
     }
 
-    gl->Screen()->SetReadBuffer(mode);
+    mDefaultFB_ReadBuffer = mode;
+    // We don't tell the driver about this, because there's no need:
+    // - Copy*TexImage* and ReadPixels: InvalidOp if READ_BUFFER is NONE
+    // - BlitFramebuffer: COLOR_BUFFER_BIT ignored if READ_BUFFER is NONE
+    // We only store the mode for validation purposes.
 }
 
 } // namespace mozilla

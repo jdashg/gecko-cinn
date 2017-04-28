@@ -8,7 +8,6 @@
 #include "GLXLibrary.h"
 #include "GLContextProvider.h"
 #include "GLContextGLX.h"
-#include "GLScreenBuffer.h"
 #include "mozilla/gfx/SourceSurfaceCairo.h"
 #include "mozilla/layers/LayersSurfaces.h"
 #include "mozilla/layers/ShadowLayerUtilsX11.h"
@@ -19,41 +18,38 @@
 namespace mozilla {
 namespace gl {
 
-/* static */
+/*static*/
 UniquePtr<SharedSurface_GLXDrawable>
-SharedSurface_GLXDrawable::Create(GLContext* prodGL,
-                                  const SurfaceCaps& caps,
-                                  const gfx::IntSize& size,
-                                  bool deallocateClient,
-                                  bool inSameProcess)
+SharedSurface_GLXDrawable::Create(GLContext* const gl, const gfx::IntSize& size,
+                                  const bool depthStencil,
+                                  const layers::TextureFlags flags,
+                                  const bool inSameProcess)
 {
-    UniquePtr<SharedSurface_GLXDrawable> ret;
     Display* display = DefaultXDisplay();
     Screen* screen = XDefaultScreenOfDisplay(display);
     Visual* visual = gfxXlibSurface::FindVisual(screen, gfx::SurfaceFormat::A8R8G8B8_UINT32);
 
-    RefPtr<gfxXlibSurface> surf = gfxXlibSurface::Create(screen, visual, size);
-    if (!deallocateClient)
-        surf->ReleasePixmap();
+    const RefPtr<gfxXlibSurface> surf = gfxXlibSurface::Create(screen, visual, size);
+    if (!surf)
+        return nullptr;
 
-    ret.reset(new SharedSurface_GLXDrawable(prodGL, size, inSameProcess, surf));
-    return Move(ret);
+    const bool deallocateClient = flags & layers::TextureFlags::DEALLOCATE_CLIENT;
+    if (!deallocateClient) {
+        surf->ReleasePixmap();
+    }
+
+    return AsUnique(new SharedSurface_GLXDrawable(gl, size, inSameProcess, surf));
 }
 
 
-SharedSurface_GLXDrawable::SharedSurface_GLXDrawable(GLContext* gl,
+SharedSurface_GLXDrawable::SharedSurface_GLXDrawable(GLContext* const gl,
                                                      const gfx::IntSize& size,
-                                                     bool inSameProcess,
-                                                     const RefPtr<gfxXlibSurface>& xlibSurface)
-    : SharedSurface(SharedSurfaceType::GLXDrawable,
-                    gl,
-                    0, 0, true, 0,
-                    size,
-                    true,
-                    true)
+                                                     const bool inSameProcess,
+                                                     gfxXlibSurface* const xlibSurface)
+    : SharedSurface(SharedSurfaceType::GLXDrawable, gl, size, true, nullptr)
     , mXlibSurface(xlibSurface)
     , mInSameProcess(inSameProcess)
-{}
+{ }
 
 void
 SharedSurface_GLXDrawable::ProducerReleaseImpl()
@@ -134,26 +130,12 @@ SharedSurface_GLXDrawable::ReadbackBySharedHandle(gfx::DataSourceSurface* out_su
     return true;
 }
 
-/* static */
-UniquePtr<SurfaceFactory_GLXDrawable>
-SurfaceFactory_GLXDrawable::Create(GLContext* prodGL,
-                                   const SurfaceCaps& caps,
-                                   const RefPtr<layers::LayersIPCChannel>& allocator,
-                                   const layers::TextureFlags& flags)
-{
-    MOZ_ASSERT(caps.alpha, "GLX surfaces require an alpha channel!");
-
-    typedef SurfaceFactory_GLXDrawable ptrT;
-    UniquePtr<ptrT> ret(new ptrT(prodGL, caps, allocator,
-                                 flags & ~layers::TextureFlags::ORIGIN_BOTTOM_LEFT));
-    return Move(ret);
-}
+////////////////////////////////////////
 
 UniquePtr<SharedSurface>
 SurfaceFactory_GLXDrawable::NewSharedSurfaceImpl(const gfx::IntSize& size)
 {
-    bool deallocateClient = !!(mFlags & layers::TextureFlags::DEALLOCATE_CLIENT);
-    return SharedSurface_GLXDrawable::Create(mGL, mCaps, size, deallocateClient,
+    return SharedSurface_GLXDrawable::Create(mGL, size, mDepthStencil, mFlags,
                                              mAllocator->IsSameProcess());
 }
 

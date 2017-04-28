@@ -63,6 +63,11 @@ namespace mozilla {
 class ComputedTimingFunction;
 class FrameLayerBuilder;
 class StyleAnimationValue;
+class WebGLContext;
+
+namespace dom {
+class CanvasRenderingContext2D;
+} // namespace dom
 
 namespace gl {
 class GLContext;
@@ -711,7 +716,7 @@ public:
   virtual void RemoveDidCompositeObserver(DidCompositeObserver* aObserver) { MOZ_CRASH("GFX: LayerManager"); }
 
   virtual void UpdateTextureFactoryIdentifier(const TextureFactoryIdentifier& aNewIdentifier,
-											  uint64_t aDeviceResetSeqNo) {}
+                        uint64_t aDeviceResetSeqNo) {}
 
   virtual TextureFactoryIdentifier GetTextureFactoryIdentifier()
   {
@@ -2606,40 +2611,28 @@ protected:
  * After Initialize is called, the underlying canvas Surface/GLContext
  * must not be modified during a layer transaction.
  */
+
+class SharedSurfaceTextureClient;
+
+class TextureProvider
+{
+public:
+  virtual RefPtr<SharedSurfaceTextureClient> GetFrontBuffer() = 0;
+};
+
 class CanvasLayer : public Layer {
 public:
-  struct Data {
-    Data()
-      : mBufferProvider(nullptr)
-      , mGLContext(nullptr)
-      , mRenderer(nullptr)
-      , mFrontbufferGLTex(0)
-      , mSize(0,0)
-      , mHasAlpha(false)
-      , mIsGLAlphaPremult(true)
-      , mIsMirror(false)
-    { }
+  struct Data final {
+    Data(const gfx::IntSize& size, const bool isAlphaPremult);
+    ~Data();
 
-    // One of these three must be specified for Canvas2D, but never more than one
-    PersistentBufferProvider* mBufferProvider; // A BufferProvider for the Canvas contents
-    mozilla::gl::GLContext* mGLContext; // or this, for GL.
-    AsyncCanvasRenderer* mRenderer; // or this, for OffscreenCanvas
+    const gfx::IntSize mSize;
+    const bool mIsAlphaPremult;
 
-    // Frontbuffer override
-    uint32_t mFrontbufferGLTex;
-
-    // The size of the canvas content
-    gfx::IntSize mSize;
-
-    // Whether the canvas drawingbuffer has an alpha channel.
-    bool mHasAlpha;
-
-    // Whether mGLContext contains data that is alpha-premultiplied.
-    bool mIsGLAlphaPremult;
-
-    // Whether the canvas front buffer is already being rendered somewhere else.
-    // When true, do not swap buffers or Morph() to another factory on mGLContext
-    bool mIsMirror;
+    // Specify only one of these:
+    PersistentBufferProvider* mBufferProvider;
+    RefPtr<WebGLContext> mWebGL;
+    RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
   };
 
   /**
