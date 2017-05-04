@@ -72,12 +72,12 @@ CopyableCanvasLayer::Initialize(const Data& aData)
 bool
 CopyableCanvasLayer::IsDataValid(const Data& aData)
 {
-  return aData.mSize.width == mBounds.width &&
-         aData.mSize.height == mBounds.height &&
-         aData.mIsAlphaPremult == mIsAlphaPremultiplied &&
-         aData.mBufferProvider == mBufferProvider;
-         aData.mWebGL == mWebGL;
-         aData.mCanvas2D == mCanvas2D;
+  return (aData.mSize.width == mBounds.width &&
+          aData.mSize.height == mBounds.height &&
+          aData.mIsAlphaPremult == mIsAlphaPremultiplied &&
+          aData.mBufferProvider == mBufferProvider &&
+          aData.mWebGL == mWebGL &&
+          aData.mCanvas2D == mCanvas2D);
 }
 
 DataSourceSurface*

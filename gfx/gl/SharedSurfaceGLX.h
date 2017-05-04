@@ -46,18 +46,18 @@ class SurfaceFactory_GLXDrawable final
     : public SurfaceFactory
 {
 public:
+    static UniquePtr<SurfaceFactory_GLXDrawable> Create(GLContext* gl, bool depthStencil,
+                                                        layers::LayersIPCChannel* allocator,
+                                                        layers::TextureFlags flags);
+
+private:
     SurfaceFactory_GLXDrawable(GLContext* const gl, const bool depthStencil,
                                layers::LayersIPCChannel* const allocator,
                                const layers::TextureFlags flags)
         : SurfaceFactory(SharedSurfaceType::GLXDrawable, gl, depthStencil, allocator,
                          flags)
-    {
-        const bool contextDepthStencil = (gl->mCreateFlags & CreateContextFlags::DEPTH_STENCIL_CONFIG);
-        MOZ_ALWAYS_TRUE(mDepthStencil == contextDepthStencil ||
-                        gl->IsConfigDepthStencilFlexible());
-    }
+    { }
 
-private:
     virtual UniquePtr<SharedSurface>
     NewSharedSurfaceImpl(const gfx::IntSize& size) override;
 };

@@ -480,10 +480,9 @@ GLXLibrary::AfterGLXCall() const
 }
 
 already_AddRefed<GLContextGLX>
-GLContextGLX::CreateGLContext(CreateContextFlags flags, const SurfaceCaps& caps,
-                              bool isOffscreen, Display* display, GLXDrawable drawable,
-                              GLXFBConfig cfg, bool deleteDrawable,
-                              gfxXlibSurface* pixmap)
+GLContextGLX::CreateGLContext(CreateContextFlags flags, bool isOffscreen,
+                              Display* display, GLXDrawable drawable, GLXFBConfig cfg,
+                              bool deleteDrawable, gfxXlibSurface* pixmap)
 {
     GLXLibrary& glx = sGLXLibrary;
 
@@ -542,8 +541,8 @@ GLContextGLX::CreateGLContext(CreateContextFlags flags, const SurfaceCaps& caps,
         }
 
         if (context) {
-            glContext = new GLContextGLX(flags, caps, isOffscreen, display, drawable,
-                                         context, deleteDrawable, db, pixmap);
+            glContext = new GLContextGLX(flags, isOffscreen, display, drawable, context,
+                                         deleteDrawable, db, pixmap, true);
             if (!glContext->Init())
                 error = true;
         } else {
@@ -625,7 +624,7 @@ GLContextGLX::MakeCurrentImpl(bool aForce)
         succeeded = mGLX->fMakeContextCurrent(mDisplay, mDrawable, mDrawable, mContext);
         NS_ASSERTION(succeeded, "Failed to make GL context current!");
 
-        if (!IsOffscreen() && mGLX->SupportsSwapControl()) {
+        if (!mIsOffscreen && mGLX->SupportsSwapControl()) {
             // Many GLX implementations default to blocking until the next
             // VBlank when calling glXSwapBuffers. We want to run unthrottled
             // in ASAP mode. See bug 1280744.
@@ -689,10 +688,7 @@ GLContextGLX::GetWSIInfo(nsCString* const out) const
 bool
 GLContextGLX::OverrideDrawable(GLXDrawable drawable)
 {
-    if (Screen())
-        Screen()->AssureBlitted();
-    Bool result = mGLX->fMakeContextCurrent(mDisplay, drawable, drawable, mContext);
-    return result;
+    return mGLX->fMakeContextCurrent(mDisplay, drawable, drawable, mContext);
 }
 
 bool
@@ -701,17 +697,16 @@ GLContextGLX::RestoreDrawable()
     return mGLX->fMakeContextCurrent(mDisplay, mDrawable, mDrawable, mContext);
 }
 
-GLContextGLX::GLContextGLX(
-                  CreateContextFlags flags,
-                  const SurfaceCaps& caps,
-                  bool isOffscreen,
-                  Display* aDisplay,
-                  GLXDrawable aDrawable,
-                  GLXContext aContext,
-                  bool aDeleteDrawable,
-                  bool aDoubleBuffered,
-                  gfxXlibSurface* aPixmap)
-    : GLContext(flags, caps, nullptr, isOffscreen),
+GLContextGLX::GLContextGLX(CreateContextFlags flags,
+                           bool isOffscreen,
+                           Display* aDisplay,
+                           GLXDrawable aDrawable,
+                           GLXContext aContext,
+                           bool aDeleteDrawable,
+                           bool aDoubleBuffered,
+                           gfxXlibSurface* aPixmap,
+                           const bool ownsContext)
+    : GLContext(flags, nullptr, isOffscreen),
       mContext(aContext),
       mDisplay(aDisplay),
       mDrawable(aDrawable),
@@ -719,7 +714,7 @@ GLContextGLX::GLContextGLX(
       mDoubleBuffered(aDoubleBuffered),
       mGLX(&sGLXLibrary),
       mPixmap(aPixmap),
-      mOwnsContext(true)
+      mOwnsContext(ownsContext)
 {
 }
 
@@ -751,153 +746,26 @@ GLContextProviderGLX::CreateWrappingExisting(void* aContext, void* aSurface)
     }
 
     if (aContext && aSurface) {
-        SurfaceCaps caps = SurfaceCaps::Any();
         RefPtr<GLContextGLX> glContext =
-            new GLContextGLX(CreateContextFlags::NONE, caps,
-                             false, // Offscreen
+            new GLContextGLX(CreateContextFlags::NONE, false,
                              (Display*)DefaultXDisplay(), // Display
                              (GLXDrawable)aSurface, (GLXContext)aContext,
                              false, // aDeleteDrawable,
                              true,
-                             (gfxXlibSurface*)nullptr);
-
-        glContext->mOwnsContext = false;
+                             (gfxXlibSurface*)nullptr, false);
         return glContext.forget();
     }
 
     return nullptr;
 }
 
-already_AddRefed<GLContext>
-CreateForWidget(Display* aXDisplay, Window aXWindow,
-                bool aWebRender,
-                bool aForceAccelerated)
-{
-    if (!sGLXLibrary.EnsureInitialized()) {
-        return nullptr;
-    }
-
-    // Currently, we take whatever Visual the window already has, and
-    // try to create an fbconfig for that visual.  This isn't
-    // necessarily what we want in the long run; an fbconfig may not
-    // be available for the existing visual, or if it is, the GL
-    // performance might be suboptimal.  But using the existing visual
-    // is a relatively safe intermediate step.
-
-    if (!aXDisplay) {
-        NS_ERROR("X Display required for GLX Context provider");
-        return nullptr;
-    }
-
-    int xscreen = DefaultScreen(aXDisplay);
-
-    ScopedXFree<GLXFBConfig> cfgs;
-    GLXFBConfig config;
-    int visid;
-    if (!GLContextGLX::FindFBConfigForWindow(aXDisplay, xscreen, aXWindow, &cfgs,
-                                             &config, &visid, aWebRender))
-    {
-        return nullptr;
-    }
-
-    CreateContextFlags flags;
-    if (aWebRender) {
-        flags = CreateContextFlags::NONE; // WR needs GL3.2+
-    } else {
-        flags = CreateContextFlags::REQUIRE_COMPAT_PROFILE;
-    }
-    return GLContextGLX::CreateGLContext(flags, SurfaceCaps::Any(), false, aXDisplay,
-                                         aXWindow, config, false, nullptr);
-}
-
-already_AddRefed<GLContext>
-GLContextProviderGLX::CreateForCompositorWidget(CompositorWidget* aCompositorWidget, bool aForceAccelerated)
-{
-    X11CompositorWidget* compWidget = aCompositorWidget->AsX11();
-    MOZ_ASSERT(compWidget);
-
-    return CreateForWidget(compWidget->XDisplay(),
-                           compWidget->XWindow(),
-                           compWidget->GetCompositorOptions().UseWebRender(),
-                           aForceAccelerated);
-}
-
-already_AddRefed<GLContext>
-GLContextProviderGLX::CreateForWindow(nsIWidget* aWidget,
-                                      bool aWebRender,
-                                      bool aForceAccelerated)
-{
-    Display* display = (Display*)aWidget->GetNativeData(NS_NATIVE_COMPOSITOR_DISPLAY);
-    Window window = GET_NATIVE_WINDOW(aWidget);
-
-    return CreateForWidget(display,
-                           window,
-                           aWebRender,
-                           aForceAccelerated);
-}
+// -------------------------------------
 
 static bool
-ChooseConfig(GLXLibrary* glx, Display* display, int screen, const SurfaceCaps& minCaps,
-             ScopedXFree<GLXFBConfig>* const out_scopedConfigArr,
-             GLXFBConfig* const out_config, int* const out_visid)
-{
-    ScopedXFree<GLXFBConfig>& scopedConfigArr = *out_scopedConfigArr;
-
-    if (minCaps.antialias)
-        return false;
-
-    int attribs[] = {
-        LOCAL_GLX_DRAWABLE_TYPE, LOCAL_GLX_PIXMAP_BIT,
-        LOCAL_GLX_X_RENDERABLE, True,
-        LOCAL_GLX_RED_SIZE, 8,
-        LOCAL_GLX_GREEN_SIZE, 8,
-        LOCAL_GLX_BLUE_SIZE, 8,
-        LOCAL_GLX_ALPHA_SIZE, minCaps.alpha ? 8 : 0,
-        LOCAL_GLX_DEPTH_SIZE, minCaps.depth ? 16 : 0,
-        LOCAL_GLX_STENCIL_SIZE, minCaps.stencil ? 8 : 0,
-        0
-    };
-
-    int numConfigs = 0;
-    scopedConfigArr = glx->fChooseFBConfig(display, screen, attribs, &numConfigs);
-    if (!scopedConfigArr || !numConfigs)
-        return false;
-
-    // Issues with glxChooseFBConfig selection and sorting:
-    // * ALPHA_SIZE is sorted as 'largest total RGBA bits first'. If we don't request
-    //   alpha bits, we'll probably get RGBA anyways, since 32 is more than 24.
-    // * DEPTH_SIZE is sorted largest first, including for `0` inputs.
-    // * STENCIL_SIZE is smallest first, but it might return `8` even though we ask for
-    //   `0`.
-
-    // For now, we don't care about these. We *will* care when we do XPixmap sharing.
-
-    for (int i = 0; i < numConfigs; ++i) {
-        GLXFBConfig curConfig = scopedConfigArr[i];
-
-        int visid;
-        if (glx->fGetFBConfigAttrib(display, curConfig, LOCAL_GLX_VISUAL_ID, &visid)
-            != Success)
-        {
-            continue;
-        }
-
-        if (!visid)
-            continue;
-
-        *out_config = curConfig;
-        *out_visid = visid;
-        return true;
-    }
-
-    return false;
-}
-
-bool
-GLContextGLX::FindFBConfigForWindow(Display* display, int screen, Window window,
-                                    ScopedXFree<GLXFBConfig>* const out_scopedConfigArr,
-                                    GLXFBConfig* const out_config, int* const out_visid,
-                                    bool aWebRender)
+FindFBConfigForWindow(Display* display, int screen, Window window,
+                      ScopedXFree<GLXFBConfig>* const out_scopedConfigArr,
+                      GLXFBConfig* const out_config, int* const out_visid,
+                      bool aWebRender)
 {
     ScopedXFree<GLXFBConfig>& cfgs = *out_scopedConfigArr;
     int numConfigs;
@@ -986,9 +854,140 @@ GLContextGLX::FindFBConfigForWindow(Display* display, int screen, Window window,
     return false;
 }
 
-static already_AddRefed<GLContextGLX>
-CreateOffscreenPixmapContext(CreateContextFlags flags, const IntSize& size,
-                             const SurfaceCaps& minCaps, nsACString* const out_failureId)
+// --
+
+/*static*/ RefPtr<GLContextGLX>
+GLContextGLX::CreateForWindow(Display* const aXDisplay, const Window aXWindow,
+                              const CreateContextFlags aFlags)
+{
+    if (!sGLXLibrary.EnsureInitialized()) {
+        return nullptr;
+    }
+
+    // Currently, we take whatever Visual the window already has, and
+    // try to create an fbconfig for that visual.  This isn't
+    // necessarily what we want in the long run; an fbconfig may not
+    // be available for the existing visual, or if it is, the GL
+    // performance might be suboptimal.  But using the existing visual
+    // is a relatively safe intermediate step.
+
+    if (!aXDisplay) {
+        MOZ_ASSERT(false, "X Display required for GLX Context provider");
+        return nullptr;
+    }
+
+    int xscreen = DefaultScreen(aXDisplay);
+    const bool webRender = bool(aFlags & CreateContextFlags::WEB_RENDER);
+
+    ScopedXFree<GLXFBConfig> cfgs;
+    GLXFBConfig config;
+    int visid;
+    if (!FindFBConfigForWindow(aXDisplay, xscreen, aXWindow, &cfgs, &config, &visid,
+                               webRender))
+    {
+        return nullptr;
+    }
+
+    return GLContextGLX::CreateGLContext(aFlags, false, aXDisplay, aXWindow, config,
+                                         false, nullptr);
+}
+
+// --
+
+static already_AddRefed<GLContext>
+CreateGLForWindow(Display* const aXDisplay, const Window aXWindow, const bool aWebRender)
+{
+    auto flags = CreateContextFlags::NONE;
+    if (aWebRender) {
+        flags |= CreateContextFlags::WEB_RENDER;
+    } else {
+        flags |= CreateContextFlags::REQUIRE_COMPAT_PROFILE;
+    }
+    auto gl = GLContextGLX::CreateForWindow(aXDisplay, aXWindow, flags);
+    return gl.forget();
+}
+
+already_AddRefed<GLContext>
+GLContextProviderGLX::CreateForCompositorWidget(CompositorWidget* aCompositorWidget,
+                                                bool /*aForceAccelerated*/)
+{
+    X11CompositorWidget* compWidget = aCompositorWidget->AsX11();
+    MOZ_ASSERT(compWidget);
+
+    const auto& webRender = compWidget->GetCompositorOptions().UseWebRender();
+    return CreateGLForWindow(compWidget->XDisplay(), compWidget->XWindow(), webRender);
+}
+
+already_AddRefed<GLContext>
+GLContextProviderGLX::CreateForWindow(nsIWidget* aWidget,
+                                      bool aWebRender,
+                                      bool /*aForceAccelerated*/)
+{
+    Display* display = (Display*)aWidget->GetNativeData(NS_NATIVE_COMPOSITOR_DISPLAY);
+    Window window = GET_NATIVE_WINDOW(aWidget);
+    return CreateGLForWindow(display, window, aWebRender);
+}
+
+// --
+
+static bool
+ChooseOffscreenConfig(GLXLibrary* glx, Display* display, int screen,
+                      const CreateContextFlags flags,
+                      ScopedXFree<GLXFBConfig>* const out_scopedConfigArr,
+                      GLXFBConfig* const out_config, int* const out_visid)
+{
+    ScopedXFree<GLXFBConfig>& scopedConfigArr = *out_scopedConfigArr;
+    const bool depthStencil = bool(flags & CreateContextFlags::DEPTH_STENCIL_CONFIG);
+    int attribs[] = {
+        LOCAL_GLX_DRAWABLE_TYPE, LOCAL_GLX_PIXMAP_BIT,
+        LOCAL_GLX_X_RENDERABLE, True,
+        LOCAL_GLX_RED_SIZE, 8,
+        LOCAL_GLX_GREEN_SIZE, 8,
+        LOCAL_GLX_BLUE_SIZE, 8,
+        LOCAL_GLX_ALPHA_SIZE, 8,
+        LOCAL_GLX_DEPTH_SIZE, depthStencil ? 24 : 0,
+        LOCAL_GLX_STENCIL_SIZE, depthStencil ? 8 : 0,
+        0
+    };
+
+    int numConfigs = 0;
+    scopedConfigArr = glx->fChooseFBConfig(display, screen, attribs, &numConfigs);
+    if (!scopedConfigArr || !numConfigs)
+        return false;
+
+    // Issues with glxChooseFBConfig selection and sorting:
+    // * ALPHA_SIZE is sorted as 'largest total RGBA bits first'. If we don't request
+    //   alpha bits, we'll probably get RGBA anyways, since 32 is more than 24.
+    // * DEPTH_SIZE is sorted largest first, including for `0` inputs.
+    // * STENCIL_SIZE is smallest first, but it might return `8` even though we ask for
+    //   `0`.
+
+    // For now, we don't care about these. We *will* care when we do XPixmap sharing.
+
+    for (int i = 0; i < numConfigs; ++i) {
+        GLXFBConfig curConfig = scopedConfigArr[i];
+
+        int visid;
+        if (glx->fGetFBConfigAttrib(display, curConfig, LOCAL_GLX_VISUAL_ID, &visid)
+            != Success)
+        {
+            continue;
+        }
+
+        if (!visid)
+            continue;
+
+        *out_config = curConfig;
+        *out_visid = visid;
+        return true;
+    }
+
+    return false;
+}
+
+/*static*/ already_AddRefed<GLContext>
+GLContextProviderGLX::CreateHeadless(CreateContextFlags flags,
+                                     nsACString* const out_failureId)
 {
     GLXLibrary* glx = &sGLXLibrary;
     if (!glx->EnsureInitialized())
@@ -1000,7 +999,9 @@ CreateOffscreenPixmapContext(CreateContextFlags flags, const IntSize& size,
     ScopedXFree<GLXFBConfig> scopedConfigArr;
     GLXFBConfig config;
     int visid;
-    if (!ChooseConfig(glx, display, screen, minCaps, &scopedConfigArr, &config, &visid)) {
+    if (!ChooseOffscreenConfig(glx, display, screen, flags, &scopedConfigArr, &config,
+                               &visid))
+    {
         NS_WARNING("Failed to find a compatible config.");
         return nullptr;
     }
@@ -1012,7 +1013,7 @@ CreateOffscreenPixmapContext(CreateContextFlags flags, const IntSize& size,
     OffMainThreadScopedXErrorHandler xErrorHandler;
     bool error = false;
 
-    gfx::IntSize dummySize(16, 16);
+    const auto dummySize = IntSize(16, 16);
     RefPtr<gfxXlibSurface> surface = gfxXlibSurface::Create(DefaultScreenOfDisplay(display),
                                                             visual,
                                                             dummySize);
@@ -1034,17 +1035,8 @@ CreateOffscreenPixmapContext(CreateContextFlags flags, const IntSize& size,
     if (error || serverError)
         return nullptr;
 
-    return GLContextGLX::CreateGLContext(flags, minCaps, true, display, pixmap, config,
-                                         true, surface);
-}
-
-/*static*/ already_AddRefed<GLContext>
-GLContextProviderGLX::CreateHeadless(CreateContextFlags flags,
-                                     nsACString* const out_failureId)
-{
-    IntSize dummySize = IntSize(16, 16);
-    SurfaceCaps dummyCaps = SurfaceCaps::Any();
-    return CreateOffscreenPixmapContext(flags, dummySize, dummyCaps, out_failureId);
+    return GLContextGLX::CreateGLContext(flags, true, display, pixmap, config, true,
+                                         surface);
 }
 
 /*static*/ GLContext*

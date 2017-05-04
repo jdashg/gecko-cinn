@@ -127,43 +127,45 @@ SurfaceFactory::Create(GLContext* const gl, const bool depthStencil,
     UniquePtr<SurfaceFactory> factory;
     if (!gfxPrefs::WebGLForceLayersReadback()) {
         switch (backend) {
-            case mozilla::layers::LayersBackend::LAYERS_OPENGL: {
+            case mozilla::layers::LayersBackend::LAYERS_OPENGL:
 #if defined(XP_MACOSX)
-                factory = SurfaceFactory_IOSurface::Create(gl, depthStencil, ipcChannel, flags);
+                factory = SurfaceFactory_IOSurface::Create(gl, depthStencil, ipcChannel,
+                                                           flags);
 #elif defined(GL_PROVIDER_GLX)
-                if (sGLXLibrary.UseTextureFromPixmap())
-                  factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel, flags);
+                factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
+                                                             flags);
 #elif defined(MOZ_WIDGET_UIKIT)
-                factory = MakeUnique<SurfaceFactory_GLTexture>(gl, depthStencil, ipcChannel, mFlags);
+                factory = MakeUnique<SurfaceFactory_GLTexture>(gl, depthStencil,
+                                                               ipcChannel, flags);
 #else
                 if (gl->GetContextType() == GLContextType::EGL) {
                     if (XRE_IsParentProcess()) {
-                        factory = SurfaceFactory_EGLImage::Create(gl, depthStencil, ipcChannel, flags);
+                        factory = SurfaceFactory_EGLImage::Create(gl, depthStencil,
+                                                                  ipcChannel, flags);
                     }
                 }
 #endif
                 break;
-            }
-            case mozilla::layers::LayersBackend::LAYERS_D3D11: {
+
+            case mozilla::layers::LayersBackend::LAYERS_D3D11:
 #ifdef XP_WIN
                 factory = SurfaceFactory_ANGLEShareHandle::Create(gl, depthStencil,
                                                                   ipcChannel, flags);
 
-                if (!factory && gfxPrefs::WebGLDXGLEnabled()) {
-                  factory = SurfaceFactory_D3D11Interop::Create(gl, depthStencil, ipcChannel, flags);
+                if (!factory) {
+                  factory = SurfaceFactory_D3D11Interop::Create(gl, depthStencil,
+                                                                ipcChannel, flags);
                 }
 #endif
                 break;
-            }
+
             default:
+#ifdef GL_PROVIDER_GLX
+                factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
+                                                             flags);
+#endif
                 break;
         }
-
-#ifdef GL_PROVIDER_GLX
-        if (!factory && sGLXLibrary.UseTextureFromPixmap()) {
-            factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel, flags);
-        }
-#endif
     }
 
     return factory;

@@ -135,10 +135,10 @@ MozFramebuffer::MozFramebuffer(GLContext* const gl, const gfx::IntSize& size,
     , mSize(size)
     , mSamples(samples)
     , mFB(gl->CreateFramebuffer())
-    , mDepthRB(depthStencil ? gl->CreateRenderbuffer() : 0)
-    , mStencilRB(depthStencil ? gl->CreateRenderbuffer() : 0)
     , mColorTarget(colorTarget)
     , mColorName(colorName)
+    , mDepthRB(depthStencil ? gl->CreateRenderbuffer() : 0)
+    , mStencilRB(depthStencil ? gl->CreateRenderbuffer() : 0)
 {
     MOZ_ASSERT(mColorTarget);
     MOZ_ASSERT(mColorName);

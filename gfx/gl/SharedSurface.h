@@ -40,6 +40,7 @@ class DrawTarget;
 
 namespace layers {
 class KnowsCompositor;
+enum class LayersBackend : int8_t;
 class LayersIPCChannel;
 class SharedSurfaceTextureClient;
 enum class TextureFlags : uint32_t;

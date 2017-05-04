@@ -491,6 +491,9 @@ SurfaceFactory_D3D11Interop::Create(GLContext* const gl, const bool depthStencil
                                     layers::LayersIPCChannel* const allocator,
                                     const layers::TextureFlags flags)
 {
+    if (!gfxPrefs::WebGLDXGLEnabled())
+        return nullptr;
+
     const auto& wgl = &sWGLLib;
     if (!wgl || !wgl->HasDXInterop2())
         return nullptr;

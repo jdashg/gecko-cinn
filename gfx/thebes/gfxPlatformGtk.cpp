@@ -682,24 +682,9 @@ public:
 
         // Most compositors wait for vsync events on the root window.
         Window root = DefaultRootWindow(mXDisplay);
-        int screen = DefaultScreen(mXDisplay);
 
-        ScopedXFree<GLXFBConfig> cfgs;
-        GLXFBConfig config;
-        int visid;
-        bool forWebRender = false;
-        if (!gl::GLContextGLX::FindFBConfigForWindow(mXDisplay, screen, root,
-                                                     &cfgs, &config, &visid,
-                                                     forWebRender)) {
-          lock.NotifyAll();
-          return;
-        }
-
-        mGLContext = gl::GLContextGLX::CreateGLContext(gl::CreateContextFlags::NONE,
-                                                       gl::SurfaceCaps::Any(), false,
-                                                       mXDisplay, root, config, false,
-                                                       nullptr);
-
+        mGLContext = gl::GLContextGLX::CreateForWindow(mXDisplay, root,
+                                                       gl::CreateContextFlags::NONE);
         if (!mGLContext) {
           lock.NotifyAll();
           return;

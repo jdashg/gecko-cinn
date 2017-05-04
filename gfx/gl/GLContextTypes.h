@@ -29,7 +29,7 @@ enum class OriginPos : uint8_t {
     BottomLeft
 };
 
-enum class CreateContextFlags : int8_t {
+enum class CreateContextFlags : uint8_t {
     NONE = 0,
     REQUIRE_COMPAT_PROFILE = 1 << 0,
     // Force the use of hardware backed GL, don't allow software implementations.
@@ -44,6 +44,8 @@ enum class CreateContextFlags : int8_t {
     // Some backends (GLX) require that subsequent backbuffers have the same depth/stencil
     // presence and depth as the config the context was created with.
     DEPTH_STENCIL_CONFIG = 1 << 6,
+
+    WEB_RENDER = 1 << 7,
 };
 MOZ_MAKE_ENUM_CLASS_BITWISE_OPERATORS(CreateContextFlags)
 

@@ -17,10 +17,22 @@ namespace gl {
 class GLContextGLX : public GLContext
 {
 public:
+    const GLXContext mContext;
+    Display* const mDisplay;
+    const GLXDrawable mDrawable;
+    const bool mDeleteDrawable;
+    const bool mDoubleBuffered;
+
+    GLXLibrary* const mGLX;
+
+    const RefPtr<gfxXlibSurface> mPixmap;
+    const bool mOwnsContext;
+
+
     MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(GLContextGLX, override)
+
     static already_AddRefed<GLContextGLX>
     CreateGLContext(CreateContextFlags flags,
-                    const SurfaceCaps& caps,
                     bool isOffscreen,
                     Display* display,
                     GLXDrawable drawable,
@@ -28,12 +40,8 @@ public:
                     bool deleteDrawable,
                     gfxXlibSurface* pixmap);
 
-    // Finds a GLXFBConfig compatible with the provided window.
-    static bool
-    FindFBConfigForWindow(Display* display, int screen, Window window,
-                          ScopedXFree<GLXFBConfig>* const out_scopedConfigArr,
-                          GLXFBConfig* const out_config, int* const out_visid,
-                          bool aWebRender);
+    static RefPtr<GLContextGLX>
+    CreateForWindow(Display* aXDisplay, Window aXWindow, CreateContextFlags flags);
 
     ~GLContextGLX();
 
@@ -71,25 +79,14 @@ private:
     friend class GLContextProviderGLX;
 
     GLContextGLX(CreateContextFlags flags,
-                 const SurfaceCaps& caps,
                  bool isOffscreen,
                  Display* aDisplay,
                  GLXDrawable aDrawable,
                  GLXContext aContext,
                  bool aDeleteDrawable,
                  bool aDoubleBuffered,
-                 gfxXlibSurface* aPixmap);
-
-    GLXContext mContext;
-    Display* mDisplay;
-    GLXDrawable mDrawable;
-    bool mDeleteDrawable;
-    bool mDoubleBuffered;
-
-    GLXLibrary* mGLX;
-
-    RefPtr<gfxXlibSurface> mPixmap;
-    bool mOwnsContext;
+                 gfxXlibSurface* aPixmap,
+                 bool ownsContext);
 };
 
 }
