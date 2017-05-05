@@ -20,7 +20,7 @@ public:
     const RefPtr<MacIOSurface> mIOSurf;
 
     SharedSurface_IOSurface(GLContext* gl, const gfx::IntSize& size,
-                            UniquePtr<MozFramebuffer>&& mozFB, MacIOSurface* ioSurf);
+                            UniquePtr<MozFramebuffer> mozFB, MacIOSurface* ioSurf);
 private:
     virtual void LockProdImpl() override { }
     virtual void UnlockProdImpl() override { }
@@ -28,15 +28,23 @@ private:
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
 
-    virtual bool CopyTexImage2D(GLenum target, GLint level, GLenum internalformat,
-                                GLint x, GLint y, GLsizei width, GLsizei height,
-                                GLint border) override;
-    virtual bool ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                            GLenum format, GLenum type, GLvoid* pixels) override;
-
-    virtual bool NeedsIndirectReads() const override { return true; }
     virtual bool ToSurfaceDescriptor(layers::SurfaceDescriptor* const out_descriptor) override;
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) override;
+
+    /* Bug 896693 - OpenGL framebuffers that are backed by IOSurface on OSX expose a bug
+     * in glCopyTexImage2D --- internalformats GL_ALPHA, GL_LUMINANCE, GL_LUMINANCE_ALPHA
+     * return the wrong results. To work around, copy framebuffer to a temporary texture
+     * using GL_RGBA (which works), attach as read framebuffer and glCopyTexImage2D
+     * instead.
+     *
+     * Calling glReadPixels when an IOSurface is bound to the current framebuffer
+     * can cause corruption in following glReadPixel calls (even if they aren't
+     * reading from an IOSurface).
+     * We workaround this by copying to a temporary texture, and doing the readback
+     * from that.
+     */
+    virtual bool NeedsIndirectReads() const override { return true; }
+
 };
 
 class SurfaceFactory_IOSurface final : public SurfaceFactory

@@ -2039,6 +2039,7 @@ private:
     UniquePtr<gl::MozFramebuffer> mPreservedFB;
     RefPtr<layers::SharedSurfaceTextureClient> mSharedFB;
     RefPtr<layers::SharedSurfaceTextureClient> mFrontBuffer;
+    UniquePtr<gl::MozFramebuffer> mIndirectReadFB;
 
     GLuint DefaultDrawFB() const;
     GLuint DefaultReadFB() const;
@@ -2076,7 +2077,9 @@ public:
     // Read commands:
     // - CopyTex*Image*
     // - ReadPixels
-    bool DoBindReadFB(const char* funcName, GLenum target = LOCAL_GL_FRAMEBUFFER);
+    // mayNeedIndirect is false for BlitFramebuffer.
+    bool DoBindReadFB(const char* funcName, bool mayNeedIndirect = true,
+                      GLenum target = LOCAL_GL_FRAMEBUFFER);
     // Both commands:
     // - BlitFramebuffer
     bool DoBindBothFBs(const char* funcName);

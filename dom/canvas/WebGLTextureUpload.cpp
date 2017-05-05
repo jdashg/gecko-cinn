@@ -11,6 +11,7 @@
 #include "gfxPrefs.h"
 #include "GLBlitHelper.h"
 #include "GLContext.h"
+#include "MozFramebuffer.h"
 #include "mozilla/gfx/2D.h"
 #include "mozilla/dom/HTMLVideoElement.h"
 #include "mozilla/dom/ImageBitmap.h"
@@ -1713,15 +1714,12 @@ ValidateCopyTexImageFormats(WebGLContext* webgl, const char* funcName,
 
 class ScopedCopyTexImageSource
 {
-    WebGLContext* const mWebGL;
-    GLuint mRB;
-    GLuint mFB;
+    UniquePtr<gl::MozFramebuffer> mFB;
 
 public:
     ScopedCopyTexImageSource(WebGLContext* webgl, const char* funcName, uint32_t srcWidth,
                              uint32_t srcHeight, const webgl::FormatInfo* srcFormat,
                              const webgl::FormatUsageInfo* dstUsage);
-    ~ScopedCopyTexImageSource();
 };
 
 ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
@@ -1729,19 +1727,19 @@ ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
                                                    uint32_t srcWidth, uint32_t srcHeight,
                                                    const webgl::FormatInfo* srcFormat,
                                                    const webgl::FormatUsageInfo* dstUsage)
-    : mWebGL(webgl)
-    , mRB(0)
-    , mFB(0)
 {
     switch (dstUsage->format->unsizedFormat) {
-    case webgl::UnsizedFormat::L:
     case webgl::UnsizedFormat::A:
     case webgl::UnsizedFormat::LA:
-        webgl->GenerateWarning("%s: Copying to a LUMINANCE, ALPHA, or LUMINANCE_ALPHA"
+        webgl->GenerateWarning("%s: Copying to a ALPHA or LUMINANCE_ALPHA"
                                " is deprecated, and has severely reduced performance"
                                " on some platforms.",
                                funcName);
         break;
+
+    case webgl::UnsizedFormat::L:
+        // L-on-R is fine.
+        return;
 
     default:
         MOZ_ASSERT(!dstUsage->textureSwizzleRGBA);
@@ -1749,45 +1747,33 @@ ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
     }
 
     if (!dstUsage->textureSwizzleRGBA)
-        return;
+        return; // Not needed on this platform, then.
+
+    if (dstUsage->format == srcFormat)
+        return; // No change.
+
+    // RGBA is the only valid src UnsizedFormat for A and LA, so make an RGBA intermediate
+    // texture.
 
     gl::GLContext* gl = webgl->gl;
+    MOZ_ASSERT(gl->IsCoreProfile());
 
-    GLenum sizedFormat;
+    // Create an intermediate texture
 
-    switch (srcFormat->componentType) {
-    case webgl::ComponentType::NormUInt:
-        sizedFormat = LOCAL_GL_RGBA8;
-        break;
+    const GLenum intermediateFormat = srcFormat->sizedFormat;
+    MOZ_ASSERT(intermediateFormat);
 
-    case webgl::ComponentType::Float:
-        if (webgl->IsExtensionEnabled(WebGLExtensionID::WEBGL_color_buffer_float)) {
-            sizedFormat = LOCAL_GL_RGBA32F;
-            break;
-        }
+    gl::ScopedTexture srcTex(gl);
+    const gl::ScopedBindTexture scopedBindTex(gl, srcTex.Texture());
+    gl->TexParams_SetClampNoMips();
 
-        if (webgl->IsExtensionEnabled(WebGLExtensionID::EXT_color_buffer_half_float)) {
-            sizedFormat = LOCAL_GL_RGBA16F;
-            break;
-        }
-        MOZ_CRASH("GFX: Should be able to request CopyTexImage from Float.");
+    gl->fCopyTexImage2D(LOCAL_GL_TEXTURE_2D, 0, intermediateFormat, 0, 0, srcWidth,
+                        srcHeight, 0);
 
-    default:
-        MOZ_CRASH("GFX: Should be able to request CopyTexImage from this type.");
-    }
-
-    gl::ScopedTexture scopedTex(gl);
-    gl::ScopedBindTexture scopedBindTex(gl, scopedTex.Texture(), LOCAL_GL_TEXTURE_2D);
-
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_2D, LOCAL_GL_TEXTURE_MIN_FILTER, LOCAL_GL_NEAREST);
-    gl->fTexParameteri(LOCAL_GL_TEXTURE_2D, LOCAL_GL_TEXTURE_MAG_FILTER, LOCAL_GL_NEAREST);
+    // Set our swizzles
 
     GLint blitSwizzle[4] = {LOCAL_GL_ZERO};
     switch (dstUsage->format->unsizedFormat) {
-    case webgl::UnsizedFormat::L:
-        blitSwizzle[0] = LOCAL_GL_RED;
-        break;
-
     case webgl::UnsizedFormat::A:
         blitSwizzle[0] = LOCAL_GL_ALPHA;
         break;
@@ -1806,70 +1792,27 @@ ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
     gl->fTexParameteri(LOCAL_GL_TEXTURE_2D, LOCAL_GL_TEXTURE_SWIZZLE_B, blitSwizzle[2]);
     gl->fTexParameteri(LOCAL_GL_TEXTURE_2D, LOCAL_GL_TEXTURE_SWIZZLE_A, blitSwizzle[3]);
 
-    gl->fCopyTexImage2D(LOCAL_GL_TEXTURE_2D, 0, sizedFormat, 0, 0, srcWidth,
-                        srcHeight, 0);
+    // Create the swizzled FB we'll be exposing
 
-    // Now create the swizzled FB we'll be exposing.
+    const GLuint swizzledRB = gl->CreateRenderbuffer();
+    {
+        const gl::ScopedBindRenderbuffer scopedRB(gl, swizzledRB);
+        gl->fRenderbufferStorage(LOCAL_GL_RENDERBUFFER, intermediateFormat, srcWidth,
+                                 srcHeight);
+    }
 
-    GLuint rgbaRB = 0;
-    gl->fGenRenderbuffers(1, &rgbaRB);
-    gl::ScopedBindRenderbuffer scopedRB(gl, rgbaRB);
-    gl->fRenderbufferStorage(LOCAL_GL_RENDERBUFFER, sizedFormat, srcWidth, srcHeight);
-
-    GLuint rgbaFB = 0;
-    gl->fGenFramebuffers(1, &rgbaFB);
-    gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, rgbaFB);
-    gl->fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
-                                 LOCAL_GL_RENDERBUFFER, rgbaRB);
-
-    const GLenum status = gl->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
-    if (status != LOCAL_GL_FRAMEBUFFER_COMPLETE) {
+    const auto srcSize = gfx::IntSize(srcWidth, srcHeight);
+    mFB = gl::MozFramebuffer::CreateWith(gl, srcSize, 0, false,
+                                         LOCAL_GL_RENDERBUFFER, swizzledRB);
+    if (!mFB) {
         MOZ_CRASH("GFX: Temp framebuffer is not complete.");
     }
+    gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mFB->mFB);
 
-    // Restore RB binding.
-    scopedRB.Unwrap(); // This function should really have a better name.
+    // Draw-blit to swizzle our FB
 
-    // Draw-blit rgbaTex into rgbaFB.
-    const gfx::IntSize srcSize(srcWidth, srcHeight);
-    gl->BlitHelper()->DrawBlitTextureToFramebuffer(scopedTex.Texture(), rgbaFB,
+    gl->BlitHelper()->DrawBlitTextureToFramebuffer(srcTex.Texture(), mFB->mFB,
                                                    srcSize, srcSize);
-
-    // Restore Tex2D binding and destroy the temp tex.
-    scopedBindTex.Unwrap();
-    scopedTex.Unwrap();
-
-    // Leave RB and FB alive, and FB bound.
-    mRB = rgbaRB;
-    mFB = rgbaFB;
-}
-
-template<typename T>
-static inline GLenum
-ToGLHandle(const T& obj)
-{
-    return (obj ? obj->mGLName : 0);
-}
-
-ScopedCopyTexImageSource::~ScopedCopyTexImageSource()
-{
-    if (!mFB) {
-        MOZ_ASSERT(!mRB);
-        return;
-    }
-    MOZ_ASSERT(mRB);
-
-    gl::GLContext* gl = mWebGL->gl;
-
-    // If we're swizzling, it's because we're on a GL core (3.2+) profile, which has
-    // split framebuffer support.
-    gl->fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER,
-                         ToGLHandle(mWebGL->mBoundDrawFramebuffer));
-    gl->fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER,
-                         ToGLHandle(mWebGL->mBoundReadFramebuffer));
-
-    gl->fDeleteFramebuffers(1, &mFB);
-    gl->fDeleteRenderbuffers(1, &mRB);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

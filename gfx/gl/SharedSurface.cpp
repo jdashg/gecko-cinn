@@ -129,8 +129,8 @@ SurfaceFactory::Create(GLContext* const gl, const bool depthStencil,
         switch (backend) {
             case mozilla::layers::LayersBackend::LAYERS_OPENGL:
 #if defined(XP_MACOSX)
-                factory = SurfaceFactory_IOSurface::Create(gl, depthStencil, ipcChannel,
-                                                           flags);
+                factory = AsUnique(new SurfaceFactory_IOSurface(gl, depthStencil,
+                                                                ipcChannel, flags));
 #elif defined(GL_PROVIDER_GLX)
                 factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
                                                              flags);

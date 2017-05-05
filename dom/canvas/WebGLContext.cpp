@@ -312,6 +312,7 @@ WebGLContext::DestroyResourcesAndContext()
     mAntialiasedFB = nullptr;
     mPreservedFB = nullptr;
     SetSharedFB(nullptr);
+    mIndirectReadFB = nullptr;
 
     mSurfFactory.Reset(nullptr);
 
@@ -1529,9 +1530,11 @@ WebGLContext::DoBindDrawFB(const char* const funcName, const GLenum target)
 }
 
 bool
-WebGLContext::DoBindReadFB(const char* const funcName, const GLenum target)
+WebGLContext::DoBindReadFB(const char* const funcName, const bool mayNeedIndirect,
+                           const GLenum target)
 {
     MOZ_ASSERT(target != LOCAL_GL_DRAW_FRAMEBUFFER);
+    bool needsIndirect = false;
     GLuint driverFB;
     if (mBoundReadFramebuffer) {
         if (!mBoundReadFramebuffer->ValidateAndInitAttachments(funcName))
@@ -1541,9 +1544,32 @@ WebGLContext::DoBindReadFB(const char* const funcName, const GLenum target)
         if (!EnsureDefaultReadFB(funcName))
             return false;
         driverFB = DefaultReadFB();
+
+        needsIndirect = (mayNeedIndirect &&
+                         mSharedFB &&
+                         mSharedFB->Surf()->NeedsIndirectReads());
     }
 
     gl->fBindFramebuffer(target, driverFB);
+
+    if (needsIndirect) {
+        mIndirectReadFB = gl::MozFramebuffer::Create(gl, mSharedFB->Surf()->mSize, 0,
+                                                     false);
+        if (!mIndirectReadFB) {
+            GenerateWarning("%s: Failed to create indirect read FB.", funcName);
+            ForceLoseContext();
+            return false;
+        }
+
+        const gl::ScopedBindTexture bindTex(gl, mIndirectReadFB->ColorTex());
+        gl->fCopyTexSubImage2D(LOCAL_GL_TEXTURE_2D, 0, 0,0, 0,0,
+                               mIndirectReadFB->mSize.width,
+                               mIndirectReadFB->mSize.height);
+
+        gl->fBindFramebuffer(target, mIndirectReadFB->mFB);
+    } else {
+        mIndirectReadFB = nullptr;
+    }
     return true;
 }
 
@@ -1552,7 +1578,7 @@ WebGLContext::DoBindBothFBs(const char* const funcName)
 {
     MOZ_ASSERT(mBoundReadFramebuffer || mBoundDrawFramebuffer);
     // BindRead first, since BindDraw sets mAntialiasedFB_IsDirty.
-    if (!DoBindReadFB(funcName, LOCAL_GL_READ_FRAMEBUFFER) ||
+    if (!DoBindReadFB(funcName, false, LOCAL_GL_READ_FRAMEBUFFER) ||
         !DoBindDrawFB(funcName, LOCAL_GL_DRAW_FRAMEBUFFER))
     {
         return false;

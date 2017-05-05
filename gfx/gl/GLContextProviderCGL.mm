@@ -5,6 +5,7 @@
 
 #include "GLContextProvider.h"
 #include "GLContextCGL.h"
+
 #include "nsDebug.h"
 #include "nsIWidget.h"
 #include <OpenGL/gl.h>
@@ -12,6 +13,7 @@
 #include "gfxPrefs.h"
 #include "prenv.h"
 #include "GeckoProfiler.h"
+#include "mozilla/AlreadyAddRefed.h"
 #include "mozilla/gfx/MacIOSurface.h"
 #include "mozilla/layers/CompositorOptions.h"
 #include "mozilla/widget/CompositorWidget.h"
@@ -72,9 +74,9 @@ private:
 
 CGLLibrary sCGLLibrary;
 
-GLContextCGL::GLContextCGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                           NSOpenGLContext* context, bool isOffscreen)
-    : GLContext(flags, caps, nullptr, isOffscreen)
+GLContextCGL::GLContextCGL(CreateContextFlags flags, bool isOffscreen,
+                           NSOpenGLContext* context)
+    : GLContext(flags, nullptr, isOffscreen)
     , mContext(context)
 {
 }
@@ -291,9 +293,8 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget,
     GLint opaque = 0;
     [context setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
 
-    RefPtr<GLContextCGL> glContext = new GLContextCGL(CreateContextFlags::NONE,
-                                                      SurfaceCaps::ForRGBA(), context,
-                                                      false);
+    RefPtr<GLContextCGL> glContext = new GLContextCGL(CreateContextFlags::NONE, false,
+                                                      context);
 
     if (!glContext->Init()) {
         glContext = nullptr;
@@ -335,7 +336,7 @@ CreateOffscreenContext(CreateContextFlags flags)
         return nullptr;
     }
 
-    RefPtr<GLContextCGL> glContext = new GLContextCGL(flags, context, true);
+    RefPtr<GLContextCGL> glContext = new GLContextCGL(flags, true, context);
     if (gfxPrefs::GLMultithreaded()) {
         CGLEnable(glContext->GetCGLContext(), kCGLCEMPEngine);
     }
