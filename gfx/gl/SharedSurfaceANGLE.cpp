@@ -130,14 +130,9 @@ SharedSurface_ANGLEShareHandle::~SharedSurface_ANGLEShareHandle()
 }
 
 void
-SharedSurface_ANGLEShareHandle::LockProdImpl()
+SharedSurface_ANGLEShareHandle::LockProd()
 {
     GLContextEGL::Cast(mGL)->SetEGLSurfaceOverride(mPBuffer);
-}
-
-void
-SharedSurface_ANGLEShareHandle::UnlockProdImpl()
-{
 }
 
 void

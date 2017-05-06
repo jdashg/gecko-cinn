@@ -3389,17 +3389,20 @@ public:
     void PushSurfaceLock(SharedSurface* const surf) {
         MOZ_ASSERT(mSurfaceLockStack.size() <= 10, "Are you sure about this?");
         UnlockTopSurface();
+
         mSurfaceLockStack.push(surf);
+
         LockTopSurface();
     }
 
-    SharedSurface* PopSurfaceLock() {
+    void PopSurfaceLock(SharedSurface* const surf) {
         MOZ_ASSERT(mSurfaceLockStack.size());
         UnlockTopSurface();
-        const auto top = mSurfaceLockStack.top();
+
+        MOZ_ASSERT(mSurfaceLockStack.top() == surf);
         mSurfaceLockStack.pop();
+
         LockTopSurface();
-        return top;
     }
 
     ////////////////
@@ -3628,6 +3631,27 @@ GLuint CreateTexture(GLContext* aGL, GLenum aInternalFormat, GLenum aFormat,
  * texel for a texture from its format and type.
  */
 uint32_t GetBytesPerTexel(GLenum format, GLenum type);
+
+// --
+
+class ScopedSurfaceLock final
+{
+    GLContext* const mGL;
+    SharedSurface* const mSurf;
+
+public:
+    ScopedSurfaceLock(GLContext* const gl, SharedSurface* const surf)
+        : mGL(gl)
+        , mSurf(surf)
+    {
+        mGL->PushSurfaceLock(mSurf);
+    }
+
+    ~ScopedSurfaceLock()
+    {
+        mGL->PopSurfaceLock(mSurf);
+    }
+};
 
 } /* namespace gl */
 } /* namespace mozilla */

@@ -69,14 +69,11 @@ public:
     const GLuint mFB;
 
 protected:
-    bool mIsLocked;
     bool mIsWriteAcquired;
     bool mIsReadAcquired;
 #ifdef DEBUG
     nsIThread* const mOwningThread;
 #endif
-
-    static GLuint CreateFB(GLContext* gl);
 
     SharedSurface(SharedSurfaceType type, GLContext* gl, const gfx::IntSize& size,
                   bool canRecycle, UniquePtr<MozFramebuffer> mozFB);
@@ -92,26 +89,14 @@ public:
     // are required by the SharedSurface backend.
     virtual layers::TextureFlags GetTextureFlags() const;
 
-    bool IsLocked() const { return mIsLocked; }
     //bool IsProducerAcquired() const { return mIsProducerAcquired; }
 
 protected:
     // This locks the SharedSurface as the production buffer for the context.
     // This is needed by backends which use PBuffers and/or EGLSurfaces.
-    void LockProd() {
-        MOZ_ASSERT(!mIsLocked);
-        mIsLocked = true;
-        LockProdImpl();
-    }
-    void UnlockProd() {
-        MOZ_ASSERT(mIsLocked);
-        mIsLocked = false;
-        UnlockProdImpl();
-    }
     friend class GLContext;
-
-    virtual void LockProdImpl() = 0;
-    virtual void UnlockProdImpl() = 0;
+    virtual void LockProd() { }
+    virtual void UnlockProd() { }
 
     virtual void ProducerAcquireImpl() = 0;
     virtual void ProducerReleaseImpl() = 0;
@@ -317,19 +302,8 @@ public:
 
     bool Morph(layers::KnowsCompositor* info, bool force = false);
 
-    operator bool() const { return bool(mFactory); }
+    explicit operator bool() const { return bool(mFactory); }
     SurfaceFactory* operator ->() const { return mFactory.get(); }
-};
-
-class ScopedReadbackFB
-{
-    GLContext* const mGL;
-    ScopedBindFramebuffer mAutoFB;
-    UniquePtr<MozFramebuffer> mIndirectFB;
-
-public:
-    explicit ScopedReadbackFB(SharedSurface* src);
-    ~ScopedReadbackFB();
 };
 
 bool ReadbackSharedSurface(SharedSurface* src, gfx::DrawTarget* dest);

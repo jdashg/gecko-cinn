@@ -25,8 +25,8 @@ using namespace mozilla::gl;
 namespace mozilla {
 namespace layers {
 
-already_AddRefed<SourceSurface>
-BasicCanvasLayer::UpdateSurface()
+RefPtr<SourceSurface>
+BasicCanvasLayer::UpdateSurface(gl::OriginPos* const out_origin)
 {
   const auto& frontTex = GetFrontTex();
   if (!frontTex) {
@@ -48,12 +48,18 @@ BasicCanvasLayer::UpdateSurface()
 
   // Readback handles Flush/MarkDirty.
   Readback(frontSurf, resultSurf);
-  if (!mIsAlphaPremultiplied) {
+  const bool isNonPremult = bool(frontTex->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
+  if (isNonPremult) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
   MOZ_ASSERT(resultSurf);
 
-  return resultSurf.forget();
+  if (frontTex->GetFlags() & TextureFlags::ORIGIN_BOTTOM_LEFT) {
+    *out_origin = gl::OriginPos::TopLeft;
+  } else {
+    *out_origin = gl::OriginPos::TopLeft;
+  }
+  return resultSurf;
 }
 
 void
@@ -65,17 +71,19 @@ BasicCanvasLayer::Paint(DrawTarget* aDT,
     return;
 
   RefPtr<SourceSurface> surface;
+  auto surfOrigin = gl::OriginPos::TopLeft;
   if (IsDirty()) {
     Painted();
 
     FirePreTransactionCallback();
-    surface = UpdateSurface();
+    surface = UpdateSurface(&surfOrigin);
     FireDidTransactionCallback();
   }
 
   bool bufferPoviderSnapshot = false;
   if (!surface && mBufferProvider) {
     surface = mBufferProvider->BorrowSnapshot();
+    surfOrigin = gl::OriginPos::TopLeft;
     bufferPoviderSnapshot = !!surface;
   }
 
@@ -83,7 +91,7 @@ BasicCanvasLayer::Paint(DrawTarget* aDT,
     return;
   }
 
-  const bool needsYFlip = (mOriginPos == gl::OriginPos::BottomLeft);
+  const bool needsYFlip = (surfOrigin != gl::OriginPos::TopLeft);
 
   Matrix oldTM;
   if (needsYFlip) {

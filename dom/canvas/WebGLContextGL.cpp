@@ -1511,6 +1511,10 @@ WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth, GLsizei rawHeig
                              GLenum packFormat, GLenum packType, void* dest,
                              uint32_t dataLen)
 {
+    MakeContextCurrent();
+    if (!DoBindReadFB("readPixels"))
+        return;
+
     if (rawWidth < 0 || rawHeight < 0) {
         ErrorInvalidValue("readPixels: negative size passed");
         return;
@@ -1520,8 +1524,6 @@ WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth, GLsizei rawHeig
     const uint32_t height(rawHeight);
 
     //////
-
-    MakeContextCurrent();
 
     const webgl::FormatUsageInfo* srcFormat;
     uint32_t srcWidth;
@@ -1571,12 +1573,8 @@ WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth, GLsizei rawHeig
     ////////////////
     // Now that the errors are out of the way, on to actually reading!
 
-    if (!DoBindReadFB("readPixels"))
-        return;
-
     if (!rwWidth || !rwHeight) {
         // Disjoint rects, so we're done already.
-        DummyReadFramebufferOperation("readPixels");
         return;
     }
 

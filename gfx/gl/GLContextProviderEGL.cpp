@@ -841,6 +841,7 @@ FillContextAttribs(bool alpha, bool bpp16, uint8_t depthBits,
     out->AppendElement(0);
 }
 
+#ifdef DEBUG
 static GLint
 GetAttrib(GLLibraryEGL* egl, EGLConfig config, EGLint attrib)
 {
@@ -850,6 +851,7 @@ GetAttrib(GLLibraryEGL* egl, EGLConfig config, EGLint attrib)
 
     return bits;
 }
+#endif
 
 static EGLConfig
 ChooseConfig(GLLibraryEGL* const egl, const CreateContextFlags flags)

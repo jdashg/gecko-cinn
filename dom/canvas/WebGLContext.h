@@ -22,7 +22,6 @@
 #include "mozilla/UniquePtr.h"
 #include "nsCycleCollectionNoteChild.h"
 #include "nsICanvasRenderingContextInternal.h"
-#include "nsLayoutUtils.h"
 #include "nsTArray.h"
 #include "nsWrapperCache.h"
 #include "SharedSurface.h"
@@ -49,7 +48,6 @@
 #include "nsIObserver.h"
 #include "mozilla/dom/HTMLCanvasElement.h"
 #include "nsWrapperCache.h"
-#include "nsLayoutUtils.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
 
@@ -159,20 +157,10 @@ struct WebGLContextOptions
         return depth || stencil;
     }
 
-    bool BackbufferHasDepthStencil() const {
-        if (antialias)
+    bool FrontbufferHasDepthStencil() const {
+        if (antialias || preserveDrawingBuffer)
             return false;
         return HasDepthStencil();
-    }
-
-    bool FrontbufferHasDepthStencil() const {
-        if (NeedsPreserveBuffer())
-            return false;
-        return BackbufferHasDepthStencil();
-    }
-
-    bool NeedsPreserveBuffer() const {
-        return preserveDrawingBuffer && !antialias;
     }
 };
 
@@ -346,10 +334,9 @@ class WebGLContext
     static const uint32_t kMinMaxColorAttachments;
     static const uint32_t kMinMaxDrawBuffers;
 
-    const uint32_t mAntialiasSamples;
-
     bool mOptionsFrozen;
     WebGLContextOptions mMutableOptions;
+    uint32_t mAntialiasSamples;
 public:
     const WebGLContextOptions& mOptions;
 
@@ -447,8 +434,6 @@ public:
      */
     static void EnumName(GLenum val, nsCString* out_name);
 
-    void DummyReadFramebufferOperation(const char* funcName);
-
     WebGLTexture* ActiveBoundTextureForTarget(const TexTarget texTarget) const {
         switch (texTarget.get()) {
         case LOCAL_GL_TEXTURE_2D:
@@ -517,19 +502,17 @@ public:
     void Commit();
     void GetCanvas(Nullable<dom::OwningHTMLCanvasElementOrOffscreenCanvas>& retval);
     uint32_t DrawingBufferWidth() {
-        if (IsContextLost() ||
-            !EnsureDefaultDrawFB("drawingBufferWidth"))
-        {
+        if (IsContextLost())
             return 0;
-        }
+        if (!EnsureDefaultFBsResized("drawingBufferWidth"))
+            return 0;
         return mWidth;
     }
     uint32_t DrawingBufferHeight() {
-        if (IsContextLost() ||
-            !EnsureDefaultDrawFB("drawingBufferHeight"))
-        {
+        if (IsContextLost())
             return 0;
-        }
+        if (!EnsureDefaultFBsResized("drawingBufferHeight"))
+            return 0;
         return mHeight;
     }
 
@@ -1400,6 +1383,7 @@ private:
     uint32_t mMaxFetchedInstances;
     bool mBufferFetch_IsAttrib0Active;
 
+    bool ValidateDraw(const char* funcName, GLenum mode);
     bool DrawArrays_check(const char* funcName, GLenum mode, GLint first,
                           GLsizei vertCount, GLsizei instanceCount);
     bool DrawElements_check(const char* funcName, GLenum mode, GLsizei vertCount,
@@ -2043,12 +2027,11 @@ private:
 
     GLuint DefaultDrawFB() const;
     GLuint DefaultReadFB() const;
-    bool CreateDefaultDrawFB();
-    bool CreateDefaultReadFB();
+    bool EnsureDefaultFBsResized(const char* funcName);
     void SetSharedFB(layers::SharedSurfaceTextureClient* sharedFB);
 public:
-    bool EnsureDefaultDrawFB(const char* funcName);
-    bool EnsureDefaultReadFB(const char* funcName);
+    bool PrepareDefaultDrawFB(const char* funcName);
+    bool PrepareDefaultReadFB(const char* funcName);
 
     const decltype(mFrontBuffer)& FrontBuffer() const { return mFrontBuffer; }
 
@@ -2077,9 +2060,10 @@ public:
     // Read commands:
     // - CopyTex*Image*
     // - ReadPixels
-    // mayNeedIndirect is false for BlitFramebuffer.
+    // mayNeedIndirect:false for BlitFramebuffer, GetParameter
+    // isFBOperation:false for GetParameter
     bool DoBindReadFB(const char* funcName, bool mayNeedIndirect = true,
-                      GLenum target = LOCAL_GL_FRAMEBUFFER);
+                      bool isFBOperation = true, GLenum target = LOCAL_GL_FRAMEBUFFER);
     // Both commands:
     // - BlitFramebuffer
     bool DoBindBothFBs(const char* funcName);

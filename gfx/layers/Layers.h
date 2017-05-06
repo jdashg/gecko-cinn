@@ -17,6 +17,7 @@
 #include "gfxPoint.h"                   // for gfxPoint
 #include "gfxRect.h"                    // for gfxRect
 #include "gfx2DGlue.h"
+#include "GLContextTypes.h"
 #include "mozilla/Assertions.h"         // for MOZ_ASSERT_HELPER2, etc
 #include "mozilla/Array.h"
 #include "mozilla/DebugOnly.h"          // for DebugOnly
@@ -1343,7 +1344,7 @@ public:
   const Maybe<ParentLayerIntRect>& GetClipRect() const { return mClipRect; }
   const Maybe<LayerClip>& GetScrolledClip() const { return mSimpleAttrs.ScrolledClip(); }
   Maybe<ParentLayerIntRect> GetScrolledClipRect() const;
-  uint32_t GetContentFlags() { return mSimpleAttrs.ContentFlags(); }
+  uint32_t GetContentFlags() const { return mSimpleAttrs.ContentFlags(); }
   const gfx::IntRect& GetLayerBounds() const { return mSimpleAttrs.LayerBounds(); }
   const LayerIntRegion& GetVisibleRegion() const { return mVisibleRegion; }
   const ScrollMetadata& GetScrollMetadata(uint32_t aIndex) const;
@@ -2623,11 +2624,10 @@ public:
 class CanvasLayer : public Layer {
 public:
   struct Data final {
-    Data(const gfx::IntSize& size, const bool isAlphaPremult);
+    explicit Data(const gfx::IntSize& size);
     ~Data();
 
     const gfx::IntSize mSize;
-    const bool mIsAlphaPremult;
 
     // Specify only one of these:
     PersistentBufferProvider* mBufferProvider;

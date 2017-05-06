@@ -1135,45 +1135,44 @@ HTMLCanvasElement::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
                                   Layer *aOldLayer,
                                   LayerManager *aManager)
 {
+  if (mCurrentContext) {
+    return mCurrentContext->GetCanvasLayer(aBuilder, aOldLayer, aManager, mVRPresentationActive);
+  }
+
+  if (!mOffscreenCanvas)
+    return nullptr;
+
+  return nullptr;
+  /*
   // The address of sOffscreenCanvasLayerUserDataDummy is used as the user
   // data key for retained LayerManagers managed by FrameLayerBuilder.
   // We don't much care about what value in it, so just assign a dummy
   // value for it.
   static uint8_t sOffscreenCanvasLayerUserDataDummy = 0;
 
-  if (mCurrentContext) {
-    return mCurrentContext->GetCanvasLayer(aBuilder, aOldLayer, aManager, mVRPresentationActive);
+  if (!mResetLayer &&
+      aOldLayer && aOldLayer->HasUserData(&sOffscreenCanvasLayerUserDataDummy)) {
+    RefPtr<Layer> ret = aOldLayer;
+    return ret.forget();
   }
 
-  if (mOffscreenCanvas) {
+  RefPtr<CanvasLayer> layer = aManager->CreateCanvasLayer();
+  if (!layer) {
+    NS_WARNING("CreateCanvasLayer failed!");
     return nullptr;
-    /*
-    if (!mResetLayer &&
-        aOldLayer && aOldLayer->HasUserData(&sOffscreenCanvasLayerUserDataDummy)) {
-      RefPtr<Layer> ret = aOldLayer;
-      return ret.forget();
-    }
-
-    RefPtr<CanvasLayer> layer = aManager->CreateCanvasLayer();
-    if (!layer) {
-      NS_WARNING("CreateCanvasLayer failed!");
-      return nullptr;
-    }
-
-    LayerUserData* userData = nullptr;
-    layer->SetUserData(&sOffscreenCanvasLayerUserDataDummy, userData);
-
-    CanvasLayer::Data data(GetWidthHeight(), true);
-    data.mRenderer = GetAsyncCanvasRenderer();
-    data.mSize = GetWidthHeight();
-    layer->Initialize(data);
-
-    layer->Updated();
-    return layer.forget();
-    */
   }
 
-  return nullptr;
+  LayerUserData* userData = nullptr;
+  layer->SetUserData(&sOffscreenCanvasLayerUserDataDummy, userData);
+
+  CanvasLayer::Data data(GetWidthHeight(), true);
+  data.mRenderer = GetAsyncCanvasRenderer();
+  data.mSize = GetWidthHeight();
+  layer->Initialize(data);
+
+  layer->Updated();
+  return layer.forget();
+  */
 }
 
 bool

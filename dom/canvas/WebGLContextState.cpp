@@ -56,7 +56,7 @@ WebGLContext::GetChannelBits(const char* funcName, GLenum pname, GLint* const ou
     if (!fb) {
         BackbufferFormats(&color, &depth, &stencil);
     } else {
-        if (!fb->ValidateAndInitAttachments(funcName))
+        if (!fb->ValidateAndInitAttachments(funcName, false))
             return false;
 
         const auto fnGetFormat = [&](const WebGLFBAttachPoint& attach)
@@ -323,6 +323,9 @@ WebGLContext::GetParameter(JSContext* cx, GLenum pname, ErrorResult& rv)
 
         case LOCAL_GL_IMPLEMENTATION_COLOR_READ_FORMAT:
         case LOCAL_GL_IMPLEMENTATION_COLOR_READ_TYPE: {
+            if (!DoBindReadFB(funcName, false, false))
+                return JS::NullValue();
+
             const webgl::FormatUsageInfo* usage;
             uint32_t width, height;
             if (!ValidateCurFBForRead(funcName, &usage, &width, &height))
@@ -527,12 +530,8 @@ WebGLContext::GetParameter(JSContext* cx, GLenum pname, ErrorResult& rv)
 
         // 4 bools
         case LOCAL_GL_COLOR_WRITEMASK: {
-            realGLboolean gl_bv[4] = { 0 };
-            gl->fGetBooleanv(pname, gl_bv);
-            bool vals[4] = { bool(gl_bv[0]), bool(gl_bv[1]),
-                             bool(gl_bv[2]), bool(gl_bv[3]) };
             JS::Rooted<JS::Value> arr(cx);
-            if (!dom::ToJSValue(cx, vals, &arr)) {
+            if (!dom::ToJSValue(cx, mColorWriteMask, &arr)) {
                 rv = NS_ERROR_OUT_OF_MEMORY;
             }
             return arr;

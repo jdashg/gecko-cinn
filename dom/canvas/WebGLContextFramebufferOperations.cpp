@@ -153,13 +153,15 @@ WebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers)
 
     gl->MakeCurrent();
 
-    if (!DoBindDrawFB(funcName))
-        return;
-
     if (mBoundDrawFramebuffer) {
+        // Doesn't need to be complete.
+        gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, mBoundDrawFramebuffer->mGLName);
         mBoundDrawFramebuffer->DrawBuffers(funcName, buffers);
         return;
     }
+
+    if (!DoBindDrawFB(funcName))
+        return;
 
     // GLES 3.0.4 p186:
     // "If the GL is bound to the default framebuffer, then `n` must be 1 and the

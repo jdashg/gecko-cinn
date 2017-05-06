@@ -29,30 +29,40 @@ MozFramebuffer::Create(GLContext* const gl, const gfx::IntSize& size,
 
     gl->MakeCurrent();
 
-    GLContext::LocalErrorScope errorScope(*gl);
-
     GLenum colorTarget;
     GLuint colorName;
+    GLenum err;
     if (samples) {
         colorTarget = LOCAL_GL_RENDERBUFFER;
         colorName = gl->CreateRenderbuffer();
         const ScopedBindRenderbuffer bindRB(gl, colorName);
+
+        GLContext::LocalErrorScope errorScope(*gl);
         gl->fRenderbufferStorageMultisample(colorTarget, samples, LOCAL_GL_RGBA8,
                                             size.width, size.height);
+        err = errorScope.GetError();
     } else {
         colorTarget = LOCAL_GL_TEXTURE_2D;
         colorName = gl->CreateTexture();
         const ScopedBindTexture bindTex(gl, colorName);
         gl->TexParams_SetClampNoMips();
         const ScopedUnbindPBO bindPBO(gl, LOCAL_GL_PIXEL_UNPACK_BUFFER);
+
+        GLContext::LocalErrorScope errorScope(*gl);
         gl->fTexImage2D(colorTarget, 0, LOCAL_GL_RGBA,
                         size.width, size.height, 0,
                         LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, nullptr);
+        err = errorScope.GetError();
     }
 
-    const auto err = errorScope.GetError();
     if (err) {
-        MOZ_ASSERT(err == LOCAL_GL_OUT_OF_MEMORY);
+        if (err != LOCAL_GL_OUT_OF_MEMORY &&
+            err != LOCAL_GL_INVALID_VALUE)
+        {
+            // INVALID_OP could be too-many-samples for MSRB.
+            // INVALID_VALUE could be size-larger-than-max.
+            gfxCriticalError() << "Error creating color buffer: " << err;
+        }
         DeleteByTarget(gl, colorTarget, colorName);
         return nullptr;
     }
@@ -106,7 +116,11 @@ MozFramebuffer::CreateWith(GLContext* const gl, const gfx::IntSize& size,
 
             const auto err = errorScope.GetError();
             if (err) {
-                MOZ_ASSERT(err == LOCAL_GL_OUT_OF_MEMORY);
+                if (err != LOCAL_GL_OUT_OF_MEMORY &&
+                    err != LOCAL_GL_INVALID_VALUE)
+                {
+                    gfxCriticalError() << "Error creating color buffer: " << err;
+                }
                 return nullptr;
             }
         }
@@ -146,7 +160,7 @@ MozFramebuffer::MozFramebuffer(GLContext* const gl, const gfx::IntSize& size,
 
 MozFramebuffer::~MozFramebuffer()
 {
-    GLContext* const gl = mWeakGL;
+    const auto gl = mWeakGL.get();
     if (!gl || !gl->MakeCurrent())
         return;
 

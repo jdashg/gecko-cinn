@@ -38,9 +38,6 @@ private:
     SharedSurface_Basic(GLContext* gl, const gfx::IntSize& size,
                         UniquePtr<MozFramebuffer> mozFB);
 
-    virtual void LockProdImpl() override {}
-    virtual void UnlockProdImpl() override {}
-
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override {}
 
@@ -84,9 +81,6 @@ private:
 public:
     virtual ~SharedSurface_GLTexture() override;
 private:
-    virtual void LockProdImpl() override {}
-    virtual void UnlockProdImpl() override {}
-
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
 

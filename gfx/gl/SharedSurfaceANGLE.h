@@ -40,8 +40,8 @@ private:
 public:
     virtual ~SharedSurface_ANGLEShareHandle() override;
 private:
-    virtual void LockProdImpl() override;
-    virtual void UnlockProdImpl() override;
+    virtual void LockProd() override;
+    virtual void UnlockProd() override { }
 
     virtual void ProducerAcquireImpl() override;
     virtual void ProducerReleaseImpl() override;

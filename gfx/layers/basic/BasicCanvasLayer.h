@@ -36,8 +36,7 @@ public:
                      Layer* aMaskLayer) override;
 
 protected:
-
-  already_AddRefed<gfx::SourceSurface> UpdateSurface();
+  RefPtr<gfx::SourceSurface> UpdateSurface(gl::OriginPos* const out_origin);
 
   BasicLayerManager* BasicManager()
   {

@@ -42,7 +42,7 @@ WebRenderCanvasLayer::RenderLayer(wr::DisplayListBuilder& aBuilder)
   MOZ_ASSERT(mExternalImageId);
 
   gfx::Matrix4x4 transform = GetTransform();
-  const bool needsYFlip = (mOriginPos == gl::OriginPos::BottomLeft);
+  const bool needsYFlip = false;
   if (needsYFlip) {
     transform.PreTranslate(0, mBounds.height, 0).PreScale(1, -1, 1);
   }

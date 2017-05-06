@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SharedSurface.h"
+#include "ScopedReadbackFB.h"
 
 #include "../2d/2D.h"
 #include "gfxPrefs.h"
@@ -45,7 +46,6 @@ SharedSurface::SharedSurface(const SharedSurfaceType type, GLContext* const gl,
     , mMozFB(Move(mozFB))
     , mFB(mMozFB ? mMozFB->mFB : 0)
 
-    , mIsLocked(false)
     , mIsWriteAcquired(false)
     , mIsReadAcquired(false)
 #ifdef DEBUG
@@ -55,7 +55,6 @@ SharedSurface::SharedSurface(const SharedSurfaceType type, GLContext* const gl,
 
 SharedSurface::~SharedSurface()
 {
-    MOZ_ASSERT(!mIsLocked);
     MOZ_ASSERT(!mIsWriteAcquired);
     MOZ_ASSERT(!mIsReadAcquired);
 }
@@ -69,14 +68,11 @@ SharedSurface::GetTextureFlags() const
 void
 SharedSurface::CopyFrom(const MozFramebuffer* const src)
 {
-    MOZ_ASSERT(!mIsLocked);
     MOZ_ASSERT(mIsWriteAcquired);
     MOZ_RELEASE_ASSERT(mSize == src->mSize);
 
     const auto colorTex = src->ColorTex();
     MOZ_RELEASE_ASSERT(colorTex);
-
-    mGL->PushSurfaceLock(this);
 
     if (mGL->IsSupported(GLFeature::framebuffer_blit)) {
         mGL->BlitHelper()->BlitFramebufferToFramebuffer(src->mFB, mFB, mSize, mSize);
@@ -84,15 +80,12 @@ SharedSurface::CopyFrom(const MozFramebuffer* const src)
         mGL->BlitHelper()->DrawBlitTextureToFramebuffer(colorTex, mFB, mSize, mSize,
                                                         src->mColorTarget);
     }
-    mGL->PopSurfaceLock();
 }
 
 void
 SharedSurface::CopyFrom(SharedSurface* const src)
 {
     MOZ_RELEASE_ASSERT(src->mSize == mSize);
-    MOZ_ASSERT(!src->mIsLocked);
-    MOZ_ASSERT(!mIsLocked);
     MOZ_ASSERT(src->mIsReadAcquired);
     MOZ_ASSERT(mIsWriteAcquired);
 
@@ -103,6 +96,7 @@ SharedSurface::CopyFrom(SharedSurface* const src)
         MOZ_RELEASE_ASSERT(src->mType == SharedSurfaceType::Basic);
     }
 
+    const ScopedSurfaceLock surfLock(mGL, this);
     CopyFrom(mMozFB.get());
 }
 
@@ -124,50 +118,50 @@ SurfaceFactory::Create(GLContext* const gl, const bool depthStencil,
                        const layers::LayersBackend backend,
                        const layers::TextureFlags flags)
 {
+    if (gfxPrefs::WebGLForceLayersReadback())
+        return nullptr;
+
     UniquePtr<SurfaceFactory> factory;
-    if (!gfxPrefs::WebGLForceLayersReadback()) {
-        switch (backend) {
-            case mozilla::layers::LayersBackend::LAYERS_OPENGL:
+    switch (backend) {
+    case mozilla::layers::LayersBackend::LAYERS_OPENGL:
 #if defined(XP_MACOSX)
-                factory = AsUnique(new SurfaceFactory_IOSurface(gl, depthStencil,
-                                                                ipcChannel, flags));
+        factory = AsUnique(new SurfaceFactory_IOSurface(gl, depthStencil,
+                                                        ipcChannel, flags));
 #elif defined(GL_PROVIDER_GLX)
-                factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
-                                                             flags);
+        factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
+                                                     flags);
 #elif defined(MOZ_WIDGET_UIKIT)
-                factory = MakeUnique<SurfaceFactory_GLTexture>(gl, depthStencil,
-                                                               ipcChannel, flags);
+        factory = MakeUnique<SurfaceFactory_GLTexture>(gl, depthStencil,
+                                                       ipcChannel, flags);
 #else
-                if (gl->GetContextType() == GLContextType::EGL) {
-                    if (XRE_IsParentProcess()) {
-                        factory = SurfaceFactory_EGLImage::Create(gl, depthStencil,
-                                                                  ipcChannel, flags);
-                    }
-                }
-#endif
-                break;
-
-            case mozilla::layers::LayersBackend::LAYERS_D3D11:
-#ifdef XP_WIN
-                factory = SurfaceFactory_ANGLEShareHandle::Create(gl, depthStencil,
-                                                                  ipcChannel, flags);
-
-                if (!factory) {
-                  factory = SurfaceFactory_D3D11Interop::Create(gl, depthStencil,
-                                                                ipcChannel, flags);
-                }
-#endif
-                break;
-
-            default:
-#ifdef GL_PROVIDER_GLX
-                factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
-                                                             flags);
-#endif
-                break;
+        if (gl->GetContextType() == GLContextType::EGL) {
+            if (XRE_IsParentProcess()) {
+                factory = SurfaceFactory_EGLImage::Create(gl, depthStencil,
+                                                          ipcChannel, flags);
+            }
         }
-    }
+#endif
+        break;
 
+    case mozilla::layers::LayersBackend::LAYERS_D3D11:
+#ifdef XP_WIN
+        factory = SurfaceFactory_ANGLEShareHandle::Create(gl, depthStencil,
+                                                          ipcChannel, flags);
+
+        if (!factory) {
+            factory = SurfaceFactory_D3D11Interop::Create(gl, depthStencil,
+                                                          ipcChannel, flags);
+        }
+#endif
+        break;
+
+    default:
+#ifdef GL_PROVIDER_GLX
+        factory = SurfaceFactory_GLXDrawable::Create(gl, depthStencil, ipcChannel,
+                                                     flags);
+#endif
+        break;
+    }
     return factory;
 }
 
@@ -410,9 +404,8 @@ MorphableSurfaceFactory::Morph(layers::KnowsCompositor* const info, const bool f
 ScopedReadbackFB::ScopedReadbackFB(SharedSurface* src)
     : mGL(src->mGL)
     , mAutoFB(mGL)
+    , mSurfLock(mGL, src)
 {
-    mGL->PushSurfaceLock(src);
-
     if (src->NeedsIndirectReads()) {
         mIndirectFB = MozFramebuffer::Create(mGL, src->mSize, 0, false);
         MOZ_RELEASE_ASSERT(mIndirectFB);
@@ -430,10 +423,7 @@ ScopedReadbackFB::ScopedReadbackFB(SharedSurface* src)
     }
 }
 
-ScopedReadbackFB::~ScopedReadbackFB()
-{
-    mGL->PopSurfaceLock();
-}
+ScopedReadbackFB::~ScopedReadbackFB() = default;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -548,8 +538,6 @@ Readback(SharedSurface* const src, gfx::DataSourceSurface* const dest)
 
     GLContext* const gl = src->mGL;
     gl->MakeCurrent();
-
-    gl->PushSurfaceLock(src);
 
     {
         const ScopedReadbackFB autoReadback(src);

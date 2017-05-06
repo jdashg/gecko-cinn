@@ -20,6 +20,7 @@
 #include "mozilla/Scoped.h"
 #include "mozilla/SizePrintfMacros.h"
 #include "mozilla/Unused.h"
+#include "nsLayoutUtils.h"
 #include "ScopedGLHelpers.h"
 #include "TexUnpackBlob.h"
 #include "WebGLBuffer.h"
@@ -2043,6 +2044,9 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
                              GLint border)
 {
     const char funcName[] = "copyTexImage2D";
+    mContext->gl->MakeCurrent();
+    if (!mContext->DoBindReadFB(funcName))
+        return;
 
     ////////////////////////////////////
     // Get dest info
@@ -2102,11 +2106,6 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
     ////////////////////////////////////
     // Do the thing!
 
-    mContext->gl->MakeCurrent();
-
-    if (!mContext->DoBindReadFB(funcName))
-        return;
-
     const bool isSubImage = false;
     if (!DoCopyTexOrSubImage(mContext, funcName, isSubImage, this, target, level, x, y,
                              srcTotalWidth, srcTotalHeight, srcUsage, 0, 0, 0, width,
@@ -2128,6 +2127,10 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
                               GLint xOffset, GLint yOffset, GLint zOffset, GLint x,
                               GLint y, GLsizei rawWidth, GLsizei rawHeight)
 {
+    mContext->gl->MakeCurrent();
+    if (!mContext->DoBindReadFB(funcName))
+        return;
+
     uint32_t width, height, depth;
     if (!ValidateExtents(mContext, funcName, rawWidth, rawHeight, 1, 0, &width,
                          &height, &depth))
@@ -2181,11 +2184,6 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
 
     ////////////////////////////////////
     // Do the thing!
-
-    mContext->gl->MakeCurrent();
-
-    if (!mContext->DoBindReadFB(funcName))
-        return;
 
     bool uploadWillInitialize;
     if (!EnsureImageDataInitializedForUpload(this, funcName, target, level, xOffset,

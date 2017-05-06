@@ -22,9 +22,6 @@ public:
     SharedSurface_IOSurface(GLContext* gl, const gfx::IntSize& size,
                             UniquePtr<MozFramebuffer> mozFB, MacIOSurface* ioSurf);
 private:
-    virtual void LockProdImpl() override { }
-    virtual void UnlockProdImpl() override { }
-
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
 

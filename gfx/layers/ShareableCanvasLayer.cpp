@@ -78,6 +78,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
 
   const auto& readSize = frontSurf->mSize;
   const SurfaceFormat format = SurfaceFormat::B8G8R8A8;
+  const bool isNonPremult = bool(frontTex->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
 
   // Try to read back directly into aDestTarget's output buffer
   uint8_t* destData;
@@ -89,7 +90,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
       RefPtr<DataSourceSurface> data =
         Factory::CreateWrappingDataSourceSurface(destData, destStride, destSize, destFormat);
       Readback(frontSurf, data);
-      if (!mIsAlphaPremultiplied) {
+      if (isNonPremult) {
         gfxUtils::PremultiplyDataSurface(data, data);
       }
       aDestTarget->ReleaseBits(destData);
@@ -107,7 +108,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
 
   // Readback handles Flush/MarkDirty.
   Readback(frontSurf, resultSurf);
-  if (!mIsAlphaPremultiplied) {
+  if (isNonPremult) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
 
@@ -135,18 +136,9 @@ void
 ShareableCanvasLayer::UpdateCompositableClient()
 {
   if (!mCanvasClient) {
-    TextureFlags flags = TextureFlags::DEFAULT;
-    if (mOriginPos == gl::OriginPos::BottomLeft) {
-      flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
-    }
-
-    if (!mIsAlphaPremultiplied) {
-      flags |= TextureFlags::NON_PREMULTIPLIED;
-    }
-
     mCanvasClient = CanvasClient::CreateCanvasClient(GetCanvasClientType(),
                                                      GetForwarder(),
-                                                     flags);
+                                                     TextureFlags::DEFAULT);
     if (!mCanvasClient) {
       return;
     }

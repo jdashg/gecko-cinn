@@ -236,7 +236,7 @@ protected:
 public:
     void DetachTexture(const char* funcName, const WebGLTexture* tex);
     void DetachRenderbuffer(const char* funcName, const WebGLRenderbuffer* rb);
-    bool ValidateAndInitAttachments(const char* funcName);
+    bool ValidateAndInitAttachments(const char* funcName, bool isFBOperation);
     bool ValidateClearBufferType(const char* funcName, GLenum buffer, uint32_t drawBuffer,
                                  GLenum funcType) const;
 

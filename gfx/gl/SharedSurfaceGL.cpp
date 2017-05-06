@@ -57,11 +57,12 @@ SharedSurface_GLTexture::SharedSurface_GLTexture(GLContext* const gl, const IntS
 
 SharedSurface_GLTexture::~SharedSurface_GLTexture()
 {
-    if (!mGL->MakeCurrent())
+    const auto gl = mGL.get();
+    if (!gl || !gl->MakeCurrent())
         return;
 
     if (mSync) {
-        mGL->fDeleteSync(mSync);
+        gl->fDeleteSync(mSync);
     }
 }
 

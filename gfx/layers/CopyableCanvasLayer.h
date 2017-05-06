@@ -51,9 +51,6 @@ protected:
   RefPtr<WebGLContext> mWebGL;
   RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
 
-  bool mIsAlphaPremultiplied;
-  gl::OriginPos mOriginPos;
-
   RefPtr<gfx::DataSourceSurface> mCachedTempSurface;
 
   gfx::DataSourceSurface* GetTempSurface(const gfx::IntSize& aSize,

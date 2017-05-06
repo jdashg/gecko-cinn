@@ -32,8 +32,8 @@ private:
     virtual void ProducerAcquireImpl() override {}
     virtual void ProducerReleaseImpl() override;
 
-    virtual void LockProdImpl() override;
-    virtual void UnlockProdImpl() override;
+    virtual void LockProd() override;
+    virtual void UnlockProd() override;
 
     virtual bool CopyFromSameType(SharedSurface* src) override;
 

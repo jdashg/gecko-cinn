@@ -61,13 +61,13 @@ SharedSurface_GLXDrawable::ProducerReleaseImpl()
 }
 
 void
-SharedSurface_GLXDrawable::LockProdImpl()
+SharedSurface_GLXDrawable::LockProd()
 {
     GLContextGLX::Cast(mGL)->OverrideDrawable(mXlibSurface->GetGLXPixmap());
 }
 
 void
-SharedSurface_GLXDrawable::UnlockProdImpl()
+SharedSurface_GLXDrawable::UnlockProd()
 {
     GLContextGLX::Cast(mGL)->RestoreDrawable();
 }

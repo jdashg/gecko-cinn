@@ -9,6 +9,7 @@
 #include "GLContext.h"                  // for GLContext
 #include "ScopedGLHelpers.h"
 #include "SharedSurface.h"
+#include "../../gl/ScopedReadbackFB.h"
 #include "gfx2DGlue.h"                  // for ImageFormatToSurfaceFormat
 #include "gfxPlatform.h"                // for gfxPlatform
 #include "GLReadTexImageHelper.h"
@@ -276,8 +277,11 @@ TexClientFromReadback(SharedSurface* src, CompositableForwarder* allocator,
 
   RefPtr<TextureClient> texClient;
 
+  const auto& gl = src->mGL;
+  gl->MakeCurrent();
+
   {
-    gl::ScopedReadbackFB autoReadback(src);
+    const gl::ScopedReadbackFB autoReadback(src);
 
     // We have a source FB, now we need a format.
     GLenum destFormat = LOCAL_GL_BGRA;
@@ -287,7 +291,6 @@ TexClientFromReadback(SharedSurface* src, CompositableForwarder* allocator,
 
     // We actually don't care if they match, since we can handle
     // any read{Format,Type} we get.
-    auto gl = src->mGL;
     GetActualReadFormats(gl, destFormat, destType, &readFormat, &readType);
 
     MOZ_ASSERT(readFormat == LOCAL_GL_RGBA ||
@@ -400,7 +403,7 @@ CanvasClientSharedSurface::UpdateRenderer(gfx::IntSize aSize, Renderer& aRendere
   const bool needsReadback = (frontSurf->mType == SharedSurfaceType::Basic);
   if (needsReadback) {
     const auto& forwarder = GetForwarder();
-    const TextureFlags readbackFlags = (layer->Flags() |
+    const TextureFlags readbackFlags = (mShSurfClient->GetFlags() |
                                         TextureFlags::IMMUTABLE);
     const auto& layersBackend = forwarder->GetCompositorBackendType();
     mReadbackClient = TexClientFromReadback(frontSurf, forwarder, readbackFlags,

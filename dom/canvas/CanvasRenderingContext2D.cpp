@@ -5841,7 +5841,7 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
 
 
 
-  CanvasLayer::Data layerData(GetSize(), true);
+  CanvasLayer::Data layerData(GetSize());
   if (mIsSkiaGL) {
     layerData.mCanvas2D = this;
   } else {
@@ -5917,12 +5917,13 @@ CanvasRenderingContext2D::GetFrontBuffer()
     return nullptr;
   const auto& dest = texClient->Surf();
 
-  gl->PushSurfaceLock(dest);
-  dest->ProducerAcquire();
-  gl->BlitHelper()->DrawBlitTextureToFramebuffer(skiaGLTex, dest->mFB, srcSize,
-                                                 dest->mSize);
-  dest->ProducerRelease();
-  MOZ_ALWAYS_TRUE( gl->PopSurfaceLock() == dest );
+  {
+    const gl::ScopedSurfaceLock surfLock(gl, dest);
+    dest->ProducerAcquire();
+    gl->BlitHelper()->DrawBlitTextureToFramebuffer(skiaGLTex, dest->mFB, srcSize,
+                                                   dest->mSize);
+    dest->ProducerRelease();
+  }
 
   return texClient;
 }

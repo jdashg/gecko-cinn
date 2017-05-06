@@ -19,6 +19,8 @@ WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY
 {
     if (IsContextLost())
         return;
+    if (!DoBindBothFBs("blitFramebuffer"))
+        return;
 
     const GLbitfield validBits = LOCAL_GL_COLOR_BUFFER_BIT |
                                  LOCAL_GL_DEPTH_BUFFER_BIT |
@@ -37,30 +39,9 @@ WebGL2Context::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY
         return;
     }
 
-    ////
-
-    const auto& readFB = mBoundReadFramebuffer;
-    if (readFB &&
-        !readFB->ValidateAndInitAttachments("blitFramebuffer's READ_FRAMEBUFFER"))
-    {
-        return;
-    }
-
-    const auto& drawFB = mBoundDrawFramebuffer;
-    if (drawFB &&
-        !drawFB->ValidateAndInitAttachments("blitFramebuffer's DRAW_FRAMEBUFFER"))
-    {
-        return;
-    }
-
-    ////
-
-    if (!DoBindBothFBs("blitFramebuffer"))
-        return;
-
     WebGLFramebuffer::BlitFramebuffer(this,
-                                      readFB, srcX0, srcY0, srcX1, srcY1,
-                                      drawFB, dstX0, dstY0, dstX1, dstY1,
+                                      mBoundReadFramebuffer, srcX0, srcY0, srcX1, srcY1,
+                                      mBoundDrawFramebuffer, dstX0, dstY0, dstX1, dstY1,
                                       mask, filter);
 }
 
@@ -177,7 +158,7 @@ WebGLContext::ValidateInvalidateFramebuffer(const char* funcName, GLenum target,
                                // "`FRAMEBUFFER` is equivalent to `DRAW_FRAMEBUFFER`."
         fb = mBoundDrawFramebuffer;
         if (!fb) {
-            if (!EnsureDefaultDrawFB(funcName))
+            if (!EnsureDefaultFBsResized(funcName))
                 return false;
             isDefaultFB = (DefaultDrawFB() == 0);
         }
@@ -186,7 +167,7 @@ WebGLContext::ValidateInvalidateFramebuffer(const char* funcName, GLenum target,
     case LOCAL_GL_READ_FRAMEBUFFER:
         fb = mBoundReadFramebuffer;
         if (!fb) {
-            if (!EnsureDefaultReadFB(funcName))
+            if (!EnsureDefaultFBsResized(funcName))
                 return false;
             isDefaultFB = (DefaultReadFB() == 0);
         }

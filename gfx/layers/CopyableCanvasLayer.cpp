@@ -33,9 +33,8 @@ namespace layers {
 using namespace mozilla::gfx;
 using namespace mozilla::gl;
 
-CanvasLayer::Data::Data(const gfx::IntSize& size, const bool isAlphaPremult)
+CanvasLayer::Data::Data(const gfx::IntSize& size)
   : mSize(size)
-  , mIsAlphaPremult(isAlphaPremult)
   , mBufferProvider(nullptr)
 { }
 CanvasLayer::Data::~Data() = default;
@@ -43,8 +42,6 @@ CanvasLayer::Data::~Data() = default;
 
 CopyableCanvasLayer::CopyableCanvasLayer(LayerManager* aLayerManager, void *aImplData) :
   CanvasLayer(aLayerManager, aImplData)
-  , mIsAlphaPremultiplied(true)
-  , mOriginPos(gl::OriginPos::TopLeft)
 {
   MOZ_COUNT_CTOR(CopyableCanvasLayer);
 }
@@ -58,7 +55,6 @@ void
 CopyableCanvasLayer::Initialize(const Data& aData)
 {
   mBounds.SetRect(0, 0, aData.mSize.width, aData.mSize.height);
-  mIsAlphaPremultiplied = aData.mIsAlphaPremult;
 
   mBufferProvider = aData.mBufferProvider;
   mWebGL = aData.mWebGL;
@@ -74,7 +70,6 @@ CopyableCanvasLayer::IsDataValid(const Data& aData)
 {
   return (aData.mSize.width == mBounds.width &&
           aData.mSize.height == mBounds.height &&
-          aData.mIsAlphaPremult == mIsAlphaPremultiplied &&
           aData.mBufferProvider == mBufferProvider &&
           aData.mWebGL == mWebGL &&
           aData.mCanvas2D == mCanvas2D);

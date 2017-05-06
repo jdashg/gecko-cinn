@@ -623,10 +623,10 @@ WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
 #ifdef ANDROID
     , mIsFB(false)
 #endif
-    , mColorDrawBufferEnums(1, LOCAL_GL_COLOR_ATTACHMENT0)
     , mDepthAttachment(this, LOCAL_GL_DEPTH_ATTACHMENT)
     , mStencilAttachment(this, LOCAL_GL_STENCIL_ATTACHMENT)
     , mDepthStencilAttachment(this, LOCAL_GL_DEPTH_STENCIL_ATTACHMENT)
+    , mColorDrawBufferEnums(1, LOCAL_GL_COLOR_ATTACHMENT0)
 {
     mContext->mFramebuffers.insertBack(this);
 
@@ -868,7 +868,7 @@ WebGLFramebuffer::PrecheckFramebufferStatus(nsCString* const out_info) const
 // Validation
 
 bool
-WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName)
+WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName, bool isFBOperation)
 {
     MOZ_ASSERT(mContext->mBoundDrawFramebuffer == this ||
                mContext->mBoundReadFramebuffer == this);
@@ -877,9 +877,12 @@ WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName)
     if (fbStatus == LOCAL_GL_FRAMEBUFFER_COMPLETE)
         return true;
 
-    mContext->ErrorInvalidFramebufferOperation("%s: Framebuffer must be"
-                                               " complete.",
-                                               funcName);
+    const nsPrintfCString text("%s: Framebuffer must be complete.", funcName);
+    if (isFBOperation) {
+        mContext->ErrorInvalidFramebufferOperation("%s", text.BeginReading());
+    } else {
+        mContext->ErrorInvalidOperation("%s", text.BeginReading());
+    }
     return false;
 }
 
@@ -925,8 +928,7 @@ WebGLFramebuffer::ValidateForRead(const char* funcName,
                                   const webgl::FormatUsageInfo** const out_format,
                                   uint32_t* const out_width, uint32_t* const out_height)
 {
-    if (!ValidateAndInitAttachments(funcName))
-        return false;
+    MOZ_ASSERT(IsResolvedComplete());
 
     if (!mColorReadBuffer) {
         mContext->ErrorInvalidOperation("%s: READ_BUFFER must not be NONE.", funcName);

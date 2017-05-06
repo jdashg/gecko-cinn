@@ -116,7 +116,6 @@ WebGLContextOptions::WebGLContextOptions()
 
 WebGLContext::WebGLContext()
     : WebGLContextUnchecked(nullptr)
-    , mAntialiasSamples(gfxPrefs::MSAALevel())
     , mOptionsFrozen(false)
     , mOptions(mMutableOptions)
     , mMaxPerfWarnings(gfxPrefs::WebGLMaxPerfWarnings())
@@ -312,6 +311,7 @@ WebGLContext::DestroyResourcesAndContext()
     mAntialiasedFB = nullptr;
     mPreservedFB = nullptr;
     SetSharedFB(nullptr);
+    mFrontBuffer = nullptr;
     mIndirectReadFB = nullptr;
 
     mSurfFactory.Reset(nullptr);
@@ -402,11 +402,6 @@ WebGLContext::SetContextOptions(JSContext* cx, JS::Handle<JS::Value> options,
 
     if (attributes.mAlpha.WasPassed()) {
         mMutableOptions.alpha = attributes.mAlpha.Value();
-    }
-
-    // Don't do antialiasing if we've disabled MSAA.
-    if (!mAntialiasSamples) {
-        mMutableOptions.antialias = false;
     }
 
     return NS_OK;
@@ -559,18 +554,29 @@ WebGLContext::CreateAndInitGLWith(FnCreateGL_T* const fnCreateGL,
 
     RefPtr<gl::GLContext> newGL;
     do {
+        uint32_t requestedSamples = gfxPrefs::MSAALevel();
+        if (!requestedSamples) {
+            mMutableOptions.antialias = false;
+        }
         if (mMutableOptions.antialias) {
-            MOZ_ASSERT(mAntialiasSamples);
             newGL = fnCreateGL(this, flags, out_failReasons);
-            if (newGL &&
-                bool(gl::MozFramebuffer::Create(newGL, gfx::IntSize(1, 1),
-                                                mAntialiasSamples, false)))
-            {
-                break;
+            if (newGL) {
+                const auto maxSamples = newGL->GetIntAs<uint32_t>(LOCAL_GL_MAX_SAMPLES);
+                if (requestedSamples > maxSamples) {
+                    requestedSamples = maxSamples;
+                }
+                if (requestedSamples &&
+                    bool(gl::MozFramebuffer::Create(newGL, gfx::IntSize(1, 1),
+                                                    requestedSamples, false)))
+                {
+                    mAntialiasSamples = requestedSamples;
+                    break;
+                }
             }
 
             mMutableOptions.antialias = false;
         }
+        mAntialiasSamples = 0;
 
         const bool frontbufferDepthStencil = mOptions.FrontbufferHasDepthStencil();
         if (newGL &&
@@ -953,10 +959,6 @@ WebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight)
 
     ResizeBackbuffer(width, height);
 
-    if (GLContext::ShouldSpew()) {
-        printf_stderr("--- WebGL context created: %p\n", gl.get());
-    }
-
     // Update our internal stuff:
     if (gl->WorkAroundDriverBugs()) {
 #ifdef MOZ_WIDGET_COCOA
@@ -968,10 +970,21 @@ WebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight)
 #endif
     }
 
+    MakeContextCurrent();
+
+    if (!EnsureDefaultFBsResized(nullptr)) {
+        const nsLiteralCString text("Failed to allocated backbuffers.");
+        ThrowEvent_WebGLContextCreationError(text);
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_BACKBUFFER");
+        return NS_ERROR_FAILURE;
+    }
+
+    // Present the cleared initial buffer
+    mShouldPresent = true;
+    mResetLayer = true;
+
     //////
     // Initial setup.
-
-    MakeContextCurrent();
 
     gl->fViewport(0, 0, mWidth, mHeight);
     mViewportX = mViewportY = 0;
@@ -979,17 +992,10 @@ WebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight)
     mViewportHeight = mHeight;
 
     gl->fScissor(0, 0, mWidth, mHeight);
-    gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
 
-    // Present the cleared initial buffer
-    mShouldPresent = true;
-
-    //////
-
-    mResetLayer = true;
+    ////
 
     reporter.SetSuccessful();
-
     failureId = NS_LITERAL_CSTRING("SUCCESS");
     return NS_OK;
 }
@@ -1228,7 +1234,7 @@ WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
     if (!isAlphaPremult && !mOptions.alpha) {
         isAlphaPremult = true;
     }
-    CanvasLayer::Data data(gfx::IntSize(mWidth, mHeight), isAlphaPremult);
+    CanvasLayer::Data data(gfx::IntSize(mWidth, mHeight));
     data.mWebGL = this;
 
     canvasLayer->Initialize(data);
@@ -1481,11 +1487,11 @@ WebGLContext::DoBindDrawFB(const char* const funcName, const GLenum target)
     MOZ_ASSERT(target != LOCAL_GL_READ_FRAMEBUFFER);
     GLuint driverFB;
     if (mBoundDrawFramebuffer) {
-        if (!mBoundDrawFramebuffer->ValidateAndInitAttachments(funcName))
+        if (!mBoundDrawFramebuffer->ValidateAndInitAttachments(funcName, true))
             return false;
         driverFB = mBoundDrawFramebuffer->mGLName;
     } else {
-        if (!EnsureDefaultDrawFB(funcName))
+        if (!PrepareDefaultDrawFB(funcName))
             return false;
         driverFB = DefaultDrawFB();
     }
@@ -1531,17 +1537,17 @@ WebGLContext::DoBindDrawFB(const char* const funcName, const GLenum target)
 
 bool
 WebGLContext::DoBindReadFB(const char* const funcName, const bool mayNeedIndirect,
-                           const GLenum target)
+                           const bool isFBOperation, const GLenum target)
 {
     MOZ_ASSERT(target != LOCAL_GL_DRAW_FRAMEBUFFER);
     bool needsIndirect = false;
     GLuint driverFB;
     if (mBoundReadFramebuffer) {
-        if (!mBoundReadFramebuffer->ValidateAndInitAttachments(funcName))
+        if (!mBoundReadFramebuffer->ValidateAndInitAttachments(funcName, isFBOperation))
             return false;
         driverFB = mBoundReadFramebuffer->mGLName;
     } else {
-        if (!EnsureDefaultReadFB(funcName))
+        if (!PrepareDefaultReadFB(funcName))
             return false;
         driverFB = DefaultReadFB();
 
@@ -1576,9 +1582,8 @@ WebGLContext::DoBindReadFB(const char* const funcName, const bool mayNeedIndirec
 bool
 WebGLContext::DoBindBothFBs(const char* const funcName)
 {
-    MOZ_ASSERT(mBoundReadFramebuffer || mBoundDrawFramebuffer);
     // BindRead first, since BindDraw sets mAntialiasedFB_IsDirty.
-    if (!DoBindReadFB(funcName, false, LOCAL_GL_READ_FRAMEBUFFER) ||
+    if (!DoBindReadFB(funcName, false, true, LOCAL_GL_READ_FRAMEBUFFER) ||
         !DoBindDrawFB(funcName, LOCAL_GL_DRAW_FRAMEBUFFER))
     {
         return false;
@@ -1587,35 +1592,18 @@ WebGLContext::DoBindBothFBs(const char* const funcName)
                                                : DefaultReadFB());
     const auto drawFB = (mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
                                                : DefaultDrawFB());
-    AssertCurFB(gl, LOCAL_GL_READ_FRAMEBUFFER, readFB);
-    AssertCurFB(gl, LOCAL_GL_DRAW_FRAMEBUFFER, drawFB);
+    gl->fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER, readFB);
+    gl->fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER, drawFB);
     return true;
 }
 
-////
+////////////////////
 
 bool
-WebGLContext::EnsureDefaultDrawFB(const char* const funcName)
+WebGLContext::PrepareDefaultDrawFB(const char* const funcName)
 {
-    if (!mAntialiasedFB && !mPreservedFB && !mSharedFB) {
-        const auto requestedWidth = mWidth;
-        const auto requestedHeight = mHeight;
-        if (!CreateDefaultDrawFB()) {
-            GenerateWarning("%s: Failed to allocate draw buffer, losing context...",
-                            funcName);
-            ForceLoseContext();
-            return false;
-        }
-        mDefaultDrawFB_IsInvalidated = true;
-
-        if (mWidth != requestedWidth ||
-            mHeight != requestedHeight)
-        {
-            GenerateWarning("Requested size %dx%d was too large, resized to %dx%d.",
-                            requestedWidth, requestedHeight,
-                            mWidth, mHeight);
-        }
-    }
+    if (!EnsureDefaultFBsResized(funcName))
+        return false;
 
     if (mDefaultDrawFB_IsInvalidated) {
         mDefaultDrawFB_IsInvalidated = false;
@@ -1638,56 +1626,19 @@ WebGLContext::EnsureDefaultDrawFB(const char* const funcName)
 }
 
 bool
-WebGLContext::CreateDefaultDrawFB()
+WebGLContext::PrepareDefaultReadFB(const char* const funcName)
 {
-    // Fallback to smaller size on failure.
-    bool firstRun = true;
-    while (true) {
-        if (firstRun) {
-            firstRun = false;
-        } else {
-            mWidth /= 2;
-            mHeight /= 2;
-        }
-
-        if (!mWidth && !mHeight)
-            return false;
-
-        mWidth = std::max(1, mWidth);
-        mHeight = std::max(1, mHeight);
-
-        if (mOptions.antialias) {
-            const gfx::IntSize size(mWidth, mHeight);
-            const auto& depthStencil = mOptions.HasDepthStencil();
-            mAntialiasedFB = gl::MozFramebuffer::Create(gl, size, mAntialiasSamples,
-                                                        depthStencil);
-            if (mAntialiasedFB)
-                return true;
-            continue;
-        }
-
-        if (CreateDefaultReadFB())
-            return true;
-        continue;
-    }
-}
-
-////
-
-bool
-WebGLContext::EnsureDefaultReadFB(const char* const funcName)
-{
-    if (!EnsureDefaultDrawFB(funcName))
+    if (!PrepareDefaultDrawFB(funcName))
         return false;
 
-    if (!mPreservedFB && !mSharedFB) {
-        MOZ_ASSERT(mOptions.antialias);
-        if (!CreateDefaultReadFB()) {
-            GenerateWarning("%s: Failed to allocate read buffer, losing context...",
-                            funcName);
-            ForceLoseContext();
+    if (!mSharedFB) {
+        const auto size = gfx::IntSize(mWidth, mHeight);
+        const auto& sharedFB = mSurfFactory->NewTexClient(size);
+        if (!sharedFB) {
+            GenerateWarning("%s: Failed to allocate default read framebuffer.", funcName);
             return false;
         }
+        SetSharedFB(sharedFB);
     }
 
     if (mAntialiasedFB_IsDirty) {
@@ -1710,12 +1661,96 @@ WebGLContext::EnsureDefaultReadFB(const char* const funcName)
     return true;
 }
 
+////////////////////
+
+bool
+WebGLContext::EnsureDefaultFBsResized(const char* const funcName)
+{
+    if (mSharedFB || mAntialiasedFB || mPreservedFB)
+        return true;
+
+    const bool depthStencil = mOptions.HasDepthStencil();
+
+    const auto fnCreate = [&](const gfx::IntSize& size) {
+        const auto& sharedFB = mSurfFactory->NewTexClient(size);
+        if (!sharedFB)
+            return false;
+        SetSharedFB(sharedFB);
+
+        if (mOptions.antialias) {
+            mAntialiasedFB = gl::MozFramebuffer::Create(gl, size, mAntialiasSamples,
+                                                        depthStencil);
+            if (!mAntialiasedFB)
+                return false;
+        } else if (mOptions.preserveDrawingBuffer) {
+            mPreservedFB = gl::MozFramebuffer::Create(gl, size, 0, depthStencil);
+            if (!mPreservedFB)
+                return false;
+        }
+        return true;
+    };
+
+    const uint32_t maxSize = std::min(mImplMaxRenderbufferSize, mImplMaxTextureSize);
+    const auto requestedWidth = mWidth;
+    const auto requestedHeight = mHeight;
+
+    // Fallback to smaller size on failure.
+    bool firstRun = true;
+    while (true) {
+        if (firstRun) {
+            firstRun = false;
+        } else {
+            mWidth /= 2;
+            mHeight /= 2;
+        }
+
+        if (!mWidth && !mHeight) {
+            if (funcName) {
+                GenerateWarning("%s: Failed to allocate default framebuffers, losing"
+                                " context...",
+                                funcName);
+                ForceLoseContext();
+            }
+            SetSharedFB(nullptr);
+            mAntialiasedFB = nullptr;
+            mPreservedFB = nullptr;
+            return false;
+        }
+
+        mWidth = std::max(1, mWidth);
+        mHeight = std::max(1, mHeight);
+
+        if (uint32_t(mWidth) > maxSize ||
+            uint32_t(mHeight) > maxSize)
+        {
+            continue;
+        }
+
+        const auto size = gfx::IntSize(mWidth, mHeight);
+        if (fnCreate(size))
+            break;
+    }
+
+    if (mWidth != requestedWidth ||
+        mHeight != requestedHeight)
+    {
+        GenerateWarning("Requested size %dx%d was too large, resized to %dx%d.",
+                        requestedWidth, requestedHeight,
+                        mWidth, mHeight);
+    }
+
+    mDefaultDrawFB_IsInvalidated = true;
+    return true;
+}
+
+////
+
 void
 WebGLContext::SetSharedFB(layers::SharedSurfaceTextureClient* const sharedFB)
 {
     if (mSharedFB) {
         const auto& surf = mSharedFB->Surf();
-        MOZ_ALWAYS_TRUE(surf == surf->mGL->PopSurfaceLock());
+        surf->mGL->PopSurfaceLock(surf);
         surf->ProducerRelease();
     }
     mSharedFB = sharedFB;
@@ -1724,22 +1759,6 @@ WebGLContext::SetSharedFB(layers::SharedSurfaceTextureClient* const sharedFB)
         surf->ProducerAcquire();
         surf->mGL->PushSurfaceLock(surf);
     }
-}
-
-bool
-WebGLContext::CreateDefaultReadFB()
-{
-    // `target` may be DRAW_FRAMEBUFFER!
-    const gfx::IntSize size(mWidth, mHeight);
-    if (mOptions.NeedsPreserveBuffer()) {
-        const auto& backbufferDepthStencil = mOptions.BackbufferHasDepthStencil();
-        mPreservedFB = gl::MozFramebuffer::Create(gl, size, 0, backbufferDepthStencil);
-        return bool(mPreservedFB);
-    }
-
-    const auto& sharedFB = mSurfFactory->NewTexClient(size);
-    SetSharedFB(sharedFB);
-    return bool(sharedFB);
 }
 
 ////////////////////////////////////////
@@ -1847,7 +1866,7 @@ WebGLContext::PresentScreenBuffer()
 
     gl->MakeCurrent();
 
-    if (!EnsureDefaultReadFB("PresentScreenBuffer"))
+    if (!PrepareDefaultReadFB("PresentScreenBuffer"))
         return;
 
     if (!mOptions.preserveDrawingBuffer) {
@@ -1867,20 +1886,12 @@ WebGLContext::PresentScreenBuffer()
     }
 
     if (mPreservedFB) {
-        mFrontBuffer = mSurfFactory->NewTexClient(gfx::IntSize(mWidth, mHeight));
-        if (!mFrontBuffer) {
-            GenerateWarning("Failed to allocate frontbuffer, losing context...");
-            ForceLoseContext();
-            return;
-        }
-        const auto& surf = mFrontBuffer->Surf();
-        surf->ProducerAcquire();
+        const auto& surf = mSharedFB->Surf();
         surf->CopyFrom(mPreservedFB.get());
-        surf->ProducerRelease();
-    } else {
-        mFrontBuffer = mSharedFB;
-        SetSharedFB(nullptr);
     }
+
+    mFrontBuffer = mSharedFB;
+    SetSharedFB(nullptr);
 }
 
 ////////////////////////////////////////
@@ -1901,20 +1912,6 @@ WebGLContext::EndComposition()
     // Mark ourselves as no longer invalidated.
     MarkContextClean();
     UpdateLastUseIndex();
-}
-
-void
-WebGLContext::DummyReadFramebufferOperation(const char* funcName)
-{
-    if (!mBoundReadFramebuffer)
-        return; // Infallible.
-
-    const auto status = mBoundReadFramebuffer->CheckFramebufferStatus(funcName);
-
-    if (status != LOCAL_GL_FRAMEBUFFER_COMPLETE) {
-        ErrorInvalidFramebufferOperation("%s: Framebuffer must be complete.",
-                                         funcName);
-    }
 }
 
 bool
@@ -2201,7 +2198,9 @@ WebGLContext::GetSurfaceSnapshot(bool* out_premultAlpha)
     if (!gl)
         return nullptr;
 
-    if (!EnsureDefaultReadFB("GetSurfaceSnapshot"))
+    gl->MakeCurrent();
+
+    if (!PrepareDefaultReadFB("GetSurfaceSnapshot"))
         return nullptr;
 
     const gfx::IntSize size(mWidth, mHeight);
