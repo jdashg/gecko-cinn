@@ -55,7 +55,7 @@ BasicCanvasLayer::UpdateSurface(gl::OriginPos* const out_origin)
   MOZ_ASSERT(resultSurf);
 
   if (frontTex->GetFlags() & TextureFlags::ORIGIN_BOTTOM_LEFT) {
-    *out_origin = gl::OriginPos::TopLeft;
+    *out_origin = gl::OriginPos::BottomLeft;
   } else {
     *out_origin = gl::OriginPos::TopLeft;
   }
