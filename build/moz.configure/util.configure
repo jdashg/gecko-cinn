@@ -88,51 +88,6 @@ def windows_binary_type(path):
         die('unsupported binary type on %s: %s' % (path, bin_type))
 
 
-@imports('ctypes')
-@imports(_from='ctypes', _import='wintypes')
-def get_GetShortPathNameW():
-    GetShortPathNameW = ctypes.windll.kernel32.GetShortPathNameW
-    GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR,
-                                  wintypes.DWORD]
-    GetShortPathNameW.restype = wintypes.DWORD
-    return GetShortPathNameW
-
-
-@template
-@imports('ctypes')
-@imports('platform')
-@imports(_from='mozbuild.shellutil', _import='quote')
-def normalize_path():
-    # Until the build system can properly handle programs that need quoting,
-    # transform those paths into their short version on Windows (e.g.
-    # c:\PROGRA~1...).
-    if platform.system() == 'Windows':
-        GetShortPathNameW = get_GetShortPathNameW()
-
-        def normalize_path(path):
-            path = normsep(path)
-            if quote(path) == path:
-                return path
-            size = 0
-            while True:
-                out = ctypes.create_unicode_buffer(size)
-                needed = GetShortPathNameW(path, out, size)
-                if size >= needed:
-                    if ' ' in out.value:
-                        die("GetShortPathName returned a long path name. "
-                            "Are 8dot3 filenames disabled?")
-                    return normsep(out.value)
-                size = needed
-
-    else:
-        def normalize_path(path):
-            return normsep(path)
-
-    return normalize_path
-
-normalize_path = normalize_path()
-
-
 # Locates the given program using which, or returns the given path if it
 # exists.
 # The `paths` parameter may be passed to search the given paths instead of
@@ -161,15 +116,15 @@ def find_program(file, paths=None):
 
     try:
         if is_absolute_or_relative(file):
-            return normalize_path(which(os.path.basename(file),
-                                        [os.path.dirname(file)], exts=exts))
+            return normsep(which(os.path.basename(file),
+                                 [os.path.dirname(file)], exts=exts))
         if paths:
             if not isinstance(paths, (list, tuple)):
                 die("Paths provided to find_program must be a list of strings, "
                     "not %r", paths)
             paths = list(itertools.chain(
                 *(p.split(pathsep) for p in paths if p)))
-        return normalize_path(which(file, path=paths, exts=exts))
+        return normsep(which(file, path=paths, exts=exts))
     except WhichError:
         return None
 

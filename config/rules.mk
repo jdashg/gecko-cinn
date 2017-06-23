@@ -581,14 +581,14 @@ ifdef MSMANIFEST_TOOL
 	@if test -f $@.manifest; then \
 		if test -f '$(srcdir)/$@.manifest'; then \
 			echo 'Embedding manifest from $(srcdir)/$@.manifest and $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;1; \
+			"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;1; \
 		else \
 			echo 'Embedding manifest from $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
+			"$(MT)" -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
 		fi; \
 	elif test -f '$(srcdir)/$@.manifest'; then \
 		echo 'Embedding manifest from $(srcdir)/$@.manifest'; \
-		$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;1; \
+		"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;1; \
 	fi
 endif	# MSVC with manifest tool
 ifdef MOZ_PROFILE_GENERATE
@@ -611,19 +611,19 @@ endif
 $(HOST_PROGRAM): $(HOST_PROGOBJS) $(HOST_LIBS) $(HOST_EXTRA_DEPS) $(GLOBAL_DEPS)
 	$(REPORT_BUILD)
 ifeq (_WINNT,$(GNU_CC)_$(HOST_OS_ARCH))
-	$(EXPAND_LIBS_EXEC) -- $(LINK) -NOLOGO -OUT:$@ -PDB:$(HOST_PDBFILE) $(HOST_OBJS) $(WIN32_EXE_LDFLAGS) $(HOST_LDFLAGS) $(HOST_LIBS) $(HOST_EXTRA_LIBS)
+	$(EXPAND_LIBS_EXEC) -- "$(LINK)" -NOLOGO -OUT:$@ -PDB:$(HOST_PDBFILE) $(HOST_OBJS) $(WIN32_EXE_LDFLAGS) $(HOST_LDFLAGS) $(HOST_LIBS) $(HOST_EXTRA_LIBS)
 ifdef MSMANIFEST_TOOL
 	@if test -f $@.manifest; then \
 		if test -f '$(srcdir)/$@.manifest'; then \
 			echo 'Embedding manifest from $(srcdir)/$@.manifest and $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;1; \
+			"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;1; \
 		else \
 			echo 'Embedding manifest from $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
+			"$(MT)" -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
 		fi; \
 	elif test -f '$(srcdir)/$@.manifest'; then \
 		echo 'Embedding manifest from $(srcdir)/$@.manifest'; \
-		$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;1; \
+		"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;1; \
 	fi
 endif	# MSVC with manifest tool
 else
@@ -651,7 +651,7 @@ ifeq (_WINNT,$(GNU_CC)_$(OS_ARCH))
 	$(EXPAND_LINK) -nologo -out:$@ -pdb:$(LINK_PDBFILE) $< $(WIN32_EXE_LDFLAGS) $(LDFLAGS) $(MOZ_PROGRAM_LDFLAGS) $(STATIC_LIBS) $(SHARED_LIBS) $(EXTRA_LIBS) $(OS_LIBS)
 ifdef MSMANIFEST_TOOL
 	@if test -f $@.manifest; then \
-		$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
+		"$(MT)" -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;1; \
 		rm -f $@.manifest; \
 	fi
 endif	# MSVC with manifest tool
@@ -670,7 +670,7 @@ endif
 $(HOST_SIMPLE_PROGRAMS): host_%$(HOST_BIN_SUFFIX): host_%.$(OBJ_SUFFIX) $(HOST_LIBS) $(HOST_EXTRA_DEPS) $(GLOBAL_DEPS)
 	$(REPORT_BUILD)
 ifeq (WINNT_,$(HOST_OS_ARCH)_$(GNU_CC))
-	$(EXPAND_LIBS_EXEC) -- $(LINK) -NOLOGO -OUT:$@ -PDB:$(HOST_PDBFILE) $< $(WIN32_EXE_LDFLAGS) $(HOST_LIBS) $(HOST_EXTRA_LIBS)
+	$(EXPAND_LIBS_EXEC) -- "$(LINK)" -NOLOGO -OUT:$@ -PDB:$(HOST_PDBFILE) $< $(WIN32_EXE_LDFLAGS) $(HOST_LIBS) $(HOST_EXTRA_LIBS)
 else
 ifneq (,$(HOST_CPPSRCS)$(USE_HOST_CXX))
 	$(EXPAND_LIBS_EXEC) -- $(HOST_CXX) $(HOST_OUTOPTION)$@ $(HOST_CXXFLAGS) $(INCLUDES) $< $(HOST_LIBS) $(HOST_EXTRA_LIBS)
@@ -729,14 +729,14 @@ ifdef EMBED_MANIFEST_AT
 	@if test -f $@.manifest; then \
 		if test -f '$(srcdir)/$@.manifest'; then \
 			echo 'Embedding manifest from $(srcdir)/$@.manifest and $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
+			"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' $@.manifest -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
 		else \
 			echo 'Embedding manifest from $@.manifest'; \
-			$(MT) -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
+			"$(MT)" -NOLOGO -MANIFEST $@.manifest -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
 		fi; \
 	elif test -f '$(srcdir)/$@.manifest'; then \
 		echo 'Embedding manifest from $(srcdir)/$@.manifest'; \
-		$(MT) -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
+		"$(MT)" -NOLOGO -MANIFEST '$(win_srcdir)/$@.manifest' -OUTPUTRESOURCE:$@\;$(EMBED_MANIFEST_AT); \
 	fi
 endif   # EMBED_MANIFEST_AT
 endif	# MSVC with manifest tool
