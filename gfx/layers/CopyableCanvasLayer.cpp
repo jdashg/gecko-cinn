@@ -33,82 +33,156 @@ namespace layers {
 using namespace mozilla::gfx;
 using namespace mozilla::gl;
 
-CanvasLayer::Data::Data(const gfx::IntSize& size)
-  : mSize(size)
-  , mBufferProvider(nullptr)
+CanvasLayer::FrameData::FrameData(layers::SharedSurfaceTextureClient* const texClient)
+  : mTexClient(texClient)
 { }
-CanvasLayer::Data::~Data() = default;
 
+CanvasLayer::FrameData::FrameData(PersistentBufferProvider* const provider)
+  : mProvider(provider)
+  , mBorrowedSnapshot(mProvider->BorrowSnapshot())
+{ }
 
-CopyableCanvasLayer::CopyableCanvasLayer(LayerManager* aLayerManager, void *aImplData) :
-  CanvasLayer(aLayerManager, aImplData)
+CanvasLayer::FrameData::~FrameData()
 {
-  MOZ_COUNT_CTOR(CopyableCanvasLayer);
+  if (mProvider) {
+    mProvider->ReturnSnapshot(mBorrowedSnapshot);
+  }
 }
 
-CopyableCanvasLayer::~CopyableCanvasLayer()
+// -------
+
+ContentCanvasLayer::ContentCanvasLayer(LayerManager* aLayerManager, void* aImplData) :
+  CanvasLayer(aLayerManager, aImplData)
 {
-  MOZ_COUNT_DTOR(CopyableCanvasLayer);
+  MOZ_COUNT_CTOR(ContentCanvasLayer);
+}
+
+ContentCanvasLayer::~ContentCanvasLayer()
+{
+  MOZ_COUNT_DTOR(ContentCanvasLayer);
 }
 
 void
-CopyableCanvasLayer::Initialize(const Data& aData)
+ContentCanvasLayer::Initialize(const Data& aData)
 {
   mBounds.SetRect(0, 0, aData.mSize.width, aData.mSize.height);
 
-  mBufferProvider = aData.mBufferProvider;
   mWebGL = aData.mWebGL;
   mCanvas2D = aData.mCanvas2D;
+  mSource = (mWebGL ? mWebGL.get() : mCanvas2D.get());
 
-  if (bool(mBufferProvider) + bool(mWebGL) + bool(mCanvas2D) != 1) {
+  if (bool(mWebGL) + bool(mCanvas2D) != 1) {
     MOZ_CRASH("GFX: must have exactly one CanvasLayer source");
   }
 }
 
-bool
-CopyableCanvasLayer::IsDataValid(const Data& aData)
-{
-  return (aData.mSize.width == mBounds.width &&
-          aData.mSize.height == mBounds.height &&
-          aData.mBufferProvider == mBufferProvider &&
-          aData.mWebGL == mWebGL &&
-          aData.mCanvas2D == mCanvas2D);
-}
+// -------
 
-DataSourceSurface*
-CopyableCanvasLayer::GetTempSurface(const IntSize& aSize,
-                                    const SurfaceFormat aFormat)
+RefPtr<DataSourceSurface>
+ContentCanvasLayer::GetReusableSurface(const IntSize& aSize,
+                                       const SurfaceFormat aFormat) const
 {
-  if (!mCachedTempSurface ||
-      aSize != mCachedTempSurface->GetSize() ||
-      aFormat != mCachedTempSurface->GetFormat())
+  if (!mReusableSurface ||
+      aSize != mReusableSurface->GetSize() ||
+      aFormat != mReusableSurface->GetFormat())
   {
     // Create a surface aligned to 8 bytes since that's the highest alignment WebGL can handle.
     uint32_t stride = GetAlignedStride<8>(aSize.width, BytesPerPixel(aFormat));
-    mCachedTempSurface = Factory::CreateDataSourceSurfaceWithStride(aSize, aFormat, stride);
+    mReusableSurface = Factory::CreateDataSourceSurfaceWithStride(aSize, aFormat, stride);
   }
 
-  return mCachedTempSurface;
+  return mReusableSurface;
 }
 
-RefPtr<layers::SharedSurfaceTextureClient>
-CopyableCanvasLayer::GetFrontTex() const
+RefPtr<SourceSurface>
+ContentCanvasLayer::ToSourceSurface(TextureClient* const texClient,
+                                    gl::OriginPos* const out_origin) const
 {
-  RefPtr<SharedSurfaceTextureClient> frontTex;
-  if (mWebGL) {
-    frontTex = mWebGL->FrontBuffer();
-  } else if (mCanvas2D) {
-    frontTex = mCanvas2D->GetFrontBuffer();
-  } else {
-    // Don't warn.
+  const auto& sharedSurf = texClient->Surf();
+
+  const IntSize readSize(sharedSurf->mSize);
+  const bool isOpaque = bool(GetContentFlags() & CONTENT_OPAQUE);
+  const SurfaceFormat format = (isOpaque ? SurfaceFormat::B8G8R8X8
+                                         : SurfaceFormat::B8G8R8A8);
+  const RefPtr<DataSourceSurface> sourceSurf = GetReusableSurface(readSize, format);
+  // There will already be a warning from inside of GetTempSurface, but
+  // it doesn't hurt to complain:
+  if (NS_WARN_IF(!sourceSurf)) {
     return nullptr;
   }
 
-  if (!frontTex) {
-    NS_WARNING("Null frame received.");
-    return nullptr;
+  Readback(sharedSurf, sourceSurf);
+
+  const bool isNonPremult = bool(texClient->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
+  if (isNonPremult && !isOpaque) {
+    gfxUtils::PremultiplyDataSurface(sourceSurf, sourceSurf);
   }
-  return frontTex;
+
+  if (texClient->GetFlags() & TextureFlags::ORIGIN_BOTTOM_LEFT) {
+    *out_origin = gl::OriginPos::BottomLeft;
+  } else {
+    *out_origin = gl::OriginPos::TopLeft;
+  }
+  return sourceSurf;
+}
+
+// -------
+
+RefPtr<CanvasLayer::FrameData>
+ContentCanvasLayer::GetFrameForRedraw()
+{
+  if (IsHidden())
+    return nullptr;
+
+  auto* pDestFrameID = &mFrameID;
+  if (ShouldAlwaysRedraw())
+    pDestFrameID = nullptr;
+  }
+  return mSource->GetNextFrame(pDestFrameID);
+}
+
+// -------
+
+void
+ContentCanvasLayer::DrawTo(const FrameData* const frame, gfx::DrawTarget* const aDT,
+                           const gfx::Point& aDeviceOffset, Layer* const aMaskLayer) const
+{
+  RefPtr<SourceSurface> surf;
+  auto surfOrigin = gl::OriginPos::TopLeft;
+  PersistentBufferProvider* usedProvider = nullptr;
+  if (frame->mTexClient) {
+    surf = ToSourceSurface(frame->mTexClient, &surfOrigin);
+  } else {
+    usedProvider = frame->mProvider;
+    surf = usedProvider->BorrowSnapshot();
+  }
+  if (!surf)
+    return false;
+
+  const bool needsYFlip = (surfOrigin != gl::OriginPos::TopLeft);
+
+  Matrix oldTM;
+  if (needsYFlip) {
+    oldTM = aDT->GetTransform();
+    aDT->SetTransform(Matrix(oldTM).
+                        PreTranslate(0.0f, mBounds.height).
+                        PreScale(1.0f, -1.0f));
+  }
+
+  FillRectWithMask(aDT, aDeviceOffset,
+                   Rect(0, 0, mBounds.width, mBounds.height),
+                   surf, mSamplingFilter,
+                   DrawOptions(GetEffectiveOpacity(), GetEffectiveOperator(this)),
+                   aMaskLayer);
+
+  if (needsYFlip) {
+    aDT->SetTransform(oldTM);
+  }
+
+  if (usedProvider) {
+    usedProvider->ReturnSnapshot(surf);
+  }
+  return true;
 }
 
 } // namespace layers

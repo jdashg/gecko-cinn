@@ -134,6 +134,7 @@ WebGLContext::WebGLContext()
     , mNeedsFakeNoStencil(false)
     , mNeedsEmulatedLoneDepthStencil(false)
     , mAllowFBInvalidation(gfxPrefs::WebGLFBInvalidation())
+    , mFrameID(0)
 {
     mGeneration = 0;
     mInvalidated = false;
@@ -1892,17 +1893,19 @@ WebGLContext::PresentScreenBuffer()
 
     mFrontBuffer = mSharedFB;
     SetSharedFB(nullptr);
+
+    mDrawCallsSinceLastFlush = 0;
 }
 
 ////////////////////////////////////////
 
 // Prepare the context for capture before compositing
-void
-WebGLContext::BeginComposition()
+RefPtr<layers::CanvasLayer::FrameData>
+WebGLContext::GetNewFrame()
 {
     // Present our screenbuffer, if needed.
     PresentScreenBuffer();
-    mDrawCallsSinceLastFlush = 0;
+    return new layers::CanvasLayer::FrameData(mFrontBuffer);
 }
 
 // Clean up the context after captured for compositing

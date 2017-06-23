@@ -2615,12 +2615,6 @@ protected:
 
 class SharedSurfaceTextureClient;
 
-class TextureProvider
-{
-public:
-  virtual RefPtr<SharedSurfaceTextureClient> GetFrontBuffer() = 0;
-};
-
 class CanvasLayer : public Layer {
 public:
   struct Data final {
@@ -2630,91 +2624,68 @@ public:
     const gfx::IntSize mSize;
 
     // Specify only one of these:
-    PersistentBufferProvider* mBufferProvider;
-    RefPtr<WebGLContext> mWebGL;
     RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
+    RefPtr<WebGLContext> mWebGL;
   };
 
-  /**
-   * CONSTRUCTION PHASE ONLY
-   * Initialize this CanvasLayer with the given data.  The data must
-   * have either mSurface or mGLContext initialized (but not both), as
-   * well as mSize.
-   *
-   * This must only be called once.
-   */
-  virtual void Initialize(const Data& aData) = 0;
+/*
+  struct FrameData final
+    : public RefCounted<FrameData>
+  {
+    MOZ_DECLARE_REFCOUNTED_TYPENAME(CanvasLayer::FrameData)
 
-  void SetBounds(gfx::IntRect aBounds) { mBounds = aBounds; }
+    const RefPtr<layers::SharedSurfaceTextureClient> mTexClient;
+  private:
+    const RefPtr<PersistentBufferProvider> mProvider;
+  public:
+    const RefPtr<gfx::SourceSurface> mBorrowedSnapshot;
 
-  /**
-   * Check the data is owned by this layer is still valid for rendering
-   */
-  virtual bool IsDataValid(const Data& aData) { return true; }
+    FrameData(layers::SharedSurfaceTextureClient* texClient);
+    FrameData(PersistentBufferProvider* provider);
+    ~FrameData();
+  };
+*/
 
+  struct FrameData final
+  {
+    const RefPtr<layers::SharedSurfaceTextureClient> mTexClient;
+    const RefPtr<PersistentBufferProvider> mProvider;
+  };
+
+
+  class Source {
+    uint64_t mFrameID;
+
+    Source()
+      : mFrameID(0)
+    { }
+
+  public:
+    void IncFrameID() { mFrameID++; }
+    const decltype(mFrameID)& FrameID() const { return mFrameID; }
+
+    virtual RefPtr<FrameData> GetFrame() = 0;
+
+    RefPtr<FrameData> GetNextFrame(uint64_t* pDestFrameID) {
+      if (pDestFrameID) {
+        if (*pDestFrameID == mFrameID)
+          return nullptr;
+        *pDestFrameID = mFrameID;
+      }
+
+      return GetFrame();
+    }
+  };
+
+
+  MOZ_LAYER_DECL_NAME("CanvasLayer", TYPE_CANVAS)
   virtual CanvasLayer* AsCanvasLayer() override { return this; }
 
-  /**
-   * Notify this CanvasLayer that the canvas surface contents have
-   * changed (or will change) before the next transaction.
-   */
-  void Updated() { mDirty = true; SetInvalidRectToVisibleRegion(); }
 
-  /**
-   * Notify this CanvasLayer that the canvas surface contents have
-   * been painted since the last change.
-   */
-  void Painted() { mDirty = false; }
-
-  /**
-   * Returns true if the canvas surface contents have changed since the
-   * last paint.
-   */
-  bool IsDirty()
-  {
-    // We can only tell if we are dirty if we're part of the
-    // widget's retained layer tree.
-    if (!mManager || !mManager->IsWidgetLayerManager()) {
-      return true;
-    }
-    return mDirty;
-  }
-
-  /**
-   * Register a callback to be called at the start of each transaction.
-   */
-  typedef void PreTransactionCallback(void* closureData);
-  void SetPreTransactionCallback(PreTransactionCallback* callback, void* closureData)
-  {
-    mPreTransCallback = callback;
-    mPreTransCallbackData = closureData;
-  }
-
+  void SetBounds(gfx::IntRect aBounds) { mBounds = aBounds; }
   const nsIntRect& GetBounds() const { return mBounds; }
 
-protected:
-  void FirePreTransactionCallback()
-  {
-    if (mPreTransCallback) {
-      mPreTransCallback(mPreTransCallbackData);
-    }
-  }
 
-public:
-  /**
-   * Register a callback to be called at the end of each transaction.
-   */
-  typedef void (* DidTransactionCallback)(void* aClosureData);
-  void SetDidTransactionCallback(DidTransactionCallback aCallback, void* aClosureData)
-  {
-    mPostTransCallback = aCallback;
-    mPostTransCallbackData = aClosureData;
-  }
-
-  /**
-   * CONSTRUCTION PHASE ONLY
-   * Set the filter used to resample this image (if necessary).
-   */
   void SetSamplingFilter(gfx::SamplingFilter aSamplingFilter)
   {
     if (mSamplingFilter != aSamplingFilter) {
@@ -2725,7 +2696,6 @@ public:
   }
   gfx::SamplingFilter GetSamplingFilter() const { return mSamplingFilter; }
 
-  MOZ_LAYER_DECL_NAME("CanvasLayer", TYPE_CANVAS)
 
   virtual void ComputeEffectiveTransforms(const gfx::Matrix4x4& aTransformToSurface) override
   {
@@ -2740,42 +2710,17 @@ public:
     ComputeEffectiveTransformForMaskLayers(aTransformToSurface);
   }
 
-  bool GetIsAsyncRenderer() const
-  {
-    return !!mAsyncRenderer;
-  }
-
 protected:
-  CanvasLayer(LayerManager* aManager, void* aImplData);
-  virtual ~CanvasLayer();
+  CanvasLayer(LayerManager* aManager, void* aImplData, const gfx::IntSize& size);
+  virtual ~CanvasLayer() override;
 
   virtual void PrintInfo(std::stringstream& aStream, const char* aPrefix) override;
 
   virtual void DumpPacket(layerscope::LayersPacket* aPacket, const void* aParent) override;
 
-  void FireDidTransactionCallback()
-  {
-    if (mPostTransCallback) {
-      mPostTransCallback(mPostTransCallbackData);
-    }
-  }
 
-  /**
-   * 0, 0, canvaswidth, canvasheight
-   */
   gfx::IntRect mBounds;
-  PreTransactionCallback* mPreTransCallback;
-  void* mPreTransCallbackData;
-  DidTransactionCallback mPostTransCallback;
-  void* mPostTransCallbackData;
   gfx::SamplingFilter mSamplingFilter;
-  RefPtr<AsyncCanvasRenderer> mAsyncRenderer;
-
-private:
-  /**
-   * Set to true in Updated(), cleared during a transaction.
-   */
-  bool mDirty;
 };
 
 /**

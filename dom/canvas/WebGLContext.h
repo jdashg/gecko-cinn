@@ -301,6 +301,7 @@ class WebGLContext
     , public WebGLContextUnchecked
     , public WebGLRectangleObject
     , public nsWrapperCache
+    , public layers::CanvasLayer::Source
 {
     friend class ScopedDrawHelper;
     friend class ScopedDrawWithTransformFeedback;
@@ -478,11 +479,6 @@ public:
     gl::GLContext* GL() const { return gl; }
 
     void PresentScreenBuffer();
-
-    // Prepare the context for capture before compositing
-    void BeginComposition();
-    // Clean up the context after captured for compositing
-    void EndComposition();
 
     // a number that increments every time we have an event that causes
     // all context resources to be lost.
@@ -2022,8 +2018,10 @@ private:
     UniquePtr<gl::MozFramebuffer> mAntialiasedFB;
     UniquePtr<gl::MozFramebuffer> mPreservedFB;
     RefPtr<layers::SharedSurfaceTextureClient> mSharedFB;
-    RefPtr<layers::SharedSurfaceTextureClient> mFrontBuffer;
     UniquePtr<gl::MozFramebuffer> mIndirectReadFB;
+
+
+    RefPtr<layers::SharedSurfaceTextureClient> mFrontBuffer;
 
     GLuint DefaultDrawFB() const;
     GLuint DefaultReadFB() const;
@@ -2033,7 +2031,7 @@ public:
     bool PrepareDefaultDrawFB(const char* funcName);
     bool PrepareDefaultReadFB(const char* funcName);
 
-    const decltype(mFrontBuffer)& FrontBuffer() const { return mFrontBuffer; }
+    virtual layers::CanvasLayer::Source::Info GetFrame() override;
 
     ////
 

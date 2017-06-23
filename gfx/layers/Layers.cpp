@@ -2218,12 +2218,7 @@ BorderLayer::DumpPacket(layerscope::LayersPacket* aPacket, const void* aParent)
 
 CanvasLayer::CanvasLayer(LayerManager* aManager, void* aImplData)
   : Layer(aManager, aImplData)
-  , mPreTransCallback(nullptr)
-  , mPreTransCallbackData(nullptr)
-  , mPostTransCallback(nullptr)
-  , mPostTransCallbackData(nullptr)
   , mSamplingFilter(gfx::SamplingFilter::GOOD)
-  , mDirty(false)
 {}
 
 CanvasLayer::~CanvasLayer() = default;
@@ -2270,6 +2265,8 @@ CanvasLayer::DumpPacket(layerscope::LayersPacket* aPacket, const void* aParent)
   layer->set_type(LayersPacket::Layer::CanvasLayer);
   DumpFilter(layer, mSamplingFilter);
 }
+
+// -------------------------------------
 
 void
 ImageLayer::PrintInfo(std::stringstream& aStream, const char* aPrefix)

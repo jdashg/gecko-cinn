@@ -20,43 +20,44 @@
 #include "nsISupportsImpl.h"            // for MOZ_COUNT_CTOR, etc
 
 namespace mozilla {
-
-namespace gl {
-class SharedSurface;
-} // namespace gl
-
 namespace layers {
 
-/**
- * A shared CanvasLayer implementation that supports copying
- * its contents into a gfxASurface using UpdateSurface.
- */
-class CopyableCanvasLayer : public CanvasLayer
+class ContentCanvasLayer : public CanvasLayer
 {
-public:
-  CopyableCanvasLayer(LayerManager* aLayerManager, void *aImplData);
+private:
+  RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
+  RefPtr<WebGLContext> mWebGL;
+
+  mutable uint64_t mFrameID;
+  mutable RefPtr<gfx::DataSourceSurface> mReusableSurface;
 
 protected:
-  virtual ~CopyableCanvasLayer();
+  CanvasLayer::Source* mSource;
 
 public:
+  ContentCanvasLayer(LayerManager* aLayerManager, void* aImplData);
   virtual void Initialize(const Data& aData) override;
 
-  virtual bool IsDataValid(const Data& aData) override;
-
-  bool IsGLLayer() const { return mWebGL || mCanvas2D; }
-
 protected:
-  RefPtr<PersistentBufferProvider> mBufferProvider;
-  RefPtr<WebGLContext> mWebGL;
-  RefPtr<dom::CanvasRenderingContext2D> mCanvas2D;
+  virtual ~ContentCanvasLayer() override;
 
-  RefPtr<gfx::DataSourceSurface> mCachedTempSurface;
+private:
+  bool ShouldAlwaysRedraw() const {
+    return (!mManager || !mManager->IsWidgetLayerManager());
+  }
+protected:
+  RefPtr<CanvasLayer::FrameData> GetFrameForRedraw() const;
 
-  gfx::DataSourceSurface* GetTempSurface(const gfx::IntSize& aSize,
-                                         const gfx::SurfaceFormat aFormat);
+  RefPtr<gfx::DataSourceSurface> GetReusableSurface(const gfx::IntSize& aSize,
+                                                    gfx::SurfaceFormat aFormat) const;
 
-  RefPtr<layers::SharedSurfaceTextureClient> GetFrontTex() const;
+  void DrawTo(const FrameData* frame, gfx::DrawTarget* aDT,
+              const gfx::Point& aDeviceOffset = gfx::Point(0, 0),
+              Layer* aMaskLayer = nullptr) const;
+
+private:
+  RefPtr<gfx::SourceSurface> ToSourceSurface(TextureClient* texClient,
+                                             gl::OriginPos* out_origin) const;
 };
 
 } // namespace layers

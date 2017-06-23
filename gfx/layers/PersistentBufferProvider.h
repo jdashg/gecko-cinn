@@ -167,6 +167,34 @@ protected:
   RefPtr<gfx::SourceSurface > mSnapshot;
 };
 
+class PersistentBufferProviderTexClient : public PersistentBufferProvider
+{
+public:
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(PersistentBufferProviderTexClient, override)
+
+  static already_AddRefed<PersistentBufferProviderTexClient>
+  Create(gfx::IntSize aSize, gfx::SurfaceFormat aFormat, gfx::BackendType aBackend);
+
+  explicit PersistentBufferProviderBasic(gfx::DrawTarget* aTarget);
+
+  virtual LayersBackend GetType() override { return LayersBackend::LAYERS_BASIC; }
+
+  virtual already_AddRefed<gfx::DrawTarget> BorrowDrawTarget(const gfx::IntRect& aPersistedRect) override;
+
+  virtual bool ReturnDrawTarget(already_AddRefed<gfx::DrawTarget> aDT) override;
+
+  virtual already_AddRefed<gfx::SourceSurface> BorrowSnapshot() override;
+
+  virtual void ReturnSnapshot(already_AddRefed<gfx::SourceSurface> aSnapshot) override;
+
+  virtual bool PreservesDrawingState() const override { return true; }
+private:
+  ~PersistentBufferProviderBasic();
+
+  RefPtr<gfx::DrawTarget> mDrawTarget;
+  RefPtr<gfx::SourceSurface> mSnapshot;
+};
+
 } // namespace layers
 } // namespace mozilla
 

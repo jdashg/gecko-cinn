@@ -25,95 +25,15 @@ using namespace mozilla::gl;
 namespace mozilla {
 namespace layers {
 
-RefPtr<SourceSurface>
-BasicCanvasLayer::UpdateSurface(gl::OriginPos* const out_origin)
-{
-  const auto& frontTex = GetFrontTex();
-  if (!frontTex) {
-    return nullptr;
-  }
-  const auto& frontSurf = frontTex->Surf();
-
-  IntSize readSize(frontSurf->mSize);
-  SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
-                          ? SurfaceFormat::B8G8R8X8
-                          : SurfaceFormat::B8G8R8A8;
-
-  RefPtr<DataSourceSurface> resultSurf = GetTempSurface(readSize, format);
-  // There will already be a warning from inside of GetTempSurface, but
-  // it doesn't hurt to complain:
-  if (NS_WARN_IF(!resultSurf)) {
-    return nullptr;
-  }
-
-  // Readback handles Flush/MarkDirty.
-  Readback(frontSurf, resultSurf);
-  const bool isNonPremult = bool(frontTex->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
-  if (isNonPremult) {
-    gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
-  }
-  MOZ_ASSERT(resultSurf);
-
-  if (frontTex->GetFlags() & TextureFlags::ORIGIN_BOTTOM_LEFT) {
-    *out_origin = gl::OriginPos::TopLeft;
-  } else {
-    *out_origin = gl::OriginPos::TopLeft;
-  }
-  return resultSurf;
-}
-
 void
-BasicCanvasLayer::Paint(DrawTarget* aDT,
-                        const Point& aDeviceOffset,
-                        Layer* aMaskLayer)
+BasicCanvasLayer::Paint(DrawTarget* const aDT, const Point& aDeviceOffset,
+                        Layer* const aMaskLayer)
 {
-  if (IsHidden())
+  const auto& frame = GetFrameForRedraw();
+  if (!frame)
     return;
 
-  RefPtr<SourceSurface> surface;
-  auto surfOrigin = gl::OriginPos::TopLeft;
-  if (IsDirty()) {
-    Painted();
-
-    FirePreTransactionCallback();
-    surface = UpdateSurface(&surfOrigin);
-    FireDidTransactionCallback();
-  }
-
-  bool bufferPoviderSnapshot = false;
-  if (!surface && mBufferProvider) {
-    surface = mBufferProvider->BorrowSnapshot();
-    surfOrigin = gl::OriginPos::TopLeft;
-    bufferPoviderSnapshot = !!surface;
-  }
-
-  if (!surface) {
-    return;
-  }
-
-  const bool needsYFlip = (surfOrigin != gl::OriginPos::TopLeft);
-
-  Matrix oldTM;
-  if (needsYFlip) {
-    oldTM = aDT->GetTransform();
-    aDT->SetTransform(Matrix(oldTM).
-                        PreTranslate(0.0f, mBounds.height).
-                        PreScale(1.0f, -1.0f));
-  }
-
-  FillRectWithMask(aDT, aDeviceOffset,
-                   Rect(0, 0, mBounds.width, mBounds.height),
-                   surface, mSamplingFilter,
-                   DrawOptions(GetEffectiveOpacity(), GetEffectiveOperator(this)),
-                   aMaskLayer);
-
-  if (needsYFlip) {
-    aDT->SetTransform(oldTM);
-  }
-
-  if (bufferPoviderSnapshot) {
-    mBufferProvider->ReturnSnapshot(surface.forget());
-  }
+  DrawTo(frame, aDT, aDeviceOffset, aMaskLayer);
 }
 
 already_AddRefed<CanvasLayer>

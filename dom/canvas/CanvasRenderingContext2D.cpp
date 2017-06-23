@@ -5839,8 +5839,6 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
     return nullptr;
   }
 
-
-
   CanvasLayer::Data layerData(GetSize());
   if (mIsSkiaGL) {
     layerData.mCanvas2D = this;
@@ -5899,33 +5897,45 @@ CanvasRenderingContext2D::GetCanvasLayer(nsDisplayListBuilder* aBuilder,
   return canvasLayer.forget();
 }
 
-RefPtr<layers::SharedSurfaceTextureClient>
-CanvasRenderingContext2D::GetFrontBuffer()
+Maybe<CanvasLayer::FrameData>
+CanvasRenderingContext2D::PublishFrame()
 {
-  const auto& skiaGLTex = SkiaGLTex();
-  MOZ_ASSERT(skiaGLTex);
-  const auto& glue = gfxPlatform::GetPlatform()->GetSkiaGLGlue();
-  MOZ_ASSERT(glue);
-  const auto& gl = glue->GetGLContext();
+  const auto fnGetTexClient = [&]() -> RefPtr<layers::SharedSurfaceTextureClient> {
+    const auto& skiaGLTex = SkiaGLTex();
+    MOZ_ASSERT(skiaGLTex);
+    if (!skiaGLTex)
+      return nullptr;
 
-  if (mSurfFactory)
-    return nullptr;
+    const auto& glue = gfxPlatform::GetPlatform()->GetSkiaGLGlue();
+    MOZ_ASSERT(glue);
+    const auto& gl = glue->GetGLContext();
 
-  const gfx::IntSize srcSize(mWidth, mHeight);
-  const auto& texClient = mSurfFactory->NewTexClient(srcSize);
-  if (!texClient)
-    return nullptr;
-  const auto& dest = texClient->Surf();
+    if (mSurfFactory)
+      return nullptr;
 
-  {
-    const gl::ScopedSurfaceLock surfLock(gl, dest);
-    dest->ProducerAcquire();
-    gl->BlitHelper()->DrawBlitTextureToFramebuffer(skiaGLTex, dest->mFB, srcSize,
-                                                   dest->mSize);
-    dest->ProducerRelease();
-  }
+    const gfx::IntSize srcSize(mWidth, mHeight);
+    const auto& texClient = mSurfFactory->NewTexClient(srcSize);
+    if (!texClient)
+      return nullptr;
+    const auto& dest = texClient->Surf();
 
-  return texClient;
+    {
+      const gl::ScopedSurfaceLock surfLock(gl, dest);
+      dest->ProducerAcquire();
+      gl->BlitHelper()->DrawBlitTextureToFramebuffer(skiaGLTex, dest->mFB, srcSize,
+                                                     dest->mSize);
+      dest->ProducerRelease();
+    }
+
+    return texClient;
+  };
+
+  const auto fnGetBorrowedSnapshot = [&]() {
+  };
+
+  const auto& texClient = Publish
+}
+{
 }
 
 void
