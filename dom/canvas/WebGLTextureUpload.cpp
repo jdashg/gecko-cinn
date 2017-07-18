@@ -1718,6 +1718,7 @@ class ScopedCopyTexImageSource
     WebGLContext* const mWebGL;
     GLuint mRB;
     GLuint mFB;
+    UniquePtr<gl::ScopedBindFramebuffer> mBindFB;
 
 public:
     ScopedCopyTexImageSource(WebGLContext* webgl, const char* funcName, uint32_t srcWidth,
@@ -1820,7 +1821,7 @@ ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
 
     GLuint rgbaFB = 0;
     gl->fGenFramebuffers(1, &rgbaFB);
-    gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, rgbaFB);
+    mBindFB.reset(new gl::ScopedBindFramebuffer(gl, rgbaFB));
     gl->fFramebufferRenderbuffer(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
                                  LOCAL_GL_RENDERBUFFER, rgbaRB);
 
@@ -1846,13 +1847,6 @@ ScopedCopyTexImageSource::ScopedCopyTexImageSource(WebGLContext* webgl,
     mFB = rgbaFB;
 }
 
-template<typename T>
-static inline GLenum
-ToGLHandle(const T& obj)
-{
-    return (obj ? obj->mGLName : 0);
-}
-
 ScopedCopyTexImageSource::~ScopedCopyTexImageSource()
 {
     if (!mFB) {
@@ -1862,13 +1856,6 @@ ScopedCopyTexImageSource::~ScopedCopyTexImageSource()
     MOZ_ASSERT(mRB);
 
     gl::GLContext* gl = mWebGL->gl;
-
-    // If we're swizzling, it's because we're on a GL core (3.2+) profile, which has
-    // split framebuffer support.
-    gl->fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER,
-                         ToGLHandle(mWebGL->mBoundDrawFramebuffer));
-    gl->fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER,
-                         ToGLHandle(mWebGL->mBoundReadFramebuffer));
 
     gl->fDeleteFramebuffers(1, &mFB);
     gl->fDeleteRenderbuffers(1, &mRB);

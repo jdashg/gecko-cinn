@@ -752,18 +752,16 @@ WebGLContext::AssertCachedBindings()
     }
 
     // Framebuffers
-    if (IsWebGL2()) {
-        GLuint bound = mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
-                                             : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_DRAW_FRAMEBUFFER_BINDING, bound);
-
-        bound = mBoundReadFramebuffer ? mBoundReadFramebuffer->mGLName : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_READ_FRAMEBUFFER_BINDING, bound);
+    const auto boundDrawFB = mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
+                                                   : gl->Screen()->DrawFB();
+    const auto boundReadFB = mBoundReadFramebuffer ? mBoundReadFramebuffer->mGLName
+                                                   : gl->Screen()->ReadFB();
+    if (gl->IsSupported(GLFeature::split_framebuffer)) {
+        AssertUintParamCorrect(gl, LOCAL_GL_DRAW_FRAMEBUFFER_BINDING, boundDrawFB);
+        AssertUintParamCorrect(gl, LOCAL_GL_READ_FRAMEBUFFER_BINDING, boundReadFB);
     } else {
         MOZ_ASSERT(mBoundDrawFramebuffer == mBoundReadFramebuffer);
-        GLuint bound = mBoundDrawFramebuffer ? mBoundDrawFramebuffer->mGLName
-                                             : 0;
-        AssertUintParamCorrect(gl, LOCAL_GL_FRAMEBUFFER_BINDING, bound);
+        AssertUintParamCorrect(gl, LOCAL_GL_FRAMEBUFFER_BINDING, boundDrawFB);
     }
 
     GLint stencilBits = 0;
