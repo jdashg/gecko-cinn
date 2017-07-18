@@ -456,6 +456,7 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
         const GLLibraryLoader::SymLoadStruct angleSymbols[] = {
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformInitialize, { "ANGLEPlatformInitialize", nullptr } },
             { (PRFuncPtr*)&mSymbols.fANGLEPlatformShutdown, { "ANGLEPlatformShutdown", nullptr } },
+            SYMBOL(QueryDisplayAttribEXT),
             SYMBOL(GetPlatformDisplayEXT),
             END_OF_SYMBOLS
         };
@@ -608,6 +609,7 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
 
     if (IsExtensionSupported(KHR_stream_consumer_gltexture)) {
         const GLLibraryLoader::SymLoadStruct streamConsumerSymbols[] = {
+            SYMBOL(StreamConsumerGLTextureExternalKHR),
             SYMBOL(StreamConsumerAcquireKHR),
             SYMBOL(StreamConsumerReleaseKHR),
             END_OF_SYMBOLS
