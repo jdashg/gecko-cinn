@@ -194,8 +194,6 @@ CompositorOGL::CleanupResources()
   }
   mPrograms.clear();
 
-  ctx->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
-
   if (mQuadVBO) {
     ctx->fDeleteBuffers(1, &mQuadVBO);
     mQuadVBO = 0;
@@ -309,7 +307,7 @@ CompositorOGL::Initialize(nsCString* const out_failureReason)
       // unbind this texture, in preparation for binding it to the FBO
       mGLContext->fBindTexture(target, 0);
 
-      mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, testFBO);
+      const gl::ScopedBindFramebuffer bindFB(mGLContext, testFBO);
       mGLContext->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
                                         LOCAL_GL_COLOR_ATTACHMENT0,
                                         target,
@@ -340,9 +338,6 @@ CompositorOGL::Initialize(nsCString* const out_failureReason)
     // not trying to work around driver bugs, so TEXTURE_2D should just work
     mFBOTextureTarget = LOCAL_GL_TEXTURE_2D;
   }
-
-  // back to default framebuffer, to avoid confusion
-  mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
 
   if (mFBOTextureTarget == LOCAL_GL_TEXTURE_RECTANGLE_ARB) {
     /* If we're using TEXTURE_RECTANGLE, then we must have the ARB
@@ -715,6 +710,16 @@ CompositorOGL::CreateFBOWithTexture(const gfx::IntRect& aRect,
   mGLContext->fGenFramebuffers(1, aFBO);
 }
 
+void
+CompositorOGL::BindFramebuffer(const GLuint aFB) const
+{
+  if (aFB) {
+    mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, aFB);
+  } else {
+    mGLContext->BindDefaultFramebuffer();
+  }
+}
+
 GLuint
 CompositorOGL::CreateTexture(const IntRect& aRect, bool aCopyFromSource,
                              GLuint aSourceFrameBuffer, IntSize* aAllocSize)
@@ -739,7 +744,7 @@ CompositorOGL::CreateTexture(const IntRect& aRect, bool aCopyFromSource,
   if (aCopyFromSource) {
     GLuint curFBO = mCurrentRenderTarget->GetFBO();
     if (curFBO != aSourceFrameBuffer) {
-      mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, aSourceFrameBuffer);
+      BindFramebuffer(aSourceFrameBuffer);
     }
 
     // We're going to create an RGBA temporary fbo.  But to
@@ -1655,13 +1660,7 @@ CompositorOGL::CopyToTarget(DrawTarget* aTarget, const nsIntPoint& aTopLeft, con
     return;
   }
 
-  mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
-
-  if (!mGLContext->IsGLES()) {
-    // GLES2 promises that binding to any custom FBO will attach
-    // to GL_COLOR_ATTACHMENT0 attachment point.
-    mGLContext->fReadBuffer(LOCAL_GL_BACK);
-  }
+  mGLContext->BindDefaultFramebuffer();
 
   RefPtr<DataSourceSurface> source =
         Factory::CreateDataSourceSurface(rect.Size(), gfx::SurfaceFormat::B8G8R8A8);

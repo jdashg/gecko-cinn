@@ -306,6 +306,8 @@ public:
         return 0;
     }
 
+    void BindDefaultFramebuffer();
+
 protected:
     bool mIsOffscreen;
     bool mContextLost;

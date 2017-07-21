@@ -215,6 +215,8 @@ public:
   GLContext* gl() const { return mGLContext; }
   GLContext* GetGLContext() const override { return mGLContext; }
 
+  void BindFramebuffer(GLuint aFB) const;
+
   /**
    * Clear the program state. This must be called
    * before operating on the GLContext directly. */

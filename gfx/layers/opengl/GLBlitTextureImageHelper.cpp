@@ -46,8 +46,7 @@ GLBlitTextureImageHelper::BlitTextureImage(TextureImage *aSrc, const gfx::IntRec
     if (!aSrc || !aDst || aSrcRect.IsEmpty() || aDstRect.IsEmpty())
         return;
 
-    int savedFb = 0;
-    gl->fGetIntegerv(LOCAL_GL_FRAMEBUFFER_BINDING, &savedFb);
+    const ScopedBindFramebuffer saveFB(gl);
 
     ScopedGLState scopedScissorTestState(gl, LOCAL_GL_SCISSOR_TEST, false);
     ScopedGLState scopedBlendState(gl, LOCAL_GL_BLEND, false);
@@ -161,8 +160,6 @@ GLBlitTextureImageHelper::BlitTextureImage(TextureImage *aSrc, const gfx::IntRec
 
     // unbind the previous texture from the framebuffer
     SetBlitFramebufferForDestTexture(0);
-
-    gl->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, savedFb);
 }
 
 void

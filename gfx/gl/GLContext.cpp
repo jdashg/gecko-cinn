@@ -2958,5 +2958,15 @@ GLContext::ResetSyncCallCount(const char* resetReason) const
     mSyncGLCallCount = 0;
 }
 
+void
+GLContext::BindDefaultFramebuffer()
+{
+    if (mScreen) {
+        mScreen->BindAsFramebuffer();
+        return;
+    }
+    fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, GetDefaultFramebuffer());
+}
+
 } /* namespace gl */
 } /* namespace mozilla */

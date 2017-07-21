@@ -45,8 +45,7 @@ CompositingRenderTargetOGL::BindRenderTarget()
     }
   } else {
     MOZ_ASSERT(mInitParams.mStatus == InitParams::INITIALIZED);
-    GLuint fbo = mFBO == 0 ? mGL->GetDefaultFramebuffer() : mFBO;
-    mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, fbo);
+    mCompositor->BindFramebuffer(mFBO);
     GLenum result = mGL->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
     if (result != LOCAL_GL_FRAMEBUFFER_COMPLETE) {
       // The main framebuffer (0) of non-offscreen contexts
@@ -94,15 +93,11 @@ CompositingRenderTargetOGL::InitializeImpl()
 {
   MOZ_ASSERT(mInitParams.mStatus == InitParams::READY);
 
-  //TODO: call mGL->GetBackbufferFB(), use that
-  GLuint fbo = mFBO == 0 ? mGL->GetDefaultFramebuffer() : mFBO;
-  mGL->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, fbo);
-  mGL->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER,
-                              LOCAL_GL_COLOR_ATTACHMENT0,
-                              mInitParams.mFBOTextureTarget,
-                              mTextureHandle,
-                              0);
-
+  mCompositor->BindFramebuffer(mFBO);
+  if (mFBO) {
+    mGL->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER, LOCAL_GL_COLOR_ATTACHMENT0,
+                               mInitParams.mFBOTextureTarget, mTextureHandle, 0);
+  }
   // Making this call to fCheckFramebufferStatus prevents a crash on
   // PowerVR. See bug 695246.
   GLenum result = mGL->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
