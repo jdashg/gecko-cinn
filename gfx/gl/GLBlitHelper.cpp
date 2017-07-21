@@ -900,6 +900,8 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
     ScopedGLDrawState autoStates(mGL);
     const ScopedBindFramebuffer bindFB(mGL, destFB);
 
+    mGL->fColorMask(1, 1, 1, 1);
+
     // Does destructive things to (only!) what we just saved above.
     bool good = UseTexQuadProgram(type, srcSize);
     if (!good) {
@@ -907,12 +909,12 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
         MOZ_DIAGNOSTIC_ASSERT(false,
                               "Error: Failed to prepare to blit texture->framebuffer.\n");
         mGL->fScissor(0, 0, destSize.width, destSize.height);
-        mGL->fColorMask(1, 1, 1, 1);
         mGL->fClear(LOCAL_GL_COLOR_BUFFER_BIT);
         return;
     }
 
     const ScopedBindTexture bindTex(mGL, srcTex, srcTarget);
+    mGL->fViewport(0, 0, destSize.width, destSize.height);
     mGL->fDrawArrays(LOCAL_GL_TRIANGLE_STRIP, 0, 4);
 }
 
