@@ -97,7 +97,7 @@ public:
                                                            double aContentsScaleFactor = 1.0,
                                                            bool aHasAlpha = true);
 
-  explicit MacIOSurface(const void *aIOSurfacePtr,
+  explicit MacIOSurface(IOSurfacePtr aIOSurfacePtr,
                         double aContentsScaleFactor = 1.0,
                         bool aHasAlpha = true);
   ~MacIOSurface();
@@ -144,7 +144,9 @@ public:
 
 private:
   friend class nsCARenderer;
-  const void* mIOSurfacePtr;
+public:
+  const IOSurfacePtr mIOSurfacePtr;
+private:
   double mContentsScaleFactor;
   bool mHasAlpha;
 };
