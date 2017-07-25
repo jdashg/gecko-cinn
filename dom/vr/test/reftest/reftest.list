@@ -4,5 +4,5 @@ default-preferences pref(dom.vr.puppet.enabled,true) pref(dom.vr.test.enabled,tr
 # VR SubmitFrame is only implemented for D3D11 now.
 # We need to continue to investigate why these reftests can be run well in local,
 # but will be suspended until terminating on reftest debug build.
-skip-if(!winWidget||!layersGPUAccelerated||isDebugBuild) == draw_rect.html wrapper.html?draw_rect.png
-skip-if(!winWidget||!layersGPUAccelerated||isDebugBuild) == change_size.html wrapper.html?change_size.png
+skip-if(!winWidget||!layersGPUAccelerated) == draw_rect.html wrapper.html?draw_rect.png
+skip-if(!winWidget||!layersGPUAccelerated) == change_size.html wrapper.html?change_size.png

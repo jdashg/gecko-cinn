@@ -109,10 +109,13 @@ If this fails, something is seriously wrong. -->
             // img width will not be eyeWidth * 2 (540), it would
             // be 544. It is because D3D11 CopyResource changes
             // the destination image size.
+            console.log('heights: ' +  img.height + ' ' + eyeHeight);
             if ((img.height == eyeHeight)) {
               webglCanvas.style.display = 'none';
               vrDisplay.exitPresent();
-              setTimeout(testComplete, 0);
+              //setTimeout(testComplete, 0);
+              img.onload = null;
+              testComplete();
             }
           };
           img.src = submitResult.base64Image;

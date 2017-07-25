@@ -1,136 +1,190 @@
 <!DOCTYPE html>
-<meta charset='UTF-8'>
 <!-- Draw rect in WebGL and submit it to the VR device as a base64 image.
 If this fails, something is seriously wrong. -->
-<html class="reftest-wait">
+<html class='reftest-wait'>
 <head>
-  <script type='text/javascript' src='webgl-util.js'></script>
-  <script type='text/javascript' src="VRSimulationDriver.js"></script>
-  <script id="vs" type="x-shader/x-vertex">
+  <meta charset='UTF-8'>
+  <script src='VRSimulationDriver.js'></script>
+  <script id='vs' type='none'>
     attribute vec2 aVertCoord;
 
-    void main(void) {
+    void main() {
       gl_Position = vec4(aVertCoord, 0.0, 1.0);
     }
   </script>
-  <script id="fs" type="x-shader/x-fragment">
+  <script id='fs' type='none'>
     precision mediump float;
 
-    void main(void) {
+    void main() {
       gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
   </script>
-  <script type='text/javascript'>
+  <script>
     'use strict';
 
-    var submitResult = null;
-    var vrDisplay = null;
-    var webglCanvas = null;
-    var gl = null;
-    var prog = null;
-    var img = null;
+    const DEBUG_SPEW = false;
 
-    function setStatus(text) {
-      var elem = document.getElementById('status');
-      elem.innerHTML = text;
-    }
+    let vrDisplay = null;
+    let gl = null;
 
     function initVRMock() {
       VRServiceTest = navigator.requestVRServiceTest();
       if (!VRServiceTest) {
-        setStatus('VRServiceTest get failed.');
+        testFailed('VRServiceTest get failed.');
         return;
       }
 
       VRSimulationDriver.AttachWebVRDisplay().then(() => {
         // Looking for VR displays
-        if (navigator.getVRDisplays) {
-          submitResult = new VRSubmitFrameResult();
-          navigator.getVRDisplays().then(function (displays) {
-            if (displays.length > 0) {
-              vrDisplay = displays[0];
-              vrDisplay.requestPresent([{ source: webglCanvas }]);
-              vrDisplay.requestAnimationFrame(onAnimationFrame);
-            }
-          });
+        if (!navigator.getVRDisplays) {
+          testFailed('!navigator.getVRDisplays');
+          return;
         }
+
+        navigator.getVRDisplays().then(function (displays) {
+          spew(displays);
+          if (!displays.length) {
+            testFailed('!displays.length');
+            return;
+          }
+          vrDisplay = displays[0];
+          spew('requestPresent?');
+          vrDisplay.requestPresent([{ source: gl.canvas }]).then(() => {
+            // Waiting until this promise executes its then() takes until after
+            // presentation is force-ended by inner-window-destroyed.
+            spew('requestPresent+');
+            spew('requestPresent: vrDisplay.isPresenting: ' + vrDisplay.isPresenting);
+            //vrDisplay.requestAnimationFrame(submitFrame);
+            submitFrame();
+          });
+          //vrDisplay.requestAnimationFrame(submitFrame);
+          //setTimeout(submitFrame, 0);
+        });
       });
     }
 
-    function onAnimationFrame() {
+    let submitResult = new VRSubmitFrameResult();
+    let frameData = new VRFrameData();
+    function submitFrame() {
+      spew('submitFrame');
+      spew('submitFrame: vrDisplay.isPresenting: ' + vrDisplay.isPresenting);
       if (!vrDisplay.isPresenting) {
+        testFailed('submitFrame: !vrDisplay.isPresenting');
         return;
       }
 
-      vrDisplay.requestAnimationFrame(onAnimationFrame);
+      // 'If getFrameData() was not called prior to calling submitFrame(), the User Agent
+      //  MAY warn the user of potentially malformed visuals or prevent the frame from
+      //  being shown at all.'
+      vrDisplay.getFrameData(frameData);
+
       gl.clearColor(0.0, 1.0, 0.0, 1.0);
       gl.clear(gl.COLOR_BUFFER_BIT);
 
       // Presenting render a stereo view.
-      gl.viewport(0, 0, webglCanvas.width * 0.5, webglCanvas.height);
+      gl.viewport(0, 0, gl.drawingBufferWidth * 0.5, gl.drawingBufferHeight);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-      gl.viewport(webglCanvas.width * 0.5, 0, webglCanvas.width * 0.5, webglCanvas.height);
+      gl.viewport(gl.drawingBufferWidth * 0.5, 0, gl.drawingBufferWidth * 0.5, gl.drawingBufferHeight);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
       // Indicate VRDisplay we're done rendering.
       vrDisplay.submitFrame();
-      if (vrDisplay.getSubmitFrameResult(submitResult)) {
-        if (!img) {
-          img = document.createElement("img");
-          img.onload = function(){
-            webglCanvas.style.display = 'none';
-            vrDisplay.exitPresent();
-            setTimeout(testComplete, 0);
-          };
-          img.src = submitResult.base64Image;
-          document.body.appendChild(img);
-        } else {
-          img.src = submitResult.base64Image;
-        }
+
+      if (!vrDisplay.getSubmitFrameResult(submitResult)) {
+        spew('getSubmitFrameResult failed');
+        //vrDisplay.requestAnimationFrame(submitFrame);
+        setTimeout(submitFrame, 0);
+        return;
       }
+
+      spew('getSubmitFrameResult succeeded');
+      vrDisplay.exitPresent();
+
+      const img = document.createElement('img');
+      img.onload = () => {
+        testComplete();
+      };
+      img.src = submitResult.base64Image;
+      document.body.appendChild(img);
+    }
+
+    function makeShader(gl, type, selector) {
+      const shader = gl.createShader(type);
+      const elem = document.querySelector(selector);
+      const text = elem.innerHTML.trim();
+      gl.shaderSource(shader, text);
+      gl.compileShader(shader);
+      return shader;
+    }
+
+    function makeProgram(gl, vsSelector, fsSelector) {
+      const vs = makeShader(gl, gl.VERTEX_SHADER, vsSelector);
+      const fs = makeShader(gl, gl.FRAGMENT_SHADER, fsSelector);
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      return prog;
     }
 
     function runTest() {
-      webglCanvas = document.getElementById('canvas');
-      gl = WebGLUtil.getWebGL('canvas');
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      gl = canvas.getContext('webgl');
       if (!gl) {
-        setStatus('WebGL context creation failed.');
+        testFailed('WebGL context creation failed.');
         return;
       }
-      gl.disable(gl.DEPTH_TEST);
-      prog = WebGLUtil.createProgramByIds(gl, 'vs', 'fs');
-      if (!prog) {
-        setStatus('Program linking failed.');
-        return;
-      }
-      prog.aVertCoord = gl.getAttribLocation(prog, "aVertCoord");
+      canvas.addEventListener('webglcontextlost', (e) => {
+        testFailed('webglcontextlost: ' + e);
+      }, false);
 
-      var vertCoordArr = new Float32Array([
+      const prog = makeProgram(gl, '#vs', '#fs');
+      if (!prog) {
+        testFailed('Program linking failed.');
+        return;
+      }
+      prog.aVertCoord = gl.getAttribLocation(prog, 'aVertCoord');
+
+      const vertCoordArr = new Float32Array([
         -0.5, -0.5,
         0.5, -0.5,
         -0.5, 0.5,
         0.5, 0.5,
       ]);
-      var vertCoordBuff = gl.createBuffer();
+      const vertCoordBuff = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, vertCoordBuff);
       gl.bufferData(gl.ARRAY_BUFFER, vertCoordArr, gl.STATIC_DRAW);
       gl.useProgram(prog);
       gl.enableVertexAttribArray(prog.aVertCoord);
       gl.vertexAttribPointer(prog.aVertCoord, 2, gl.FLOAT, false, 0, 0);
 
+      gl.disable(gl.DEPTH_TEST);
+
       initVRMock();
     }
 
+    function spew(text) {
+      console.log('spew: ' + text);
+      if (DEBUG_SPEW) {
+        document.documentElement.innerHTML += '<br>' + text;
+      }
+    }
+
+    function testFailed(text) {
+      spew('Test failed: ' + text);
+      testComplete();
+    }
+
     function testComplete() {
-      document.documentElement.removeAttribute("class");
+      document.documentElement.removeAttribute('class');
     }
   </script>
 </head>
 
 <body onload='runTest();'>
-  <canvas id='canvas' width='256' height='256'></canvas>
-  <div id='status'></div>
 </body>
 
 </html>

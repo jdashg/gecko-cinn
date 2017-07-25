@@ -12,6 +12,7 @@
 #include "mozilla/Preferences.h"
 #include "ImageContainer.h"
 #include "HeapCopyOfStackArray.h"
+#include "mozilla/gfx/Logging.h"
 #include "mozilla/gfx/Matrix.h"
 #include "mozilla/UniquePtr.h"
 
@@ -906,9 +907,7 @@ GLBlitHelper::DrawBlitTextureToFramebuffer(GLuint srcTex, GLuint destFB,
     bool good = UseTexQuadProgram(type, srcSize);
     if (!good) {
         // We're up against the wall, so bail.
-        MOZ_DIAGNOSTIC_ASSERT(false,
-                              "Error: Failed to prepare to blit texture->framebuffer.\n");
-        mGL->fScissor(0, 0, destSize.width, destSize.height);
+        gfxCriticalError() << "Error: Failed to prepare to blit texture->framebuffer.";
         mGL->fClear(LOCAL_GL_COLOR_BUFFER_BIT);
         return;
     }
