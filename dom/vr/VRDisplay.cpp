@@ -675,13 +675,31 @@ VRDisplay::CancelAnimationFrame(int32_t aHandle, ErrorResult& aError)
   vm->CancelFrameRequestCallback(aHandle);
 }
 
-
 bool
 VRDisplay::IsPresenting() const
 {
   // IsPresenting returns true only if this Javascript context is presenting
   // and will return false if another context is presenting.
-  return mPresentation != nullptr;
+  if (mPresentation)
+    return true;
+
+  do {
+    if (!mShutdown)
+      break;
+
+    dom::AutoJSAPI api;
+    if (!api.Init(GetOwnerGlobal())) {
+      MOZ_ASSERT(false);
+      break;
+    }
+
+    JS_ReportWarningASCII(api.cx(),
+                          "VRDisplay.isPresenting is always false after"
+                          " presentation is forcibly shutdown by window"
+                          " destruction.");
+  } while (false);
+
+  return false;
 }
 
 bool
