@@ -123,7 +123,7 @@ WebGLContext::WebGLContext()
     , mBufferFetchingHasPerVertex(false)
     , mMaxFetchedVertices(0)
     , mMaxFetchedInstances(0)
-    , mLayerIsMirror(false)
+    , mInVRPresent(false)
     , mBypassShaderValidation(false)
     , mEmptyTFO(0)
     , mContextLossHandler(this)
@@ -1311,7 +1311,7 @@ WebGLContext::GetInputStream(const char* mimeType,
 }
 
 void
-WebGLContext::UpdateLastUseIndex()
+WebGLContext::UpdateLastUseIndex() const
 {
     static CheckedInt<uint64_t> sIndex = 0;
 
@@ -1324,8 +1324,7 @@ WebGLContext::UpdateLastUseIndex()
     mLastUseIndex = sIndex.value();
 }
 
-static uint8_t gWebGLLayerUserData;
-static uint8_t gWebGLMirrorLayerUserData;
+static bool gWebGLLayerUserDataKeyDummyVar;
 
 class WebGLContextUserData : public LayerUserData
 {
@@ -1333,18 +1332,6 @@ public:
     explicit WebGLContextUserData(HTMLCanvasElement* canvas)
         : mCanvas(canvas)
     {}
-
-    /* PreTransactionCallback gets called by the Layers code every time the
-     * WebGL canvas is going to be composited.
-     */
-    static void PreTransactionCallback(void* data) {
-        WebGLContextUserData* userdata = static_cast<WebGLContextUserData*>(data);
-        HTMLCanvasElement* canvas = userdata->mCanvas;
-        WebGLContext* webgl = static_cast<WebGLContext*>(canvas->GetContextAtIndex(0));
-
-        // Prepare the context for composition
-        webgl->BeginComposition();
-    }
 
     /** DidTransactionCallback gets called by the Layers code everytime the WebGL canvas gets composite,
       * so it really is the right place to put actions that have to be performed upon compositing
@@ -1355,7 +1342,7 @@ public:
         WebGLContext* webgl = static_cast<WebGLContext*>(canvas->GetContextAtIndex(0));
 
         // Clean up the context after composition
-        webgl->EndComposition();
+        webgl->mInvalidated = false;
     }
 
 private:
@@ -1366,13 +1353,14 @@ already_AddRefed<layers::Layer>
 WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
                              Layer* oldLayer,
                              LayerManager* manager,
-                             bool aMirror /*= false*/)
+                             bool)
 {
     if (IsContextLost())
         return nullptr;
 
     if (!mResetLayer && oldLayer &&
-        oldLayer->HasUserData(aMirror ? &gWebGLMirrorLayerUserData : &gWebGLLayerUserData)) {
+        oldLayer->HasUserData(&gWebGLLayerUserDataKeyDummyVar))
+    {
         RefPtr<layers::Layer> ret = oldLayer;
         return ret.forget();
     }
@@ -1384,7 +1372,7 @@ WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
     }
 
     WebGLContextUserData* userData = nullptr;
-    if (builder->IsPaintingToWindow() && mCanvasElement && !aMirror) {
+    if (builder->IsPaintingToWindow() && mCanvasElement) {
         // Make the layer tell us whenever a transaction finishes (including
         // the current transaction), so we can clear our invalidation state and
         // start invalidating again. We need to do this for the layer that is
@@ -1400,18 +1388,14 @@ WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
         userData = new WebGLContextUserData(mCanvasElement);
         canvasLayer->SetDidTransactionCallback(
             WebGLContextUserData::DidTransactionCallback, userData);
-        canvasLayer->SetPreTransactionCallback(
-            WebGLContextUserData::PreTransactionCallback, userData);
     }
 
-    canvasLayer->SetUserData(aMirror ? &gWebGLMirrorLayerUserData : &gWebGLLayerUserData, userData);
+    canvasLayer->SetUserData(&gWebGLLayerUserDataKeyDummyVar, userData);
 
     CanvasLayer::Data data;
-    data.mGLContext = gl;
+    data.mWebGL = this;
     data.mSize = nsIntSize(mWidth, mHeight);
     data.mHasAlpha = gl->Caps().alpha;
-    data.mIsGLAlphaPremult = IsPremultAlpha() || !data.mHasAlpha;
-    data.mIsMirror = aMirror;
 
     canvasLayer->Initialize(data);
     uint32_t flags = gl->Caps().alpha ? 0 : Layer::CONTENT_OPAQUE;
@@ -1419,10 +1403,6 @@ WebGLContext::GetCanvasLayer(nsDisplayListBuilder* builder,
     canvasLayer->Updated();
 
     mResetLayer = false;
-    // We only wish to update mLayerIsMirror when a new layer is returned.
-    // If a cached layer is returned above, aMirror is not changing since
-    // the last cached layer was created and mLayerIsMirror is still valid.
-    mLayerIsMirror = aMirror;
 
     return canvasLayer.forget();
 }
@@ -1619,12 +1599,17 @@ WebGLContext::ForceClearFramebufferWithDefaultValues(GLbitfield clearBits,
 void
 WebGLContext::OnEndOfFrame() const
 {
-   if (gfxPrefs::WebGLSpewFrameAllocs()) {
-      GeneratePerfWarning("[webgl.perf.spew-frame-allocs] %" PRIu64 " data allocations this frame.",
-                           mDataAllocGLCallCount);
-   }
-   mDataAllocGLCallCount = 0;
-   gl->ResetSyncCallCount("WebGLContext PresentScreenBuffer");
+    mDrawCallsSinceLastFlush = 0;
+    UpdateLastUseIndex();
+
+    if (gfxPrefs::WebGLSpewFrameAllocs()) {
+        GeneratePerfWarning("[webgl.perf.spew-frame-allocs] %" PRIu64 " data allocations"
+                            " this frame.",
+                            mDataAllocGLCallCount);
+    }
+    mDataAllocGLCallCount = 0;
+
+    gl->ResetSyncCallCount("WebGLContext PresentScreenBuffer");
 }
 
 // For an overview of how WebGL compositing works, see:
@@ -1660,24 +1645,6 @@ WebGLContext::PresentScreenBuffer()
     OnEndOfFrame();
 
     return true;
-}
-
-// Prepare the context for capture before compositing
-void
-WebGLContext::BeginComposition()
-{
-    // Present our screenbuffer, if needed.
-    PresentScreenBuffer();
-    mDrawCallsSinceLastFlush = 0;
-}
-
-// Clean up the context after captured for compositing
-void
-WebGLContext::EndComposition()
-{
-    // Mark ourselves as no longer invalidated.
-    MarkContextClean();
-    UpdateLastUseIndex();
 }
 
 void
@@ -2341,82 +2308,97 @@ WebGLContext::GetUnpackSize(bool isFunc3D, uint32_t width, uint32_t height,
     return totalBytes;
 }
 
+// -------------------------------------
+
+UniquePtr<gl::SurfaceFactory>
+WebGLContext::CreateFactory(layers::LayersIPCChannel* const ipcChannel,
+                            const layers::LayersBackend backend) const
+{
+    auto flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
+    if (!mOptions.premultipliedAlpha) {
+        flags |= TextureFlags::NON_PREMULTIPLIED;
+    }
+
+    const auto& screen = gl->Screen();
+    return GLScreenBuffer::CreateFactory(gl, screen->mCaps, ipcChannel, backend, flags);
+}
+
+// -------------------------------------
+
+RefPtr<layers::SharedSurfaceTextureClient>
+WebGLContext::GetFrameFor(layers::LayersIPCChannel* const ipcChannel,
+                          const layers::LayersBackend backend)
+{
+    PresentScreenBuffer();
+
+    const auto& screen = gl->Screen();
+    auto curFront = screen->Front();
+    if (!curFront)
+        return nullptr;
+
+    if (curFront->GetAllocator() == ipcChannel)
+        return curFront.forget();
+
+    const auto& tempFactory = CreateFactory(ipcChannel, backend);
+
+    auto dest = tempFactory->NewTexClient(curFront->GetSize());
+    if (!dest)
+        return nullptr;
+
+    const auto& destSurf = dest->Surf();
+    destSurf->ProducerAcquire();
+    SharedSurface::ProdCopy(curFront->Surf(), dest->Surf(),
+                            tempFactory.get());
+    destSurf->ProducerRelease();
+    return dest;
+}
+
+// --
+
+RefPtr<layers::SharedSurfaceTextureClient>
+WebGLContext::GetLayerFrame(layers::LayersIPCChannel* const ipcChannel,
+                            const layers::LayersBackend backend)
+{
+    const auto& screen = gl->Screen();
+    MOZ_ASSERT(screen);
+
+    if (!mInVRPresent) {
+        screen->Morph(ipcChannel, backend);
+    }
+
+    return GetFrameFor(ipcChannel, backend);
+}
+
 already_AddRefed<layers::SharedSurfaceTextureClient>
 WebGLContext::GetVRFrame()
 {
-    if (!mLayerIsMirror) {
-        /**
-         * Do not allow VR frame submission until a mirroring canvas layer has
-         * been returned by GetCanvasLayer
-         */
+    const auto& vrmc = VRManagerChild::Get();
+    if (!vrmc)
         return nullptr;
-    }
 
-    VRManagerChild* vrmc = VRManagerChild::Get();
-    if (!vrmc) {
-        return nullptr;
-    }
-
-    /**
-     * Swap buffers as though composition has occurred.
-     * We will then share the resulting front buffer to be submitted to the VR
-     * compositor.
-     */
-    BeginComposition();
-    EndComposition();
-
-    gl::GLScreenBuffer* screen = gl->Screen();
-    if (!screen) {
-        return nullptr;
-    }
-
-    RefPtr<SharedSurfaceTextureClient> sharedSurface = screen->Front();
-    if (!sharedSurface) {
-        return nullptr;
-    }
-
-    if (sharedSurface && sharedSurface->GetAllocator() != vrmc) {
-        RefPtr<SharedSurfaceTextureClient> dest =
-        screen->Factory()->NewTexClient(sharedSurface->GetSize(), vrmc);
-        if (!dest) {
-            return nullptr;
-        }
-        gl::SharedSurface* destSurf = dest->Surf();
-        destSurf->ProducerAcquire();
-        SharedSurface::ProdCopy(sharedSurface->Surf(), dest->Surf(),
-                                screen->Factory());
-        destSurf->ProducerRelease();
-
-        return dest.forget();
-    }
-
-  return sharedSurface.forget();
+    return GetFrameFor(vrmc, vrmc->GetBackendType()).forget();
 }
+
+// -------------------------------------
 
 bool
 WebGLContext::StartVRPresentation()
 {
-    VRManagerChild* vrmc = VRManagerChild::Get();
-    if (!vrmc) {
+    const auto& vrmc = VRManagerChild::Get();
+    if (!vrmc)
         return false;
-    }
-    gl::GLScreenBuffer* screen = gl->Screen();
-    if (!screen) {
-        return false;
-    }
-    gl::SurfaceCaps caps = screen->mCaps;
 
-    UniquePtr<gl::SurfaceFactory> factory =
-        gl::GLScreenBuffer::CreateFactory(gl,
-            caps,
-            vrmc,
-            vrmc->GetBackendType(),
-            TextureFlags::ORIGIN_BOTTOM_LEFT);
+    const auto& screen = gl->Screen();
+    screen->Morph(vrmc, vrmc->GetBackendType());
 
-    if (factory) {
-        screen->Morph(Move(factory));
-    }
+    mInVRPresent = true;
     return true;
+}
+
+void
+WebGLContext::OnEndVRPresentation()
+{
+    mInVRPresent = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2517,7 +2499,7 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebGLContext)
     NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
     NS_INTERFACE_MAP_ENTRY(nsIDOMWebGLRenderingContext)
     NS_INTERFACE_MAP_ENTRY(nsICanvasRenderingContextInternal)
-    NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
+    //NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
     // If the exact way we cast to nsISupports here ever changes, fix our
     // ToSupports() method.
     NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports, nsIDOMWebGLRenderingContext)

@@ -5,6 +5,7 @@
 
 #include "ShareableCanvasLayer.h"
 
+#include "dom/canvas/WebGLContext.h"
 #include "GLContext.h"                  // for GLContext
 #include "GLScreenBuffer.h"             // for GLScreenBuffer
 #include "SharedSurfaceGL.h"            // for SurfaceFactory_GLTexture, etc
@@ -43,41 +44,17 @@ ShareableCanvasLayer::Initialize(const Data& aData)
   if (!mGLContext)
     return;
 
-  gl::GLScreenBuffer* screen = mGLContext->Screen();
+  if (!mGLFrontbuffer)
+    return;
+  // We're using a source other than the one in the default screen.
+  // (SkiaGL)
 
-  gl::SurfaceCaps caps;
-  if (mGLFrontbuffer) {
-    // The screen caps are irrelevant if we're using a separate frontbuffer.
-    caps = mGLFrontbuffer->mHasAlpha ? gl::SurfaceCaps::ForRGBA()
-                                     : gl::SurfaceCaps::ForRGB();
-  } else {
-    MOZ_ASSERT(screen);
-    caps = screen->mCaps;
-  }
-  MOZ_ASSERT(caps.alpha == aData.mHasAlpha);
+  auto caps = gl::SurfaceCaps::ForRGB();
+  caps.alpha |= bool(mGLFrontbuffer->mHasAlpha);
 
-  auto forwarder = GetForwarder();
-
-  mFlags = TextureFlags::ORIGIN_BOTTOM_LEFT;
-  if (!aData.mIsGLAlphaPremult) {
-    mFlags |= TextureFlags::NON_PREMULTIPLIED;
-  }
-
-  UniquePtr<gl::SurfaceFactory> factory =
-    gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, mFlags);
-
-  if (mGLFrontbuffer || aData.mIsMirror) {
-    // We're using a source other than the one in the default screen.
-    // (SkiaGL)
-    mFactory = Move(factory);
-    if (!mFactory) {
-      // Absolutely must have a factory here, so create a basic one
-      mFactory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, caps, mFlags);
-    }
-  } else {
-    if (factory)
-      screen->Morph(Move(factory));
-  }
+  const auto& forwarder = GetForwarder();
+  const auto flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
+  mFactory = gl::GLScreenBuffer::CreateFactory(mGLContext, caps, forwarder, flags);
 }
 
 bool
@@ -90,7 +67,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
 
   RefPtr<SourceSurface> surface;
 
-  if (!mGLContext) {
+  if (!mGLContext && !mWebGL) {
     AutoReturnSnapshot autoReturn;
 
     if (mAsyncRenderer) {
@@ -112,14 +89,22 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
     return true;
   }
 
+  RefPtr<layers::SharedSurfaceTextureClient> frontTex;
   gl::SharedSurface* frontbuffer = nullptr;
+  bool isAlphaPremult = true;
   if (mGLFrontbuffer) {
     frontbuffer = mGLFrontbuffer.get();
-  } else {
-    gl::GLScreenBuffer* screen = mGLContext->Screen();
-    const auto& front = screen->Front();
-    if (front) {
-      frontbuffer = front->Surf();
+  } else if (mWebGL) {
+    const auto& forwarder = GetForwarder();
+    const auto& ipcChannel = forwarder->GetTextureForwarder();
+    const auto& layersBackend = forwarder->GetCompositorBackendType();
+    if (!mWebGL)
+      return false;
+    frontTex = mWebGL->GetLayerFrame(ipcChannel, layersBackend);
+
+    if (frontTex) {
+      frontbuffer = frontTex->Surf();
+      isAlphaPremult = !bool(frontTex->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
     }
   }
 
@@ -132,7 +117,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
   SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
                           ? SurfaceFormat::B8G8R8X8
                           : SurfaceFormat::B8G8R8A8;
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
+  const bool needsPremult = frontbuffer->mHasAlpha && !isAlphaPremult;
 
   // Try to read back directly into aDestTarget's output buffer
   uint8_t* destData;
@@ -143,7 +128,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
     if (destSize == readSize && destFormat == format) {
       RefPtr<DataSourceSurface> data =
         Factory::CreateWrappingDataSourceSurface(destData, destStride, destSize, destFormat);
-      mGLContext->Readback(frontbuffer, data);
+      frontbuffer->Readback(data);
       if (needsPremult) {
         gfxUtils::PremultiplyDataSurface(data, data);
       }
@@ -161,7 +146,7 @@ ShareableCanvasLayer::UpdateTarget(DrawTarget* aDestTarget)
   }
 
   // Readback handles Flush/MarkDirty.
-  mGLContext->Readback(frontbuffer, resultSurf);
+  frontbuffer->Readback(resultSurf);
   if (needsPremult) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
@@ -193,10 +178,6 @@ ShareableCanvasLayer::UpdateCompositableClient()
     TextureFlags flags = TextureFlags::DEFAULT;
     if (mOriginPos == gl::OriginPos::BottomLeft) {
       flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
-    }
-
-    if (!mIsAlphaPremultiplied) {
-      flags |= TextureFlags::NON_PREMULTIPLIED;
     }
 
     mCanvasClient = CanvasClient::CreateCanvasClient(GetCanvasClientType(),

@@ -122,13 +122,14 @@ UniquePtr<SurfaceFactory_GLXDrawable>
 SurfaceFactory_GLXDrawable::Create(GLContext* prodGL,
                                    const SurfaceCaps& caps,
                                    const RefPtr<layers::LayersIPCChannel>& allocator,
-                                   const layers::TextureFlags& flags)
+                                   const layers::TextureFlags& originalFlags)
 {
     MOZ_ASSERT(caps.alpha, "GLX surfaces require an alpha channel!");
 
+    const auto flags = originalFlags & ~layers::TextureFlags::ORIGIN_BOTTOM_LEFT;
+
     typedef SurfaceFactory_GLXDrawable ptrT;
-    UniquePtr<ptrT> ret(new ptrT(prodGL, caps, allocator,
-                                 flags & ~layers::TextureFlags::ORIGIN_BOTTOM_LEFT));
+    UniquePtr<ptrT> ret(new ptrT(prodGL, caps, allocator, originalFlags, flags));
     return Move(ret);
 }
 

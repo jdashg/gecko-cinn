@@ -73,11 +73,6 @@ public:
     mHeight = aHeight;
   }
 
-  void SetIsAlphaPremultiplied(bool aIsAlphaPremultiplied)
-  {
-    mIsAlphaPremultiplied = aIsAlphaPremultiplied;
-  }
-
   // Active thread means the thread which spawns GLContext.
   void SetActiveEventTarget();
   void ResetActiveEventTarget();
@@ -135,8 +130,6 @@ private:
 
   // Readback current WebGL's content and return it as DataSourceSurface.
   already_AddRefed<gfx::DataSourceSurface> UpdateTarget();
-
-  bool mIsAlphaPremultiplied;
 
   uint32_t mWidth;
   uint32_t mHeight;

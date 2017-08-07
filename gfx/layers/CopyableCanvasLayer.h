@@ -47,13 +47,12 @@ public:
   bool IsGLLayer() { return !!mGLContext; }
 
 protected:
-  RefPtr<gl::GLContext> mGLContext;
   RefPtr<PersistentBufferProvider> mBufferProvider;
+  WeakPtr<WebGLContext> mWebGL;
   UniquePtr<gl::SharedSurface> mGLFrontbuffer;
+  RefPtr<gl::GLContext> mGLContext;
 
-  bool mIsAlphaPremultiplied;
   gl::OriginPos mOriginPos;
-  bool mIsMirror;
 
   RefPtr<gfx::DataSourceSurface> mCachedTempSurface;
 

@@ -344,7 +344,8 @@ SurfaceFactory_ANGLEShareHandle::SurfaceFactory_ANGLEShareHandle(GLContext* gl,
                                                                  const layers::TextureFlags& flags,
                                                                  GLLibraryEGL* egl,
                                                                  EGLConfig config)
-    : SurfaceFactory(SharedSurfaceType::EGLSurfaceANGLE, gl, caps, allocator, flags)
+    : SurfaceFactory(SharedSurfaceType::EGLSurfaceANGLE, gl, caps, allocator, flags,
+                     flags)
     , mProdGL(gl)
     , mEGL(egl)
     , mConfig(config)

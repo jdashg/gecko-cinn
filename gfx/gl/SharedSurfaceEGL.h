@@ -106,7 +106,8 @@ protected:
                             const RefPtr<layers::LayersIPCChannel>& allocator,
                             const layers::TextureFlags& flags,
                             EGLContext context)
-        : SurfaceFactory(SharedSurfaceType::EGLImageShare, prodGL, caps, allocator, flags)
+        : SurfaceFactory(SharedSurfaceType::EGLImageShare, prodGL, caps, allocator, flags,
+                         flags)
         , mContext(context)
     { }
 
@@ -182,20 +183,13 @@ class SurfaceFactory_SurfaceTexture
     : public SurfaceFactory
 {
 public:
-    // Fallible:
-    static UniquePtr<SurfaceFactory_SurfaceTexture> Create(GLContext* prodGL,
-                                                           const SurfaceCaps& caps,
-                                                           const RefPtr<layers::LayersIPCChannel>& allocator,
-                                                           const layers::TextureFlags& flags);
-
-protected:
     SurfaceFactory_SurfaceTexture(GLContext* prodGL, const SurfaceCaps& caps,
-                            const RefPtr<layers::LayersIPCChannel>& allocator,
+                            layers::LayersIPCChannel* const allocator,
                             const layers::TextureFlags& flags)
-        : SurfaceFactory(SharedSurfaceType::AndroidSurfaceTexture, prodGL, caps, allocator, flags)
+        : SurfaceFactory(SharedSurfaceType::AndroidSurfaceTexture, prodGL, caps,
+                         allocator, flags, flags)
     { }
 
-public:
     virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override;
 };
 

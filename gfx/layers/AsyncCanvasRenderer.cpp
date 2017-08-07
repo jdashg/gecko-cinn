@@ -26,7 +26,6 @@ AsyncCanvasRenderer::AsyncCanvasRenderer()
   : mHTMLCanvasElement(nullptr)
   , mContext(nullptr)
   , mGLContext(nullptr)
-  , mIsAlphaPremultiplied(true)
   , mWidth(0)
   , mHeight(0)
   , mCanvasClient(nullptr)
@@ -222,8 +221,8 @@ AsyncCanvasRenderer::UpdateTarget()
   if (!frontbuffer->ReadbackBySharedHandle(surface)) {
     return nullptr;
   }
-
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
+  const bool isAlphaPremult = !bool(front->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
+  bool needsPremult = frontbuffer->mHasAlpha && !isAlphaPremult;
   if (needsPremult) {
     gfxUtils::PremultiplyDataSurface(surface, surface);
   }

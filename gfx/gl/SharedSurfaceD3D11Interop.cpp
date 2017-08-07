@@ -524,7 +524,7 @@ SurfaceFactory_D3D11Interop::SurfaceFactory_D3D11Interop(GLContext* gl,
                                                          layers::LayersIPCChannel* allocator,
                                                          const layers::TextureFlags& flags,
                                                          DXInterop2Device* interop)
-    : SurfaceFactory(SharedSurfaceType::DXGLInterop2, gl, caps, allocator, flags)
+    : SurfaceFactory(SharedSurfaceType::DXGLInterop2, gl, caps, allocator, flags, flags)
     , mInterop(interop)
 { }
 

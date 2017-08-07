@@ -20,6 +20,7 @@
 #include "mozilla/gfx/2D.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/UniquePtr.h"
+#include "mozilla/WeakPtr.h"
 #include "nsCycleCollectionNoteChild.h"
 #include "nsICanvasRenderingContextInternal.h"
 #include "nsLayoutUtils.h"
@@ -27,7 +28,7 @@
 #include "nsWrapperCache.h"
 #include "SurfaceTypes.h"
 #include "ScopedGLHelpers.h"
-#include "TexUnpackBlob.h"
+//#include "TexUnpackBlob.h"
 
 #ifdef XP_MACOSX
 #include "ForceDiscreteGPUHelperCGL.h"
@@ -48,7 +49,6 @@
 #include "nsIObserver.h"
 #include "mozilla/dom/HTMLCanvasElement.h"
 #include "nsWrapperCache.h"
-#include "nsLayoutUtils.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
 
@@ -117,14 +117,20 @@ template<typename> struct Nullable;
 } // namespace dom
 
 namespace gfx {
-class SourceSurface;
 class VRLayerChild;
 } // namespace gfx
+
+namespace gl {
+class SurfaceFactory;
+} // namespace gl
 
 namespace webgl {
 struct LinkedProgramInfo;
 class ShaderValidator;
 class TexUnpackBlob;
+class TexUnpackBytes;
+class TexUnpackImage;
+class TexUnpackSurface;
 struct UniformInfo;
 struct UniformBlockInfo;
 } // namespace webgl
@@ -294,7 +300,8 @@ struct TexImageSourceAdapter final : public TexImageSource
 class WebGLContext
     : public nsIDOMWebGLRenderingContext
     , public nsICanvasRenderingContextInternal
-    , public nsSupportsWeakReference
+    //, public nsSupportsWeakReference
+    , public SupportsWeakPtr<WebGLContext>
     , public WebGLContextUnchecked
     , public WebGLRectangleObject
     , public nsWrapperCache
@@ -340,6 +347,8 @@ class WebGLContext
     const uint32_t mMaxAcceptableFBStatusInvals;
 
 public:
+    MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLContext)
+
     WebGLContext();
 
 protected:
@@ -478,11 +487,6 @@ public:
     bool IsPreservingDrawingBuffer() const { return mOptions.preserveDrawingBuffer; }
 
     bool PresentScreenBuffer();
-
-    // Prepare the context for capture before compositing
-    void BeginComposition();
-    // Clean up the context after captured for compositing
-    void EndComposition();
 
     // a number that increments every time we have an event that causes
     // all context resources to be lost.
@@ -664,9 +668,6 @@ public:
     void LinkProgram(WebGLProgram& prog);
     void PixelStorei(GLenum pname, GLint param);
     void PolygonOffset(GLfloat factor, GLfloat units);
-
-    already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
-    bool StartVRPresentation();
 
     ////
 
@@ -1436,9 +1437,9 @@ protected:
     WebGLContextOptions mOptions;
 
     bool mInvalidated;
+    bool mInVRPresent;
     bool mCapturedFrameInvalidated;
     bool mResetLayer;
-    bool mLayerIsMirror;
     bool mOptionsFrozen;
     bool mMinCapability;
     bool mDisableExtensions;
@@ -1964,7 +1965,7 @@ protected:
 
     // Used for some hardware (particularly Tegra 2 and 4) that likes to
     // be Flushed while doing hundreds of draw calls.
-    int mDrawCallsSinceLastFlush;
+    mutable uint32_t mDrawCallsSinceLastFlush;
 
     int mAlreadyGeneratedWarnings;
     int mMaxWarnings;
@@ -1976,7 +1977,7 @@ protected:
         return mNumPerfWarnings < mMaxPerfWarnings;
     }
 
-    uint64_t mLastUseIndex;
+    mutable uint64_t mLastUseIndex;
 
     bool mNeedsFakeNoAlpha;
     bool mNeedsFakeNoDepth;
@@ -2047,7 +2048,7 @@ protected:
     void OnBeforeReadCall();
 
     void LoseOldestWebGLContextIfLimitExceeded();
-    void UpdateLastUseIndex();
+    void UpdateLastUseIndex() const;
 
     template <typename WebGLObjectType>
     JS::Value WebGLObjectAsJSValue(JSContext* cx, const WebGLObjectType*,
@@ -2080,6 +2081,21 @@ public:
 
 
     const decltype(mBound2DTextures)* TexListForElemType(GLenum elemType) const;
+
+    UniquePtr<gl::SurfaceFactory> CreateFactory(layers::LayersIPCChannel* ipcChannel,
+                                                layers::LayersBackend backend) const;
+private:
+    RefPtr<layers::SharedSurfaceTextureClient>
+    GetFrameFor(layers::LayersIPCChannel* ipcChannel,
+                layers::LayersBackend backend);
+public:
+    RefPtr<layers::SharedSurfaceTextureClient>
+    GetLayerFrame(layers::LayersIPCChannel* ipcChannel,
+                  layers::LayersBackend backend);
+
+    already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
+    bool StartVRPresentation();
+    void OnEndVRPresentation();
 
     // Friend list
     friend class ScopedCopyTexImageSource;

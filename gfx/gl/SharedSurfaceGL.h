@@ -83,7 +83,8 @@ class SurfaceFactory_Basic
 {
 public:
     SurfaceFactory_Basic(GLContext* gl, const SurfaceCaps& caps,
-                         const layers::TextureFlags& flags);
+                         const layers::TextureFlags& flags,
+                         layers::LayersIPCChannel* ipcChannel);
 
     virtual UniquePtr<SharedSurface> CreateShared(const gfx::IntSize& size) override {
         bool hasAlpha = mReadCaps.alpha;
@@ -150,7 +151,8 @@ public:
                              const SurfaceCaps& caps,
                              const RefPtr<layers::LayersIPCChannel>& allocator,
                              const layers::TextureFlags& flags)
-        : SurfaceFactory(SharedSurfaceType::SharedGLTexture, prodGL, caps, allocator, flags)
+        : SurfaceFactory(SharedSurfaceType::SharedGLTexture, prodGL, caps, allocator,
+                         flags, flags)
     {
     }
 

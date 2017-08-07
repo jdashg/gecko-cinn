@@ -49,7 +49,8 @@ WebRenderCanvasLayer::Initialize(const Data& aData)
     return;
 
   gl::GLScreenBuffer* screen = mGLContext->Screen();
-  auto factory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, screen->mCaps, mFlags);
+  auto factory = MakeUnique<gl::SurfaceFactory_Basic>(mGLContext, screen->mCaps, mFlags,
+                                                      nullptr);
   screen->Morph(Move(factory));
 }
 

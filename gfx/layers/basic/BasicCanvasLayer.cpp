@@ -4,7 +4,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "BasicCanvasLayer.h"
+
 #include "AsyncCanvasRenderer.h"
+#include "dom/canvas/WebGLContext.h"
 #include "basic/BasicLayers.h"          // for BasicLayerManager
 #include "basic/BasicLayersImpl.h"      // for GetEffectiveOperator
 #include "mozilla/mozalloc.h"           // for operator new
@@ -34,19 +36,19 @@ BasicCanvasLayer::UpdateSurface()
     return mAsyncRenderer->GetSurface();
   }
 
-  if (!mGLContext) {
-    return nullptr;
-  }
-
+  RefPtr<layers::SharedSurfaceTextureClient> frontTex;
   SharedSurface* frontbuffer = nullptr;
+  bool isAlphaPremult = true;
   if (mGLFrontbuffer) {
     frontbuffer = mGLFrontbuffer.get();
-  } else {
-    GLScreenBuffer* screen = mGLContext->Screen();
-    const auto& front = screen->Front();
-    if (front) {
-      frontbuffer = front->Surf();
+  } else if (mWebGL) {
+    frontTex = mWebGL->GetLayerFrame(nullptr, LayersBackend::LAYERS_BASIC);
+    if (frontTex) {
+      isAlphaPremult = !bool(frontTex->GetFlags() & TextureFlags::NON_PREMULTIPLIED);
+      frontbuffer = frontTex->Surf();
     }
+  } else {
+    return nullptr;
   }
 
   if (!frontbuffer) {
@@ -58,7 +60,7 @@ BasicCanvasLayer::UpdateSurface()
   SurfaceFormat format = (GetContentFlags() & CONTENT_OPAQUE)
                           ? SurfaceFormat::B8G8R8X8
                           : SurfaceFormat::B8G8R8A8;
-  bool needsPremult = frontbuffer->mHasAlpha && !mIsAlphaPremultiplied;
+  bool needsPremult = frontbuffer->mHasAlpha && !isAlphaPremult;
 
   RefPtr<DataSourceSurface> resultSurf = GetTempSurface(readSize, format);
   // There will already be a warning from inside of GetTempSurface, but
@@ -68,7 +70,7 @@ BasicCanvasLayer::UpdateSurface()
   }
 
   // Readback handles Flush/MarkDirty.
-  mGLContext->Readback(frontbuffer, resultSurf);
+  frontbuffer->Readback(resultSurf);
   if (needsPremult) {
     gfxUtils::PremultiplyDataSurface(resultSurf, resultSurf);
   }
@@ -85,19 +87,20 @@ BasicCanvasLayer::Paint(DrawTarget* aDT,
   if (IsHidden())
     return;
 
+  bool bufferPoviderSnapshot = false;
   RefPtr<SourceSurface> surface;
   if (IsDirty()) {
     Painted();
 
     FirePreTransactionCallback();
-    surface = UpdateSurface();
-    FireDidTransactionCallback();
-  }
 
-  bool bufferPoviderSnapshot = false;
-  if (!surface && mBufferProvider) {
-    surface = mBufferProvider->BorrowSnapshot();
-    bufferPoviderSnapshot = !!surface;
+    surface = UpdateSurface();
+    if (!surface && mBufferProvider) {
+      surface = mBufferProvider->BorrowSnapshot();
+      bufferPoviderSnapshot = !!surface;
+    }
+
+    FireDidTransactionCallback();
   }
 
   if (!surface) {

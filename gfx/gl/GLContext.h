@@ -3646,10 +3646,13 @@ public:
     void FlushIfHeavyGLCallsSinceLastFlush();
     static bool ShouldSpew();
     static bool ShouldDumpExts();
+
+protected:
     void Readback(SharedSurface* src, gfx::DataSourceSurface* dest);
 
     ////
 
+public:
     void TexParams_SetClampNoMips(GLenum target = LOCAL_GL_TEXTURE_2D) {
         fTexParameteri(target, LOCAL_GL_TEXTURE_WRAP_S, LOCAL_GL_CLAMP_TO_EDGE);
         fTexParameteri(target, LOCAL_GL_TEXTURE_WRAP_T, LOCAL_GL_CLAMP_TO_EDGE);

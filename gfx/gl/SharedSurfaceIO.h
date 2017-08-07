@@ -86,7 +86,7 @@ protected:
                              const RefPtr<layers::LayersIPCChannel>& allocator,
                              const layers::TextureFlags& flags,
                              const gfx::IntSize& maxDims)
-        : SurfaceFactory(SharedSurfaceType::IOSurface, gl, caps, allocator, flags)
+        : SurfaceFactory(SharedSurfaceType::IOSurface, gl, caps, allocator, flags, flags)
         , mMaxDims(maxDims)
     { }
 

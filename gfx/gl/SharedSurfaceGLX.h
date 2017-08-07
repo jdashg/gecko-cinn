@@ -57,8 +57,10 @@ public:
 private:
     SurfaceFactory_GLXDrawable(GLContext* prodGL, const SurfaceCaps& caps,
                                const RefPtr<layers::LayersIPCChannel>& allocator,
-                               const layers::TextureFlags& flags)
-        : SurfaceFactory(SharedSurfaceType::GLXDrawable, prodGL, caps, allocator, flags)
+                               layers::TextureFlags originalFlags,
+                               layers::TextureFlags flags)
+        : SurfaceFactory(SharedSurfaceType::GLXDrawable, prodGL, caps, allocator,
+                         originalFlags, flags)
     { }
 };
 

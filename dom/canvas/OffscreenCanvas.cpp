@@ -145,7 +145,6 @@ OffscreenCanvas::GetContext(JSContext* aCx,
       mCanvasRenderer->mContext = mCurrentContext;
       mCanvasRenderer->SetActiveEventTarget();
       mCanvasRenderer->mGLContext = gl;
-      mCanvasRenderer->SetIsAlphaPremultiplied(webGL->IsPremultAlpha() || !gl->Caps().alpha);
 
       if (RefPtr<ImageBridgeChild> imageBridge = ImageBridgeChild::GetSingleton()) {
         TextureFlags flags = TextureFlags::ORIGIN_BOTTOM_LEFT;

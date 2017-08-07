@@ -6,6 +6,7 @@
 #include "CanvasClient.h"
 
 #include "ClientCanvasLayer.h"          // for ClientCanvasLayer
+#include "dom/canvas/WebGLContext.h"
 #include "GLContext.h"                  // for GLContext
 #include "GLScreenBuffer.h"             // for GLScreenBuffer
 #include "ScopedGLHelpers.h"
@@ -393,40 +394,32 @@ CanvasClientSharedSurface::UpdateAsync(AsyncCanvasRenderer* aRenderer)
 void
 CanvasClientSharedSurface::UpdateRenderer(gfx::IntSize aSize, Renderer& aRenderer)
 {
-  GLContext* gl = nullptr;
   ShareableCanvasLayer* layer = nullptr;
   AsyncCanvasRenderer* asyncRenderer = nullptr;
   if (aRenderer.constructed<ShareableCanvasLayer*>()) {
     layer = aRenderer.ref<ShareableCanvasLayer*>();
-    gl = layer->mGLContext;
   } else {
-    asyncRenderer = aRenderer.ref<AsyncCanvasRenderer*>();
-    gl = asyncRenderer->mGLContext;
+    MOZ_CRASH("Offscreen canvas not yet supported.");
   }
-  gl->MakeCurrent();
 
   RefPtr<TextureClient> newFront;
 
-  if (layer && layer->mGLFrontbuffer) {
+  if (layer->mGLFrontbuffer) {
+    layer->mGLContext->MakeCurrent();
     mShSurfClient = CloneSurface(layer->mGLFrontbuffer.get(), layer->mFactory.get());
     if (!mShSurfClient) {
       gfxCriticalError() << "Invalid canvas front buffer";
       return;
     }
-  } else if (layer && layer->mIsMirror) {
-    mShSurfClient = CloneSurface(gl->Screen()->Front()->Surf(), layer->mFactory.get());
-    if (!mShSurfClient) {
-      return;
-    }
   } else {
-    mShSurfClient = gl->Screen()->Front();
-    if (mShSurfClient && mShSurfClient->GetAllocator() &&
-        mShSurfClient->GetAllocator() != GetForwarder()->GetTextureForwarder()) {
-      mShSurfClient = CloneSurface(mShSurfClient->Surf(), gl->Screen()->Factory());
-    }
-    if (!mShSurfClient) {
+    const auto& forwarder = GetForwarder();
+    const auto& ipcChannel = forwarder->GetTextureForwarder();
+    const auto& layersBackend = forwarder->GetCompositorBackendType();
+    if (!layer->mWebGL)
       return;
-    }
+    mShSurfClient = layer->mWebGL->GetLayerFrame(ipcChannel, layersBackend);
+    if (!mShSurfClient)
+      return;
   }
   MOZ_ASSERT(mShSurfClient);
 

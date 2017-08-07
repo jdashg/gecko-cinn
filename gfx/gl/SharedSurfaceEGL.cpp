@@ -278,16 +278,6 @@ SharedSurface_SurfaceTexture::ToSurfaceDescriptor(layers::SurfaceDescriptor* con
 
 ////////////////////////////////////////////////////////////////////////
 
-/*static*/ UniquePtr<SurfaceFactory_SurfaceTexture>
-SurfaceFactory_SurfaceTexture::Create(GLContext* prodGL, const SurfaceCaps& caps,
-                                      const RefPtr<layers::LayersIPCChannel>& allocator,
-                                      const layers::TextureFlags& flags)
-{
-    UniquePtr<SurfaceFactory_SurfaceTexture> ret(
-        new SurfaceFactory_SurfaceTexture(prodGL, caps, allocator, flags));
-    return Move(ret);
-}
-
 UniquePtr<SharedSurface>
 SurfaceFactory_SurfaceTexture::CreateShared(const gfx::IntSize& size)
 {

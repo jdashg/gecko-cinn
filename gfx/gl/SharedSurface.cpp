@@ -243,6 +243,12 @@ SharedSurface::UnlockProd()
     mIsLocked = false;
 }
 
+void
+SharedSurface::Readback(gfx::DataSourceSurface* const dest)
+{
+    mGL->Readback(this, dest);
+}
+
 ////////////////////////////////////////////////////////////////////////
 // SurfaceFactory
 
@@ -282,12 +288,14 @@ ChooseBufferBits(const SurfaceCaps& caps,
 
 SurfaceFactory::SurfaceFactory(SharedSurfaceType type, GLContext* gl,
                                const SurfaceCaps& caps,
-                               const RefPtr<layers::LayersIPCChannel>& allocator,
-                               const layers::TextureFlags& flags)
+                               layers::LayersIPCChannel* const allocator,
+                               const layers::TextureFlags originalFlags,
+                               const layers::TextureFlags flags)
     : mType(type)
     , mGL(gl)
     , mCaps(caps)
     , mAllocator(allocator)
+    , mOriginalFlags(originalFlags)
     , mFlags(flags)
     , mFormats(gl->ChooseGLFormats(caps))
     , mMutex("SurfaceFactor::mMutex")
@@ -310,23 +318,23 @@ SurfaceFactory::~SurfaceFactory()
     mRecycleFreePool.clear();
 }
 
-already_AddRefed<layers::SharedSurfaceTextureClient>
-SurfaceFactory::NewTexClient(const gfx::IntSize& size, const layers::LayersIPCChannel* aLayersChannel)
+RefPtr<layers::SharedSurfaceTextureClient>
+SurfaceFactory::NewTexClient(const gfx::IntSize& size)
 {
     while (!mRecycleFreePool.empty()) {
         RefPtr<layers::SharedSurfaceTextureClient> cur = mRecycleFreePool.front();
         mRecycleFreePool.pop();
 
-        if (cur->Surf()->mSize == size){
+        if (cur->Surf()->mSize == size) {
             // In the general case, textureClients transit textures through
             // CompositorForwarder. But, the textureClient created by VRManagerChild
             // has a different LayerIPCChannel, PVRManager. Therefore, textureClients
             // need to be separated into different cases.
-            if ((aLayersChannel && aLayersChannel == cur->GetAllocator()) ||
-                (cur->GetAllocator() != gfx::VRManagerChild::Get())) {
+            MOZ_ASSERT(cur->GetAllocator() == mAllocator);
+            if (mAllocator != gfx::VRManagerChild::Get()) {
                 cur->Surf()->WaitForBufferOwnership();
-                return cur.forget();
             }
+            return cur.forget();
         }
 
         StopRecycling(cur);

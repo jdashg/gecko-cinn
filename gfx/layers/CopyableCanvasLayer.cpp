@@ -15,6 +15,7 @@
 #include "gfxRect.h"                    // for gfxRect
 #include "gfxUtils.h"                   // for gfxUtils
 #include "gfx2DGlue.h"                  // for thebes --> moz2d transition
+#include "dom/canvas/WebGLContext.h"
 #include "mozilla/gfx/BaseSize.h"       // for BaseSize
 #include "mozilla/gfx/Tools.h"
 #include "mozilla/gfx/Point.h"          // for IntSize
@@ -35,9 +36,7 @@ using namespace mozilla::gl;
 CopyableCanvasLayer::CopyableCanvasLayer(LayerManager* aLayerManager, void *aImplData) :
   CanvasLayer(aLayerManager, aImplData)
   , mGLFrontbuffer(nullptr)
-  , mIsAlphaPremultiplied(true)
   , mOriginPos(gl::OriginPos::TopLeft)
-  , mIsMirror(false)
 {
   MOZ_COUNT_CTOR(CopyableCanvasLayer);
 }
@@ -50,25 +49,20 @@ CopyableCanvasLayer::~CopyableCanvasLayer()
 void
 CopyableCanvasLayer::Initialize(const Data& aData)
 {
-  if (aData.mGLContext) {
+  mOriginPos = gl::OriginPos::BottomLeft;
+  if (aData.mWebGL) {
+    mWebGL = aData.mWebGL;
+  } else if (aData.mFrontbufferGLTex) {
     mGLContext = aData.mGLContext;
-    mIsAlphaPremultiplied = aData.mIsGLAlphaPremult;
-    mOriginPos = gl::OriginPos::BottomLeft;
-    mIsMirror = aData.mIsMirror;
 
-    MOZ_ASSERT(mGLContext->IsOffscreen(), "canvas gl context isn't offscreen");
-
-    if (aData.mFrontbufferGLTex) {
-      gfx::IntSize size(aData.mSize.width, aData.mSize.height);
-      mGLFrontbuffer = SharedSurface_Basic::Wrap(aData.mGLContext, size, aData.mHasAlpha,
-                                                 aData.mFrontbufferGLTex);
-      mBufferProvider = aData.mBufferProvider;
-    }
+    mGLFrontbuffer = SharedSurface_Basic::Wrap(aData.mGLContext, aData.mSize,
+                                               aData.mHasAlpha, aData.mFrontbufferGLTex);
+    mBufferProvider = aData.mBufferProvider;
   } else if (aData.mBufferProvider) {
     mBufferProvider = aData.mBufferProvider;
+    mOriginPos = gl::OriginPos::TopLeft;
   } else if (aData.mRenderer) {
-    mAsyncRenderer = aData.mRenderer;
-    mOriginPos = gl::OriginPos::BottomLeft;
+    MOZ_CRASH("Offscreen canvas is not yet supported.");
   } else {
     MOZ_CRASH("GFX: CanvasLayer created without BufferProvider, DrawTarget or GLContext?");
   }
@@ -79,6 +73,7 @@ CopyableCanvasLayer::Initialize(const Data& aData)
 bool
 CopyableCanvasLayer::IsDataValid(const Data& aData)
 {
+  // Context loss+restore might mean we need to tear-down:
   return mGLContext == aData.mGLContext;
 }
 

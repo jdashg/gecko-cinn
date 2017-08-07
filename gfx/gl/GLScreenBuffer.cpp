@@ -56,7 +56,8 @@ GLScreenBuffer::Create(GLContext* gl,
         flags |= layers::TextureFlags::NON_PREMULTIPLIED;
     }
 
-    UniquePtr<SurfaceFactory> factory = MakeUnique<SurfaceFactory_Basic>(gl, caps, flags);
+    UniquePtr<SurfaceFactory> factory = MakeUnique<SurfaceFactory_Basic>(gl, caps, flags,
+                                                                         nullptr);
 
     ret.reset( new GLScreenBuffer(gl, caps, Move(factory)) );
     return Move(ret);
@@ -94,7 +95,8 @@ GLScreenBuffer::CreateFactory(GLContext* gl,
                 if (XRE_IsParentProcess()) {
                     factory = SurfaceFactory_EGLImage::Create(gl, caps, ipcChannel, flags);
                 } else {
-                    factory = SurfaceFactory_SurfaceTexture::Create(gl, caps, ipcChannel, flags);
+                    factory.reset(new SurfaceFactory_SurfaceTexture(gl, caps, ipcChannel,
+                                                                    flags));
                 }
 #else
                 if (gl->GetContextType() == GLContextType::EGL) {
@@ -121,10 +123,10 @@ GLScreenBuffer::CreateFactory(GLContext* gl,
                   factory = SurfaceFactory_D3D11Interop::Create(gl, caps, ipcChannel, flags);
                 }
 #endif
-              break;
+                break;
             }
             default:
-              break;
+                break;
         }
 
 #ifdef GL_PROVIDER_GLX
@@ -134,7 +136,19 @@ GLScreenBuffer::CreateFactory(GLContext* gl,
 #endif
     }
 
+    if (!factory) {
+        factory.reset(new SurfaceFactory_Basic(gl, caps, flags, ipcChannel));
+    }
+
     return factory;
+}
+
+UniquePtr<SurfaceFactory>
+GLScreenBuffer::CreateFactory(layers::LayersIPCChannel* const ipcChannel,
+                              const mozilla::layers::LayersBackend backend) const
+{
+    return CreateFactory(mGL, mFactory->mCaps, ipcChannel, backend,
+                         mFactory->mOriginalFlags);
 }
 
 GLScreenBuffer::GLScreenBuffer(GLContext* gl,
@@ -334,6 +348,17 @@ GLScreenBuffer::Morph(UniquePtr<SurfaceFactory> newFactory)
 {
     MOZ_RELEASE_ASSERT(newFactory, "newFactory must not be null");
     mFactory = Move(newFactory);
+}
+
+void
+GLScreenBuffer::Morph(layers::LayersIPCChannel* const ipcChannel,
+                      const layers::LayersBackend backend)
+{
+    if (mFactory->mAllocator == ipcChannel)
+        return;
+
+    auto factory = CreateFactory(ipcChannel, backend);
+    Morph(Move(factory));
 }
 
 bool

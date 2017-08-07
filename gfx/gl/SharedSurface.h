@@ -172,6 +172,8 @@ public:
     virtual bool ReadbackBySharedHandle(gfx::DataSourceSurface* out_surface) {
         return false;
     }
+
+    void Readback(gfx::DataSourceSurface* dest);
 };
 
 template<typename T>
@@ -269,7 +271,10 @@ public:
     GLContext* const mGL;
     const SurfaceCaps mCaps;
     const RefPtr<layers::LayersIPCChannel> mAllocator;
+    const layers::TextureFlags mOriginalFlags;
+protected:
     const layers::TextureFlags mFlags;
+public:
     const GLFormats mFormats;
     Mutex mMutex;
 protected:
@@ -279,8 +284,8 @@ protected:
     RefSet<layers::SharedSurfaceTextureClient> mRecycleTotalPool;
 
     SurfaceFactory(SharedSurfaceType type, GLContext* gl, const SurfaceCaps& caps,
-                   const RefPtr<layers::LayersIPCChannel>& allocator,
-                   const layers::TextureFlags& flags);
+                   layers::LayersIPCChannel* allocator,
+                   layers::TextureFlags originalFlags, layers::TextureFlags flags);
 
 public:
     virtual ~SurfaceFactory();
@@ -302,9 +307,7 @@ protected:
 
 public:
     UniquePtr<SharedSurface> NewSharedSurface(const gfx::IntSize& size);
-    //already_AddRefed<ShSurfHandle> NewShSurfHandle(const gfx::IntSize& size);
-    already_AddRefed<layers::SharedSurfaceTextureClient> NewTexClient(const gfx::IntSize& size,
-                                                                      const layers::LayersIPCChannel* aLayersChannel = nullptr);
+    RefPtr<layers::SharedSurfaceTextureClient> NewTexClient(const gfx::IntSize& size);
 
     static void RecycleCallback(layers::TextureClient* tc, void* /*closure*/);
 

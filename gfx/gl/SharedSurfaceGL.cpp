@@ -99,8 +99,9 @@ SharedSurface_Basic::~SharedSurface_Basic()
 ////////////////////////////////////////////////////////////////////////
 
 SurfaceFactory_Basic::SurfaceFactory_Basic(GLContext* gl, const SurfaceCaps& caps,
-                                           const layers::TextureFlags& flags)
-    : SurfaceFactory(SharedSurfaceType::Basic, gl, caps, nullptr, flags)
+                                           const layers::TextureFlags& flags,
+                                           layers::LayersIPCChannel* const ipcChannel)
+    : SurfaceFactory(SharedSurfaceType::Basic, gl, caps, ipcChannel, flags, flags)
 { }
 
 

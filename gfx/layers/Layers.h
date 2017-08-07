@@ -63,6 +63,7 @@ namespace mozilla {
 class ComputedTimingFunction;
 class FrameLayerBuilder;
 class StyleAnimationValue;
+class WebGLContext;
 
 namespace gl {
 class GLContext;
@@ -737,7 +738,7 @@ public:
   virtual void RemoveDidCompositeObserver(DidCompositeObserver* aObserver) { MOZ_CRASH("GFX: LayerManager"); }
 
   virtual void UpdateTextureFactoryIdentifier(const TextureFactoryIdentifier& aNewIdentifier,
-											  uint64_t aDeviceResetSeqNo) {}
+                        uint64_t aDeviceResetSeqNo) {}
 
   virtual TextureFactoryIdentifier GetTextureFactoryIdentifier()
   {
@@ -2352,7 +2353,7 @@ public:
   }
 
   nsTArray<CSSFilter>& GetFilterChain() { return mFilterChain; }
-  
+
   virtual void SetInvalidCompositeRect(const gfx::IntRect& aRect) {}
 
 protected:
@@ -2712,35 +2713,27 @@ public:
   struct Data {
     Data()
       : mBufferProvider(nullptr)
-      , mGLContext(nullptr)
+      , mWebGL(nullptr)
       , mRenderer(nullptr)
       , mFrontbufferGLTex(0)
+      , mGLContext(nullptr)
       , mSize(0,0)
       , mHasAlpha(false)
-      , mIsGLAlphaPremult(true)
-      , mIsMirror(false)
     { }
 
-    // One of these three must be specified for Canvas2D, but never more than one
-    PersistentBufferProvider* mBufferProvider; // A BufferProvider for the Canvas contents
-    mozilla::gl::GLContext* mGLContext; // or this, for GL.
-    AsyncCanvasRenderer* mRenderer; // or this, for OffscreenCanvas
+    PersistentBufferProvider* mBufferProvider;
+    WebGLContext* mWebGL;
+    AsyncCanvasRenderer* mRenderer;
 
-    // Frontbuffer override
+    // Used together for skia-gl:
     uint32_t mFrontbufferGLTex;
+    mozilla::gl::GLContext* mGLContext;
 
     // The size of the canvas content
     gfx::IntSize mSize;
 
     // Whether the canvas drawingbuffer has an alpha channel.
     bool mHasAlpha;
-
-    // Whether mGLContext contains data that is alpha-premultiplied.
-    bool mIsGLAlphaPremult;
-
-    // Whether the canvas front buffer is already being rendered somewhere else.
-    // When true, do not swap buffers or Morph() to another factory on mGLContext
-    bool mIsMirror;
   };
 
   /**

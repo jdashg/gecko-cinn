@@ -683,6 +683,8 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
         mNeedsIndexValidation = true;
     }
 
+    mInVRPresent = false;
+
     return true;
 }
 

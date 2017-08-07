@@ -531,6 +531,7 @@ if CONFIG['MOZ_WIDGET_TOOLKIT'] == 'windows':
   mlg_shaders.inputs = ['d3d11/mlgshaders/shaders.manifest']
 
 LOCAL_INCLUDES += [
+    '/',
     '/docshell/base',  # for nsDocShell.h
     '/layout/base',    # for TouchManager.h
     '/layout/generic', # for nsTextFrame.h

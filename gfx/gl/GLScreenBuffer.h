@@ -147,6 +147,10 @@ public:
                   const mozilla::layers::LayersBackend backend,
                   const layers::TextureFlags& flags);
 
+    UniquePtr<SurfaceFactory>
+    CreateFactory(layers::LayersIPCChannel* ipcChannel,
+                  const mozilla::layers::LayersBackend backend) const;
+
 protected:
     GLContext* const mGL; // Owns us.
 public:
@@ -252,6 +256,7 @@ public:
 
     // Morph changes the factory used to create surfaces.
     void Morph(UniquePtr<SurfaceFactory> newFactory);
+    void Morph(layers::LayersIPCChannel* ipcChannel, layers::LayersBackend backend);
 
 protected:
     // Returns false on error or inability to resize.
