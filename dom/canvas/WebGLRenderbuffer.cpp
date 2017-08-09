@@ -62,11 +62,12 @@ WebGLRenderbuffer::WebGLRenderbuffer(WebGLContext* webgl)
 void
 WebGLRenderbuffer::Delete()
 {
-    mContext->MakeContextCurrent();
-
-    mContext->gl->fDeleteRenderbuffers(1, &mPrimaryRB);
-    if (mSecondaryRB)
-        mContext->gl->fDeleteRenderbuffers(1, &mSecondaryRB);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteRenderbuffers(1, &mPrimaryRB);
+        if (mSecondaryRB) {
+            mContext->gl->fDeleteRenderbuffers(1, &mSecondaryRB);
+        }
+    }
 
     LinkedListElement<WebGLRenderbuffer>::removeFrom(mContext->mRenderbuffers);
 }

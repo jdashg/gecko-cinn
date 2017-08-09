@@ -226,7 +226,16 @@ WebGLContext::DestroyResourcesAndContext()
     if (!gl)
         return;
 
-    gl->MakeCurrent();
+    if (gl->MakeCurrent()) {
+        if (mEmptyTFO) {
+            gl->fDeleteTransformFeedbacks(1, &mEmptyTFO);
+            mEmptyTFO = 0;
+        }
+        if (mFakeVertexAttrib0BufferObject) {
+            gl->fDeleteBuffers(1, &mFakeVertexAttrib0BufferObject);
+            mFakeVertexAttrib0BufferObject = 0;
+        }
+    }
 
     mBound2DTextures.Clear();
     mBoundCubeMapTextures.Clear();
@@ -271,13 +280,6 @@ WebGLContext::DestroyResourcesAndContext()
 
     //////
 
-    if (mEmptyTFO) {
-        gl->fDeleteTransformFeedbacks(1, &mEmptyTFO);
-        mEmptyTFO = 0;
-    }
-
-    //////
-
     mFakeBlack_2D_0000       = nullptr;
     mFakeBlack_2D_0001       = nullptr;
     mFakeBlack_CubeMap_0000  = nullptr;
@@ -286,11 +288,6 @@ WebGLContext::DestroyResourcesAndContext()
     mFakeBlack_3D_0001       = nullptr;
     mFakeBlack_2D_Array_0000 = nullptr;
     mFakeBlack_2D_Array_0001 = nullptr;
-
-    if (mFakeVertexAttrib0BufferObject) {
-        gl->fDeleteBuffers(1, &mFakeVertexAttrib0BufferObject);
-        mFakeVertexAttrib0BufferObject = 0;
-    }
 
     // disable all extensions except "WEBGL_lose_context". see bug #927969
     // spec: http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2

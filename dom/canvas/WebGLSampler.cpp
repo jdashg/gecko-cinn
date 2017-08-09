@@ -35,8 +35,9 @@ WebGLSampler::~WebGLSampler()
 void
 WebGLSampler::Delete()
 {
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteSamplers(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteSamplers(1, &mGLName);
+    }
 
     removeFrom(mContext->mSamplers);
 }

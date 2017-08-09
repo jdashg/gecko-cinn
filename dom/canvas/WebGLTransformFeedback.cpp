@@ -30,8 +30,7 @@ WebGLTransformFeedback::~WebGLTransformFeedback()
 void
 WebGLTransformFeedback::Delete()
 {
-    if (mGLName) {
-        mContext->MakeContextCurrent();
+    if (mContext->gl->MakeCurrent()) {
         mContext->gl->fDeleteTransformFeedbacks(1, &mGLName);
     }
     removeFrom(mContext->mTransformFeedbacks);

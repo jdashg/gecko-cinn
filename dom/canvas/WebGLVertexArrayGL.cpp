@@ -25,8 +25,9 @@ WebGLVertexArrayGL::DeleteImpl()
 {
     mElementArrayBuffer = nullptr;
 
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteVertexArrays(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteVertexArrays(1, &mGLName);
+    }
 
     mIsVAO = false;
 }

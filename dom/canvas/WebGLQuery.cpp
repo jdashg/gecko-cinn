@@ -56,8 +56,9 @@ WebGLQuery::WebGLQuery(WebGLContext* webgl)
 void
 WebGLQuery::Delete()
 {
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteQueries(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteQueries(1, &mGLName);
+    }
     LinkedListElement<WebGLQuery>::removeFrom(mContext->mQueries);
 }
 

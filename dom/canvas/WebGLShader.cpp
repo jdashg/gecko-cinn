@@ -453,10 +453,9 @@ WebGLShader::SizeOfIncludingThis(MallocSizeOf mallocSizeOf) const
 void
 WebGLShader::Delete()
 {
-    gl::GLContext* gl = mContext->GL();
-
-    gl->MakeCurrent();
-    gl->fDeleteShader(mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteShader(mGLName);
+    }
 
     LinkedListElement<WebGLShader>::removeFrom(mContext->mShaders);
 }

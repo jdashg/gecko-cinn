@@ -483,10 +483,9 @@ WebGLProgram::~WebGLProgram()
 void
 WebGLProgram::Delete()
 {
-    gl::GLContext* gl = mContext->GL();
-
-    gl->MakeCurrent();
-    gl->fDeleteProgram(mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteProgram(mGLName);
+    }
 
     mVertShader = nullptr;
     mFragShader = nullptr;

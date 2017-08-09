@@ -152,8 +152,9 @@ WebGLTexture::Delete()
         cur.Clear(funcName);
     }
 
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteTextures(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteTextures(1, &mGLName);
+    }
 
     LinkedListElement<WebGLTexture>::removeFrom(mContext->mTextures);
 }

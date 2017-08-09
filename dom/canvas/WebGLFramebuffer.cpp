@@ -655,8 +655,9 @@ WebGLFramebuffer::Delete()
         cur.Clear(funcName);
     }
 
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteFramebuffers(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteFramebuffers(1, &mGLName);
+    }
 
     LinkedListElement<WebGLFramebuffer>::removeFrom(mContext->mFramebuffers);
 

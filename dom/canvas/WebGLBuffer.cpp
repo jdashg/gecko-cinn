@@ -57,8 +57,9 @@ WebGLBuffer::SetContentAfterBind(GLenum target)
 void
 WebGLBuffer::Delete()
 {
-    mContext->MakeContextCurrent();
-    mContext->gl->fDeleteBuffers(1, &mGLName);
+    if (mContext->gl->MakeCurrent()) {
+        mContext->gl->fDeleteBuffers(1, &mGLName);
+    }
     mByteLength = 0;
     mIndexCache = nullptr;
     mIndexRanges.clear();
