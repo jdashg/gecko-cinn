@@ -775,10 +775,6 @@ gfxPlatform::Init()
 #  endif
 #endif
 
-#ifdef MOZ_GL_DEBUG
-    GLContext::StaticInit();
-#endif
-
     InitLayersIPC();
 
     gPlatform->PopulateScreenInfo();
