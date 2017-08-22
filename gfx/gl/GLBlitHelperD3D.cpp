@@ -281,7 +281,7 @@ GLBlitHelper::BlitDescriptor(const layers::SurfaceDescriptorD3D10& desc,
     const DrawBlitProg::BaseArgs baseArgs = { destSize, yFlip, clipRect, ySize };
     const DrawBlitProg::YUVArgs yuvArgs = { uvSize, divisors, colorSpace };
 
-    const auto& prog = GetDrawBlitProg(DrawBlitType::TexExtNV12);
+    const auto& prog = GetDrawBlitProg({kFragHeader_TexExt, kFragBody_NV12});
     MOZ_RELEASE_ASSERT(prog);
     prog->Draw(baseArgs, &yuvArgs);
     return true;
@@ -317,7 +317,7 @@ GLBlitHelper::BlitAngleYCbCr(const WindowsHandle (&handleList)[3],
     const DrawBlitProg::BaseArgs baseArgs = { destSize, yFlip, clipRect, ySize };
     const DrawBlitProg::YUVArgs yuvArgs = { uvSize, divisors, colorSpace };
 
-    const auto& prog = GetDrawBlitProg(DrawBlitType::TexExtPlanarYUV);
+    const auto& prog = GetDrawBlitProg({kFragHeader_TexExt, kFragBody_PlanarYUV});
     MOZ_RELEASE_ASSERT(prog);
     prog->Draw(baseArgs, &yuvArgs);
     return true;
