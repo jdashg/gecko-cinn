@@ -135,10 +135,9 @@ var gJPEGBlob;
 
 function prepareSources() {
   gVideo = document.createElement("video");
-  gVideo.src = "http://example.com/tests/dom/canvas/test/crossorigin/video.sjs?name=tests/dom/canvas/test/320x240.ogv&type=video/ogg&cors=anonymous";
-  gVideo.crossOrigin = "anonymous";
+  gVideo.src = "../../media/test/320x240.ogv";
+  //gVideo.src = "320x240.ogv";
   gVideo.autoplay = "true"
-
 
   gCanvas = document.createElement("canvas");
   gCtx = gCanvas.getContext("2d");
