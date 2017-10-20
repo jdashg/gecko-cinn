@@ -47,7 +47,15 @@ public:
     virtual void Invalidate() const = 0;
 };
 
+template<typename T>
+struct DerefLess final {
+    bool operator ()(const T* const a, const T* const b) const {
+        return *a < *b;
+    }
+};
+
 } // namespace detail
+
 
 template<typename KeyT, typename ValueT>
 class CacheMap final
@@ -66,40 +74,51 @@ class CacheMap final
         { }
 
         void Invalidate() const override {
-            const auto erased = mParent.mMap.erase(mKey);
+            const auto erased = mParent.mMap.erase(&mKey);
             MOZ_ALWAYS_TRUE( erased == 1 );
+        }
+
+        bool operator <(const Entry& x) const {
+            return mKey < x.mKey;
         }
     };
 
-    std::map<KeyT, UniquePtr<const Entry>> mMap;
+    typedef std::map<const KeyT*, UniquePtr<const Entry>, detail::DerefLess<KeyT>> MapT;
+    MapT mMap;
 
 public:
     const ValueT* Insert(KeyT&& key, ValueT&& value,
                          std::vector<const CacheMapInvalidator*>&& invalidators)
     {
-        UniquePtr<const Entry> entry;
-        entry.reset(new Entry(Move(invalidators), *this, Move(key), Move(value)));
+        UniquePtr<const Entry> entry( new Entry(Move(invalidators), *this, Move(key),
+                                                Move(value)) );
 
-        const auto res = mMap.insert({entry->mKey, Move(entry)});
+        typename MapT::value_type insertable{
+            &entry->mKey,
+            nullptr
+        };
+        insertable.second = Move(entry);
+
+        const auto res = mMap.insert(Move(insertable));
         const auto& didInsert = res.second;
         MOZ_ALWAYS_TRUE( didInsert );
 
-        const auto& newEntry = res.first->second;
-        return &newEntry->mValue;
+        const auto& itr = res.first;
+        return &itr->second->mValue;
     }
 
     const ValueT* Find(const KeyT& key) const {
-        const auto itr = mMap.find(key);
+        const auto itr = mMap.find(&key);
         if (itr == mMap.end())
             return nullptr;
 
-        return &(itr->second->mValue);
+        return &itr->second->mValue;
     }
 
     void Invalidate() {
         while (mMap.size()) {
-            const auto& pair = *(mMap.begin());
-            pair.second->Invalidate();
+            const auto& itr = mMap.begin();
+            itr->second->Invalidate();
         }
     }
 };
