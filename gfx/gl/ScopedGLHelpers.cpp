@@ -533,14 +533,14 @@ GetPBOBinding(GLContext* gl, GLenum target)
     return gl->GetIntAs<GLuint>(targetBinding);
 }
 
-ScopedBindPBO::ScopedBindPBO(GLContext* gl, GLenum target)
-    : ScopedGLWrapper<ScopedBindPBO>(gl)
+ScopedUnbindPBO::ScopedUnbindPBO(GLContext* gl, GLenum target)
+    : ScopedGLWrapper<ScopedUnbindPBO>(gl)
     , mTarget(target)
     , mPBO(GetPBOBinding(mGL, mTarget))
 { }
 
 void
-ScopedBindPBO::UnwrapImpl()
+ScopedUnbindPBO::UnwrapImpl()
 {
     if (!mGL->HasPBOState())
         return;

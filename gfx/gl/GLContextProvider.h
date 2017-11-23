@@ -7,9 +7,9 @@
 #define GLCONTEXTPROVIDER_H_
 
 #include "GLContextTypes.h"
-#include "SurfaceTypes.h"
-
+#include "mozilla/AlreadyAddRefed.h"
 #include "nsSize.h" // for gfx::IntSize (needed by GLContextProviderImpl.h below)
+#include "SurfaceTypes.h"
 
 class nsIWidget;
 

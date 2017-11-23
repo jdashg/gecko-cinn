@@ -610,6 +610,7 @@ ZeroANGLEDepthTexture(WebGLContext* webgl, GLuint tex,
 
     ////
     const auto& gl = webgl->gl;
+    MOZ_ASSERT(gl->IsANGLE());
     MOZ_ASSERT(gl->IsCurrent());
 
     gl::ScopedFramebuffer scopedFB(gl);
@@ -617,14 +618,9 @@ ZeroANGLEDepthTexture(WebGLContext* webgl, GLuint tex,
 
     gl->fFramebufferTexture2D(LOCAL_GL_FRAMEBUFFER, attachPoint, LOCAL_GL_TEXTURE_2D,
                               tex, 0);
+    MOZ_ASSERT(gl->IsFramebufferComplete());
 
-    const auto& status = gl->fCheckFramebufferStatus(LOCAL_GL_FRAMEBUFFER);
-    MOZ_RELEASE_ASSERT(status == LOCAL_GL_FRAMEBUFFER_COMPLETE);
-
-    ////
-
-    const bool fakeNoAlpha = false;
-    webgl->ForceClearFramebufferWithDefaultValues(clearBits, fakeNoAlpha);
+    webgl->ClearCurFBToDefaultValues(LOCAL_GL_FRAMEBUFFER, scopedFB.FB(), false);
 }
 
 static bool

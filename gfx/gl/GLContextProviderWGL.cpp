@@ -268,9 +268,9 @@ WGLLibrary::EnsureInitialized()
 #undef SYMBOL
 #undef END_OF_SYMBOLS
 
-GLContextWGL::GLContextWGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                           bool isOffscreen, HDC aDC, HGLRC aContext, HWND aWindow)
-    : GLContext(flags, caps, nullptr, isOffscreen),
+GLContextWGL::GLContextWGL(CreateContextFlags flags, bool isOffscreen, HDC aDC,
+                           HGLRC aContext, HWND aWindow)
+    : GLContext(flags, nullptr, isOffscreen),
       mDC(aDC),
       mContext(aContext),
       mWnd(aWindow),
@@ -280,10 +280,9 @@ GLContextWGL::GLContextWGL(CreateContextFlags flags, const SurfaceCaps& caps,
 {
 }
 
-GLContextWGL::GLContextWGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                           bool isOffscreen, HANDLE aPbuffer, HDC aDC, HGLRC aContext,
-                           int aPixelFormat)
-    : GLContext(flags, caps, nullptr, isOffscreen),
+GLContextWGL::GLContextWGL(CreateContextFlags flags, bool isOffscreen, HANDLE aPbuffer,
+                           HDC aDC, HGLRC aContext, int aPixelFormat)
+    : GLContext(flags, nullptr, isOffscreen),
       mDC(aDC),
       mContext(aContext),
       mWnd(nullptr),
@@ -340,7 +339,7 @@ GLContextWGL::MakeCurrentImpl(bool aForce)
 }
 
 bool
-GLContextWGL::IsCurrent()
+GLContextWGL::IsCurrent() const
 {
     return sWGLLib.mSymbols.fGetCurrentContext() == mContext;
 }
@@ -458,14 +457,13 @@ CreateForWidget(HWND aHwnd,
     }
 
     SurfaceCaps caps = SurfaceCaps::ForRGBA();
-    RefPtr<GLContextWGL> glContext = new GLContextWGL(CreateContextFlags::NONE, caps,
-                                                      false, dc, context);
+    RefPtr<GLContextWGL> glContext = new GLContextWGL(CreateContextFlags::NONE, false, dc,
+                                                      context);
     if (!glContext->Init()) {
         return nullptr;
     }
 
     glContext->SetIsDoubleBuffered(true);
-
     return glContext.forget();
 }
 
@@ -543,9 +541,8 @@ CreatePBufferOffscreenContext(CreateContextFlags flags, const IntSize& aSize)
         return nullptr;
     }
 
-    SurfaceCaps dummyCaps = SurfaceCaps::Any();
-    RefPtr<GLContextWGL> glContext = new GLContextWGL(flags, dummyCaps, true, pbuffer,
-                                                      pbdc, context, chosenFormat);
+    RefPtr<GLContextWGL> glContext = new GLContextWGL(flags, true, pbuffer, pbdc, context,
+                                                      chosenFormat);
     return glContext.forget();
 }
 
@@ -575,9 +572,8 @@ CreateWindowOffscreenContext()
         return nullptr;
     }
 
-    SurfaceCaps caps = SurfaceCaps::ForRGBA();
-    RefPtr<GLContextWGL> glContext = new GLContextWGL(CreateContextFlags::NONE, caps,
-                                                      true, dc, context, win);
+    RefPtr<GLContextWGL> glContext = new GLContextWGL(CreateContextFlags::NONE, true, dc,
+                                                      context, win);
     return glContext.forget();
 }
 
@@ -613,24 +609,6 @@ GLContextProviderWGL::CreateHeadless(CreateContextFlags flags,
 
     RefPtr<GLContext> retGL = glContext.get();
     return retGL.forget();
-}
-
-/*static*/ already_AddRefed<GLContext>
-GLContextProviderWGL::CreateOffscreen(const IntSize& size,
-                                      const SurfaceCaps& minCaps,
-                                      CreateContextFlags flags,
-                                      nsACString* const out_failureId)
-{
-    RefPtr<GLContext> gl = CreateHeadless(flags, out_failureId);
-    if (!gl)
-        return nullptr;
-
-    if (!gl->InitOffscreen(size, minCaps)) {
-        *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WGL_INIT");
-        return nullptr;
-    }
-
-    return gl.forget();
 }
 
 /*static*/ GLContext*

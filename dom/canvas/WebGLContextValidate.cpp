@@ -436,28 +436,6 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
 
     mLineWidth = 1.0;
 
-    /*
-    // Technically, we should be setting mStencil[...] values to
-    // `allOnes`, but either ANGLE breaks or the SGX540s on Try break.
-    GLuint stencilBits = 0;
-    gl->GetUIntegerv(LOCAL_GL_STENCIL_BITS, &stencilBits);
-    GLuint allOnes = ~(UINT32_MAX << stencilBits);
-    mStencilValueMaskFront = allOnes;
-    mStencilValueMaskBack  = allOnes;
-    mStencilWriteMaskFront = allOnes;
-    mStencilWriteMaskBack  = allOnes;
-    */
-
-    gl->GetUIntegerv(LOCAL_GL_STENCIL_VALUE_MASK,      &mStencilValueMaskFront);
-    gl->GetUIntegerv(LOCAL_GL_STENCIL_BACK_VALUE_MASK, &mStencilValueMaskBack);
-    gl->GetUIntegerv(LOCAL_GL_STENCIL_WRITEMASK,       &mStencilWriteMaskFront);
-    gl->GetUIntegerv(LOCAL_GL_STENCIL_BACK_WRITEMASK,  &mStencilWriteMaskBack);
-
-    AssertUintParamCorrect(gl, LOCAL_GL_STENCIL_VALUE_MASK,      mStencilValueMaskFront);
-    AssertUintParamCorrect(gl, LOCAL_GL_STENCIL_BACK_VALUE_MASK, mStencilValueMaskBack);
-    AssertUintParamCorrect(gl, LOCAL_GL_STENCIL_WRITEMASK,       mStencilWriteMaskFront);
-    AssertUintParamCorrect(gl, LOCAL_GL_STENCIL_BACK_WRITEMASK,  mStencilWriteMaskBack);
-
     mDitherEnabled = true;
     mRasterizerDiscardEnabled = false;
     mScissorTestEnabled = false;
@@ -468,6 +446,7 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
     // Bindings, etc.
     mActiveTexture = 0;
     mDefaultFB_DrawBuffer0 = LOCAL_GL_BACK;
+    mDefaultFB_ReadBuffer = LOCAL_GL_BACK;
 
     mEmitContextLostErrorOnce = true;
     mWebGLError = LOCAL_GL_NO_ERROR;

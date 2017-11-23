@@ -435,6 +435,9 @@ struct GLContextSymbols final
     // APPLE_framebuffer_multisample
     void (GLAPIENTRY * fResolveMultisampleFramebufferAPPLE)(void);
 
+    // EXT_discard_framebuffer
+    void (GLAPIENTRY * fDiscardFramebufferEXT) (GLenum, GLsizei, const GLenum*);
+
     // NV_texture_barrier
     void (GLAPIENTRY * fTextureBarrier)(void);
 

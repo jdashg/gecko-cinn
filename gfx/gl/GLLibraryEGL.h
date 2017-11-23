@@ -329,10 +329,17 @@ public:
 
     // ANGLE_device_creation
     EGLDeviceEXT fCreateDeviceANGLE(EGLint device_type, void* native_device, const EGLAttrib* attrib_list) const
-        WRAP(   fCreateDeviceANGLE(device_type, native_device, attrib_list) )
+        WRAP(    fCreateDeviceANGLE(device_type, native_device, attrib_list) )
 
     EGLBoolean fReleaseDeviceANGLE(EGLDeviceEXT device)
-        WRAP(   fReleaseDeviceANGLE(device) )
+        WRAP(  fReleaseDeviceANGLE(device) )
+
+    EGLBoolean fQueryDisplayAttribEXT(EGLDisplay dpy, EGLint attribute, EGLAttrib* value) const
+        WRAP(  fQueryDisplayAttribEXT(dpy, attribute, value) )
+
+    EGLBoolean fQueryDeviceAttribEXT(EGLDeviceEXT device, EGLint attribute, EGLAttrib* value) const
+        WRAP(  fQueryDeviceAttribEXT(device, attribute, value) )
+
 
 #undef WRAP
 #undef VOID_WRAP
@@ -495,6 +502,8 @@ private:
                                                         const EGLAttrib* attrib_list);
         EGLBoolean (GLAPIENTRY * fReleaseDeviceANGLE) (EGLDeviceEXT device);
 
+        EGLBoolean (GLAPIENTRY * fQueryDisplayAttribEXT)(EGLDisplay, EGLint, EGLAttrib*);
+        EGLBoolean (GLAPIENTRY * fQueryDeviceAttribEXT)(EGLDeviceEXT, EGLint, EGLAttrib*);
     } mSymbols;
 
 private:

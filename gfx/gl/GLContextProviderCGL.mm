@@ -5,6 +5,7 @@
 
 #include "GLContextProvider.h"
 #include "GLContextCGL.h"
+
 #include "nsDebug.h"
 #include "nsIWidget.h"
 #include <OpenGL/gl.h>
@@ -72,9 +73,9 @@ private:
 
 CGLLibrary sCGLLibrary;
 
-GLContextCGL::GLContextCGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                           NSOpenGLContext* context, bool isOffscreen)
-    : GLContext(flags, caps, nullptr, isOffscreen)
+GLContextCGL::GLContextCGL(CreateContextFlags flags, NSOpenGLContext* context,
+                           bool isOffscreen)
+    : GLContext(flags, nullptr, isOffscreen)
     , mContext(context)
 {
 }
@@ -132,7 +133,7 @@ GLContextCGL::MakeCurrentImpl(bool aForce)
 }
 
 bool
-GLContextCGL::IsCurrent() {
+GLContextCGL::IsCurrent() const {
     return [NSOpenGLContext currentContext] == mContext;
 }
 
@@ -289,8 +290,7 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget,
     GLint opaque = 0;
     [context setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
 
-    RefPtr<GLContextCGL> glContext = new GLContextCGL(CreateContextFlags::NONE,
-                                                      SurfaceCaps::ForRGBA(), context,
+    RefPtr<GLContextCGL> glContext = new GLContextCGL(CreateContextFlags::NONE, context,
                                                       false);
 
     if (!glContext->Init()) {
@@ -333,8 +333,7 @@ CreateOffscreenFBOContext(CreateContextFlags flags)
         return nullptr;
     }
 
-    RefPtr<GLContextCGL> glContext = new GLContextCGL(flags, SurfaceCaps::Any(), context,
-                                                      true);
+    RefPtr<GLContextCGL> glContext = new GLContextCGL(flags, context, true);
 
     if (gfxPrefs::GLMultithreaded()) {
         CGLEnable(glContext->GetCGLContext(), kCGLCEMPEngine);
@@ -346,8 +345,7 @@ already_AddRefed<GLContext>
 GLContextProviderCGL::CreateHeadless(CreateContextFlags flags,
                                      nsACString* const out_failureId)
 {
-    RefPtr<GLContextCGL> gl;
-    gl = CreateOffscreenFBOContext(flags);
+    RefPtr<GLContextCGL> gl = CreateOffscreenFBOContext(flags);
     if (!gl) {
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_CGL_FBO");
         return nullptr;
@@ -356,25 +354,6 @@ GLContextProviderCGL::CreateHeadless(CreateContextFlags flags,
     if (!gl->Init()) {
         *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_CGL_INIT");
         NS_WARNING("Failed during Init.");
-        return nullptr;
-    }
-
-    return gl.forget();
-}
-
-already_AddRefed<GLContext>
-GLContextProviderCGL::CreateOffscreen(const IntSize& size,
-                                      const SurfaceCaps& minCaps,
-                                      CreateContextFlags flags,
-                                      nsACString* const out_failureId)
-{
-    RefPtr<GLContext> gl = CreateHeadless(flags, out_failureId);
-    if (!gl) {
-        return nullptr;
-    }
-
-    if (!gl->InitOffscreen(size, minCaps)) {
-        *out_failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_CGL_INIT");
         return nullptr;
     }
 

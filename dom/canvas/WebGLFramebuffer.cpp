@@ -10,7 +10,6 @@
 #include <iterator>
 
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "nsPrintfCString.h"
 #include "WebGLContext.h"
@@ -627,6 +626,7 @@ WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
     , mDepthAttachment(this, LOCAL_GL_DEPTH_ATTACHMENT)
     , mStencilAttachment(this, LOCAL_GL_STENCIL_ATTACHMENT)
     , mDepthStencilAttachment(this, LOCAL_GL_DEPTH_STENCIL_ATTACHMENT)
+    , mColorDrawBufferEnums(1, LOCAL_GL_COLOR_ATTACHMENT0)
 {
     mContext->mFramebuffers.insertBack(this);
 
@@ -890,7 +890,7 @@ WebGLFramebuffer::PrecheckFramebufferStatus(nsCString* const out_info) const
 // Validation
 
 bool
-WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName)
+WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName, bool isFBOperation)
 {
     MOZ_ASSERT(mContext->mBoundDrawFramebuffer == this ||
                mContext->mBoundReadFramebuffer == this);
@@ -899,9 +899,13 @@ WebGLFramebuffer::ValidateAndInitAttachments(const char* funcName)
     if (fbStatus == LOCAL_GL_FRAMEBUFFER_COMPLETE)
         return true;
 
-    mContext->ErrorInvalidFramebufferOperation("%s: Framebuffer must be"
-                                               " complete.",
-                                               funcName);
+    const nsPrintfCString text("%s: Framebuffer must be complete.", funcName);
+    if (isFBOperation) {
+        mContext->ErrorInvalidFramebufferOperation("%s", text.BeginReading());
+    } else {
+        mContext->ErrorInvalidOperation("%s", text.BeginReading());
+    }
+
     return false;
 }
 
@@ -947,8 +951,7 @@ WebGLFramebuffer::ValidateForRead(const char* funcName,
                                   const webgl::FormatUsageInfo** const out_format,
                                   uint32_t* const out_width, uint32_t* const out_height)
 {
-    if (!ValidateAndInitAttachments(funcName))
-        return false;
+    MOZ_ASSERT(IsResolvedComplete());
 
     if (!mColorReadBuffer) {
         mContext->ErrorInvalidOperation("%s: READ_BUFFER must not be NONE.", funcName);
@@ -1095,9 +1098,8 @@ WebGLFramebuffer::ResolveAttachmentData(const char* funcName) const
         }
 
         {
-            gl::ScopedBindFramebuffer autoBind(mContext->gl, mGLName);
-
-            mContext->ForceClearFramebufferWithDefaultValues(clearBits, false);
+            const gl::ScopedBindFramebuffer bindFB(mContext->gl, mGLName);
+            mContext->ClearCurFBToDefaultValues(LOCAL_GL_FRAMEBUFFER, mGLName, false);
         }
 
         if (hasDrawBuffers) {
@@ -1296,7 +1298,9 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
         return;
     }
 
+    std::vector<GLenum> newColorDrawBufferEnums;
     std::vector<const WebGLFBAttachPoint*> newColorDrawBuffers;
+    newColorDrawBufferEnums.reserve(buffers.Length());
     newColorDrawBuffers.reserve(buffers.Length());
 
     for (size_t i = 0; i < buffers.Length(); i++) {
@@ -1311,6 +1315,7 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
         // This means that if buffers.Length() isn't larger than MaxDrawBuffers, it won't
         // be larger than MaxColorAttachments.
         const auto& cur = buffers[i];
+        newColorDrawBufferEnums.push_back(cur);
         if (cur == LOCAL_GL_COLOR_ATTACHMENT0 + i) {
             const auto& attach = mColorAttachments[i];
             newColorDrawBuffers.push_back(&attach);
@@ -1335,6 +1340,7 @@ WebGLFramebuffer::DrawBuffers(const char* funcName, const dom::Sequence<GLenum>&
 
     mContext->MakeContextCurrent();
 
+	mColorDrawBufferEnums.swap(newColorDrawBufferEnums);
     mColorDrawBuffers.swap(newColorDrawBuffers);
     RefreshDrawBuffers(); // Calls glDrawBuffers.
     RefreshResolvedData();
@@ -1629,13 +1635,13 @@ WebGLFramebuffer::GetAttachmentParameter(const char* funcName, JSContext* cx,
 }
 
 ////////////////////
-
 static void
 GetBackbufferFormats(const WebGLContext* webgl,
                      const webgl::FormatInfo** const out_color,
                      const webgl::FormatInfo** const out_depth,
                      const webgl::FormatInfo** const out_stencil)
 {
+#error remove this
     const auto& options = webgl->Options();
 
     const auto effFormat = (options.alpha ? webgl::EffectiveFormat::RGBA8
@@ -1737,7 +1743,7 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
     } else {
         srcHasSamples = false; // Always false.
 
-        GetBackbufferFormats(webgl, &srcColorFormat, &srcDepthFormat, &srcStencilFormat);
+        webgl->BackbufferFormats(&srcColorFormat, &srcDepthFormat, &srcStencilFormat);
     }
 
     if (srcColorFormat) {
@@ -1774,10 +1780,10 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
         dstDepthFormat = fnGetFormat(dstDepthAttach, &dstHasSamples);
         dstStencilFormat = fnGetFormat(dstStencilAttach, &dstHasSamples);
     } else {
-        dstHasSamples = bool(gl->Screen()->Samples());
+        dstHasSamples = webgl->mOptions.antialias;
 
         const webgl::FormatInfo* dstColorFormat;
-        GetBackbufferFormats(webgl, &dstColorFormat, &dstDepthFormat, &dstStencilFormat);
+        webgl->BackbufferFormats(&dstColorFormat, &dstDepthFormat, &dstStencilFormat);
 
         fnCheckColorFormat(dstColorFormat);
     }
@@ -1936,9 +1942,6 @@ WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl,
 
     ////
 
-    gl->MakeCurrent();
-    webgl->OnBeforeReadCall();
-    WebGLContext::ScopedDrawCallWrapper wrapper(*webgl);
     gl->fBlitFramebuffer(srcX0, srcY0, srcX1, srcY1,
                          dstX0, dstY0, dstX1, dstY1,
                          mask, filter);

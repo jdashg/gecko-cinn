@@ -25,6 +25,17 @@ using mozilla::gl::SkiaGLGlue;
 
 template<typename R, typename... A>
 static inline GrGLFunction<R (*)(A...)>
+WrapGL(RefPtr<GLContext> aContext, R (GLContext::*aFunc)(A...) const)
+{
+  return [aContext, aFunc] (A... args) -> R
+  {
+    aContext->MakeCurrent();
+    return (aContext->*aFunc)(args...);
+  };
+}
+
+template<typename R, typename... A>
+static inline GrGLFunction<R (*)(A...)>
 WrapGL(RefPtr<GLContext> aContext, R (GLContext::*aFunc)(A...))
 {
   return [aContext, aFunc] (A... args) -> R

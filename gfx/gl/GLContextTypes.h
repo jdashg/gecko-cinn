@@ -13,6 +13,7 @@ namespace mozilla {
 namespace gl {
 
 class GLContext;
+class MozFramebuffer;
 
 enum class GLContextType {
     Unknown,
@@ -24,28 +25,11 @@ enum class GLContextType {
 };
 
 enum class OriginPos : uint8_t {
-  TopLeft,
-  BottomLeft
+    TopLeft,
+    BottomLeft
 };
 
-struct GLFormats
-{
-    // Constructs a zeroed object:
-    GLFormats();
-
-    GLenum color_texInternalFormat;
-    GLenum color_texFormat;
-    GLenum color_texType;
-    GLenum color_rbFormat;
-
-    GLenum depthStencil;
-    GLenum depth;
-    GLenum stencil;
-
-    GLsizei samples;
-};
-
-enum class CreateContextFlags : int8_t {
+enum class CreateContextFlags : uint8_t {
     NONE = 0,
     REQUIRE_COMPAT_PROFILE = 1 << 0,
     // Force the use of hardware backed GL, don't allow software implementations.
@@ -57,6 +41,12 @@ enum class CreateContextFlags : int8_t {
 
     NO_VALIDATION = 1 << 4,
     PREFER_ROBUSTNESS = 1 << 5,
+
+    // Some backends (GLX) require that subsequent backbuffers have the same depth/stencil
+    // presence and depth as the config the context was created with.
+    DEPTH_STENCIL_CONFIG = 1 << 6,
+
+    WEB_RENDER = 1 << 7, // For use with webrender.
 };
 MOZ_MAKE_ENUM_CLASS_BITWISE_OPERATORS(CreateContextFlags)
 

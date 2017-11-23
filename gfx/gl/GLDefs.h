@@ -31,6 +31,13 @@
 #define LOCAL_EGL_IMAGE_CROP_RIGHT_ANDROID              0x314A
 #define LOCAL_EGL_IMAGE_CROP_BOTTOM_ANDROID             0x314B
 
+// EGL_ANGLE_d3d_texture_client_buffer
+#define LOCAL_EGL_D3D_TEXTURE_ANGLE 0x33A3
+
+// EGL_ANGLE_device_d3d
+#define LOCAL_EGL_D3D9_DEVICE_ANGLE  0x33A0
+#define LOCAL_EGL_D3D11_DEVICE_ANGLE 0x33A1
+
 // EGL_ANGLE_platform_angle
 #define LOCAL_EGL_PLATFORM_ANGLE_ANGLE                      0x3202
 #define LOCAL_EGL_PLATFORM_ANGLE_TYPE_ANGLE                 0x3203
@@ -56,6 +63,10 @@
 // EGL_ANGLE_direct3d_display
 #define LOCAL_EGL_D3D11_ELSE_D3D9_DISPLAY_ANGLE         ((EGLNativeDisplayType)-2)
 #define LOCAL_EGL_D3D11_ONLY_DISPLAY_ANGLE              ((EGLNativeDisplayType)-3)
+
+// EGL_EXT_device_base
+#define LOCAL_EGL_BAD_DEVICE_EXT 0x322B
+#define LOCAL_EGL_DEVICE_EXT     0x322C
 
 // WGL_NV_DX_interop
 #define LOCAL_WGL_ACCESS_READ_ONLY                      0x0000

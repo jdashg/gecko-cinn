@@ -28,8 +28,8 @@ class GLContextCGL : public GLContext
 
 public:
     MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(GLContextCGL, override)
-    GLContextCGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                 NSOpenGLContext* context, bool isOffscreen);
+    GLContextCGL(CreateContextFlags flags, NSOpenGLContext* context,
+                 bool isOffscreen);
 
     ~GLContextCGL();
 
@@ -47,7 +47,7 @@ public:
 
     virtual bool MakeCurrentImpl(bool aForce) override;
 
-    virtual bool IsCurrent() override;
+    virtual bool IsCurrent() const override;
 
     virtual GLenum GetPreferredARGB32Format() const override;
 

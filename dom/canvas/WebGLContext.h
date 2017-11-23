@@ -22,11 +22,11 @@
 #include "mozilla/UniquePtr.h"
 #include "nsCycleCollectionNoteChild.h"
 #include "nsICanvasRenderingContextInternal.h"
-#include "nsLayoutUtils.h"
 #include "nsTArray.h"
 #include "nsWrapperCache.h"
-#include "SurfaceTypes.h"
 #include "ScopedGLHelpers.h"
+#include "SharedSurface.h"
+#include "SurfaceTypes.h"
 #include "TexUnpackBlob.h"
 
 #ifdef XP_MACOSX
@@ -49,7 +49,6 @@
 #include "nsIObserver.h"
 #include "mozilla/dom/HTMLCanvasElement.h"
 #include "nsWrapperCache.h"
-#include "nsLayoutUtils.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
 
@@ -108,27 +107,8 @@ struct UniformBlockInfo;
 
 WebGLTexelFormat GetWebGLTexelFormat(TexInternalFormat format);
 
-void AssertUintParamCorrect(gl::GLContext* gl, GLenum pname, GLuint shadow);
-
 struct WebGLContextOptions
 {
-    // these are defaults
-    WebGLContextOptions();
-
-    bool operator==(const WebGLContextOptions& other) const {
-        return
-            alpha == other.alpha &&
-            depth == other.depth &&
-            stencil == other.stencil &&
-            premultipliedAlpha == other.premultipliedAlpha &&
-            antialias == other.antialias &&
-            preserveDrawingBuffer == other.preserveDrawingBuffer;
-    }
-
-    bool operator!=(const WebGLContextOptions& other) const {
-        return !operator==(other);
-    }
-
     bool alpha;
     bool depth;
     bool stencil;
@@ -136,6 +116,19 @@ struct WebGLContextOptions
     bool antialias;
     bool preserveDrawingBuffer;
     bool failIfMajorPerformanceCaveat;
+
+    // these are defaults
+    WebGLContextOptions();
+
+    bool HasDepthStencil() const {
+        return depth || stencil;
+    }
+
+    bool FrontbufferHasDepthStencil() const {
+        if (antialias || preserveDrawingBuffer)
+            return false;
+        return HasDepthStencil();
+    }
 };
 
 // From WebGLContextUtils
@@ -378,22 +371,22 @@ public:
         return NS_ERROR_NOT_IMPLEMENTED;
     }
 
-    void SynthesizeGLError(GLenum err);
-    void SynthesizeGLError(GLenum err, const char* fmt, ...) MOZ_FORMAT_PRINTF(3, 4);
+    void SynthesizeGLError(GLenum err) const;
+    void SynthesizeGLError(GLenum err, const char* fmt, ...) const MOZ_FORMAT_PRINTF(3, 4);
 
-    void ErrorInvalidEnum(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void ErrorInvalidOperation(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void ErrorInvalidValue(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void ErrorInvalidFramebufferOperation(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void ErrorInvalidEnumInfo(const char* info, GLenum enumValue);
+    void ErrorInvalidEnum(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void ErrorInvalidOperation(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void ErrorInvalidValue(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void ErrorInvalidFramebufferOperation(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void ErrorInvalidEnumInfo(const char* info, GLenum enumValue) const;
     void ErrorInvalidEnumInfo(const char* info, const char* funcName,
-                              GLenum enumValue);
-    void ErrorOutOfMemory(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void ErrorImplementationBug(const char* fmt = 0, ...) MOZ_FORMAT_PRINTF(2, 3);
+                              GLenum enumValue) const;
+    void ErrorOutOfMemory(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void ErrorImplementationBug(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
 
-    void ErrorInvalidEnumArg(const char* funcName, const char* argName, GLenum val);
+    void ErrorInvalidEnumArg(const char* funcName, const char* argName, GLenum val) const;
 
-    const char* ErrorName(GLenum error);
+    static const char* ErrorName(GLenum error);
 
     /**
      * Return displayable name for GLenum.
@@ -402,8 +395,6 @@ public:
      * Returns hex formatted version of glenum if glenum is unknown.
      */
     static void EnumName(GLenum val, nsCString* out_name);
-
-    void DummyReadFramebufferOperation(const char* funcName);
 
     WebGLTexture* ActiveBoundTextureForTarget(const TexTarget texTarget) const {
         switch (texTarget.get()) {
@@ -455,30 +446,11 @@ public:
 
     gl::GLContext* GL() const { return gl; }
 
-    bool IsPremultAlpha() const { return mOptions.premultipliedAlpha; }
-
-    bool IsPreservingDrawingBuffer() const { return mOptions.preserveDrawingBuffer; }
-
-    bool PresentScreenBuffer();
-
-    // Prepare the context for capture before compositing
-    void BeginComposition();
-    // Clean up the context after captured for compositing
-    void EndComposition();
+    void PresentScreenBuffer();
 
     // a number that increments every time we have an event that causes
     // all context resources to be lost.
     uint32_t Generation() const { return mGeneration.value(); }
-
-    // This is similar to GLContext::ClearSafely, but tries to minimize the
-    // amount of work it does.
-    // It only clears the buffers we specify, and can reset its state without
-    // first having to query anything, as WebGL knows its state at all times.
-    void ForceClearFramebufferWithDefaultValues(GLbitfield bufferBits, bool fakeNoAlpha);
-
-    // Calls ForceClearFramebufferWithDefaultValues() for the Context's 'screen'.
-    void ClearScreen();
-    void ClearBackbufferIfNeeded();
 
     void RunContextLossTimer();
     void UpdateContextLossStatus();
@@ -486,18 +458,26 @@ public:
 
     bool TryToRestoreContext();
 
-    void AssertCachedBindings();
-    void AssertCachedGlobalState();
-
     dom::HTMLCanvasElement* GetCanvas() const { return mCanvasElement; }
     nsIDocument* GetOwnerDoc() const;
 
     // WebIDL WebGLRenderingContext API
     void Commit();
     void GetCanvas(Nullable<dom::OwningHTMLCanvasElementOrOffscreenCanvas>& retval);
-    GLsizei DrawingBufferWidth() const { return IsContextLost() ? 0 : mWidth; }
-    GLsizei DrawingBufferHeight() const {
-        return IsContextLost() ? 0 : mHeight;
+
+    uint32_t DrawingBufferWidth() {
+        if (IsContextLost())
+            return 0;
+        if (!EnsureDefaultFBsResized("drawingBufferWidth"))
+            return 0;
+        return mWidth;
+    }
+    uint32_t DrawingBufferHeight() {
+        if (IsContextLost())
+            return 0;
+        if (!EnsureDefaultFBsResized("drawingBufferHeight"))
+            return 0;
+        return mHeight;
     }
 
     layers::LayersBackend GetCompositorBackendType() const;
@@ -1419,12 +1399,9 @@ protected:
 
     CheckedUint32 mGeneration;
 
-    WebGLContextOptions mOptions;
-
     bool mInvalidated;
     bool mCapturedFrameInvalidated;
     bool mResetLayer;
-    bool mOptionsFrozen;
     bool mDisableExtensions;
     bool mIsMesa;
     bool mLoseContextOnMemoryPressure;
@@ -1438,13 +1415,12 @@ protected:
     void DeleteWebGLObjectsArray(nsTArray<WebGLObjectType>& array);
 
     GLuint mActiveTexture;
-    GLenum mDefaultFB_DrawBuffer0;
 
     // glGetError sources:
     bool mEmitContextLostErrorOnce;
-    GLenum mWebGLError;
-    GLenum mUnderlyingGLError;
-    GLenum GetAndFlushUnderlyingGLErrors();
+    mutable GLenum mWebGLError;
+    mutable GLenum mUnderlyingGLError;
+    GLenum GetAndFlushUnderlyingGLErrors() const;
 
     bool mBypassShaderValidation;
 
@@ -1474,8 +1450,6 @@ public:
     GLenum LastColorAttachmentEnum() const {
         return LOCAL_GL_COLOR_ATTACHMENT0 + mGLMaxColorAttachments - 1;
     }
-
-    const decltype(mOptions)& Options() const { return mOptions; }
 
 protected:
 
@@ -1573,15 +1547,13 @@ protected:
     bool CreateAndInitGL(bool forceEnabled,
                          std::vector<FailureReason>* const out_failReasons);
 
-    bool ResizeBackbuffer(uint32_t width, uint32_t height);
+    void ResizeBackbuffer(uint32_t width, uint32_t height);
 
-    typedef already_AddRefed<gl::GLContext> FnCreateGL_T(const gl::SurfaceCaps& caps,
-                                                         gl::CreateContextFlags flags,
-                                                         WebGLContext* webgl,
-                                                         std::vector<FailureReason>* const out_failReasons);
+    typedef RefPtr<gl::GLContext> FnCreateGL_T(WebGLContext* webgl,
+											   gl::CreateContextFlags flags,
+											   std::vector<FailureReason>* const out_failReasons);
 
-    bool CreateAndInitGLWith(FnCreateGL_T fnCreateGL, const gl::SurfaceCaps& baseCaps,
-                             gl::CreateContextFlags flags,
+    bool CreateAndInitGLWith(FnCreateGL_T fnCreateGL, gl::CreateContextFlags flags,
                              std::vector<FailureReason>* const out_failReasons);
 
     void ThrowEvent_WebGLContextCreationError(const nsACString& text);
@@ -1950,11 +1922,11 @@ protected:
 
     // Used for some hardware (particularly Tegra 2 and 4) that likes to
     // be Flushed while doing hundreds of draw calls.
-    int mDrawCallsSinceLastFlush;
+    mutable uint64_t mDrawCallsSinceLastFlush;
 
-    int mAlreadyGeneratedWarnings;
-    int mMaxWarnings;
-    bool mAlreadyWarnedAboutFakeVertexAttrib0;
+    mutable int mAlreadyGeneratedWarnings;
+    mutable int mMaxWarnings;
+    mutable bool mAlreadyWarnedAboutFakeVertexAttrib0;
 
     bool ShouldGenerateWarnings() const;
 
@@ -1974,61 +1946,6 @@ protected:
     const bool mAllowFBInvalidation;
 
     bool Has64BitTimestamps() const;
-
-    struct ScopedDrawCallWrapper final {
-        WebGLContext& mWebGL;
-        const bool mFakeNoAlpha;
-        const bool mFakeNoDepth;
-        const bool mFakeNoStencil;
-
-        static bool ShouldFakeNoAlpha(WebGLContext& webgl) {
-            // We should only be doing this if we're about to draw to the backbuffer, but
-            // the backbuffer needs to have this fake-no-alpha workaround.
-            return !webgl.mBoundDrawFramebuffer &&
-                   webgl.mNeedsFakeNoAlpha &&
-                   webgl.mColorWriteMask[3] != false;
-        }
-
-        static bool ShouldFakeNoDepth(WebGLContext& webgl) {
-            // We should only be doing this if we're about to draw to the backbuffer.
-            return !webgl.mBoundDrawFramebuffer &&
-                   webgl.mNeedsFakeNoDepth &&
-                   webgl.mDepthTestEnabled;
-        }
-
-        static bool HasDepthButNoStencil(const WebGLFramebuffer* fb);
-
-        static bool ShouldFakeNoStencil(WebGLContext& webgl) {
-            if (!webgl.mStencilTestEnabled)
-                return false;
-
-            if (!webgl.mBoundDrawFramebuffer) {
-                if (webgl.mNeedsFakeNoStencil)
-                    return true;
-
-                if (webgl.mNeedsEmulatedLoneDepthStencil &&
-                    webgl.mOptions.depth && !webgl.mOptions.stencil)
-                {
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (webgl.mNeedsEmulatedLoneDepthStencil &&
-                HasDepthButNoStencil(webgl.mBoundDrawFramebuffer))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        ////
-
-        explicit ScopedDrawCallWrapper(WebGLContext& webgl);
-        ~ScopedDrawCallWrapper();
-    };
 
     void OnBeforeReadCall();
 
@@ -2053,8 +1970,8 @@ protected:
 
 public:
     // console logging helpers
-    void GenerateWarning(const char* fmt, ...) MOZ_FORMAT_PRINTF(2, 3);
-    void GenerateWarning(const char* fmt, va_list ap) MOZ_FORMAT_PRINTF(2, 0);
+    void GenerateWarning(const char* fmt, ...) const MOZ_FORMAT_PRINTF(2, 3);
+    void GenerateWarning(const char* fmt, va_list ap) const MOZ_FORMAT_PRINTF(2, 0);
 
     void GeneratePerfWarning(const char* fmt, ...) const MOZ_FORMAT_PRINTF(2, 3);
 
@@ -2068,6 +1985,75 @@ public:
     const decltype(mBound2DTextures)* TexListForElemType(GLenum elemType) const;
 
     void UpdateMaxDrawBuffers();
+
+    void BackbufferFormats(const webgl::FormatInfo** out_color,
+                           const webgl::FormatInfo** out_depth,
+                           const webgl::FormatInfo** out_stencil) const;
+
+    ////////////////////////////////////
+
+public:
+    gl::MorphableSurfaceFactory mSurfFactory;
+
+private:
+    mutable bool mDefaultDrawFB_IsInvalidated;
+    mutable bool mAntialiasedFB_IsDirty;
+
+    GLenum mDefaultFB_DrawBuffer0;
+    GLenum mDefaultFB_ReadBuffer;
+
+    UniquePtr<gl::MozFramebuffer> mAntialiasedFB;
+    UniquePtr<gl::MozFramebuffer> mPreservedFB;
+    RefPtr<layers::SharedSurfaceTextureClient> mSharedFB;
+    UniquePtr<gl::MozFramebuffer> mIndirectReadFB;
+
+
+    RefPtr<layers::SharedSurfaceTextureClient> mFrontBuffer;
+
+    GLuint DefaultDrawFB() const;
+    GLuint DefaultReadFB() const;
+    bool EnsureDefaultFBsResized(const char* funcName);
+    void SetSharedFB(layers::SharedSurfaceTextureClient* sharedFB);
+public:
+    bool PrepareDefaultDrawFB(const char* funcName);
+    bool PrepareDefaultReadFB(const char* funcName);
+
+    virtual layers::CanvasLayer::Source::Info GetFrame() override;
+
+    ////
+
+    void ClearCurFBToDefaultValues(GLenum target, GLuint curFB, bool fakeNoAlpha) const;
+
+    ////
+
+private:
+    mutable Maybe<bool> mDrawState_IsDefaultFB;
+
+public:
+    void InvalidateDrawState() const {
+        mDrawState_IsDefaultFB = Nothing();
+    }
+
+    ////
+
+    // Draw commands:
+    // - Clear
+    // - ClearBuffer*
+    // - DrawArrays*
+    // - Draw*Elements*
+    bool DoBindDrawFB(const char* funcName, GLenum target = LOCAL_GL_FRAMEBUFFER);
+    // Read commands:
+    // - CopyTex*Image*
+    // - ReadPixels
+    // mayNeedIndirect:false for BlitFramebuffer, GetParameter
+    // isFBOperation:false for GetParameter
+    bool DoBindReadFB(const char* funcName, bool mayNeedIndirect = true,
+                      bool isFBOperation = true, GLenum target = LOCAL_GL_FRAMEBUFFER);
+    // Both commands:
+    // - BlitFramebuffer
+    bool DoBindBothFBs(const char* funcName);
+
+    ////////////////////////////////////
 
     // Friend list
     friend class ScopedCopyTexImageSource;

@@ -456,6 +456,8 @@ GLLibraryEGL::EnsureInitialized(bool forceAccel, nsACString* const out_failureId
         MOZ_ASSERT(IsExtensionSupported(ANGLE_platform_angle_d3d));
         const GLLibraryLoader::SymLoadStruct angleSymbols[] = {
             SYMBOL(GetPlatformDisplayEXT),
+            SYMBOL(QueryDisplayAttribEXT),
+            SYMBOL(QueryDeviceAttribEXT),
             END_OF_SYMBOLS
         };
         if (!fnLoadSymbols(angleSymbols)) {

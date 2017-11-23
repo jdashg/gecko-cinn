@@ -267,13 +267,9 @@ public:
 
         ////
 
-        if (mWebGL->mBoundDrawFramebuffer) {
-            if (!mWebGL->mBoundDrawFramebuffer->ValidateAndInitAttachments(funcName)) {
-                *out_error = true;
-                return;
-            }
-        } else {
-            mWebGL->ClearBackbufferIfNeeded();
+		if (!DoBindDrawFB(funcName)) {
+            *out_error = true;
+            return;
         }
 
         ////

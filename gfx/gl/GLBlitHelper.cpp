@@ -4,10 +4,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "gfxUtils.h"
 #include "GLBlitHelper.h"
+
+#include "gfxUtils.h"
 #include "GLContext.h"
-#include "GLScreenBuffer.h"
 #include "ScopedGLHelpers.h"
 #include "mozilla/Preferences.h"
 #include "ImageContainer.h"
