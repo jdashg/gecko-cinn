@@ -2131,8 +2131,8 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
     const webgl::FormatUsageInfo* srcUsage;
     uint32_t srcTotalWidth;
     uint32_t srcTotalHeight;
-    if (!mContext->ValidateCurFBForRead(funcName, &srcUsage, &srcTotalWidth,
-                                        &srcTotalHeight))
+    if (!mContext->BindCurFBForColorRead(funcName, &srcUsage, &srcTotalWidth,
+                                         &srcTotalHeight))
     {
         return;
     }
@@ -2166,7 +2166,6 @@ WebGLTexture::CopyTexImage2D(TexImageTarget target, GLint level, GLenum internal
     // Do the thing!
 
     mContext->gl->MakeCurrent();
-    mContext->OnBeforeReadCall();
 
     const bool isSubImage = false;
     if (!DoCopyTexOrSubImage(mContext, funcName, isSubImage, this, target, level, x, y,
@@ -2226,8 +2225,8 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
     const webgl::FormatUsageInfo* srcUsage;
     uint32_t srcTotalWidth;
     uint32_t srcTotalHeight;
-    if (!mContext->ValidateCurFBForRead(funcName, &srcUsage, &srcTotalWidth,
-                                        &srcTotalHeight))
+    if (!mContext->BindCurFBForColorRead(funcName, &srcUsage, &srcTotalWidth,
+                                         &srcTotalHeight))
     {
         return;
     }
@@ -2246,7 +2245,6 @@ WebGLTexture::CopyTexSubImage(const char* funcName, TexImageTarget target, GLint
     // Do the thing!
 
     mContext->gl->MakeCurrent();
-    mContext->OnBeforeReadCall();
 
     bool uploadWillInitialize;
     if (!EnsureImageDataInitializedForUpload(this, funcName, target, level, xOffset,
