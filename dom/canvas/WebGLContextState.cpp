@@ -177,7 +177,7 @@ WebGLContext::GetParameter(JSContext* cx, GLenum pname, ErrorResult& rv)
             GLint ret = LOCAL_GL_NONE;
             if (!mBoundDrawFramebuffer) {
                 if (pname == LOCAL_GL_DRAW_BUFFER0) {
-                    ret = gl->Screen()->GetDrawBufferMode();
+                    ret = mDefaultFB_DrawBuffer0;
                 }
             } else {
                 gl->fGetIntegerv(pname, &ret);
