@@ -137,7 +137,6 @@ WebGLContext::ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b, WebGLboo
     if (IsContextLost())
         return;
 
-    MakeContextCurrent();
     mColorWriteMask = uint8_t(bool(r)) << 0 |
                       uint8_t(bool(g)) << 1 |
                       uint8_t(bool(b)) << 2 |
