@@ -956,7 +956,14 @@ public:
 
     void fClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
         BEFORE_GL_CALL;
+
+        printf_stderr("%p->glClearColor(%f,%f,%f,%f)\n", this, r, g, b, a);
         mSymbols.fClearColor(r, g, b, a);
+
+        float driverVals[4] = {};
+        mSymbols.fGetFloatv(LOCAL_GL_COLOR_CLEAR_VALUE, driverVals);
+        printf_stderr("%p->~glClearColor(%f,%f,%f,%f)\n", this,
+                      driverVals[0], driverVals[1], driverVals[2], driverVals[3]);
         AFTER_GL_CALL;
     }
 

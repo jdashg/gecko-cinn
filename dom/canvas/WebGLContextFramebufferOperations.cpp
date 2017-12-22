@@ -91,6 +91,8 @@ WebGLContext::ClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
 
     MakeContextCurrent();
 
+    printf_stderr("^^^webglClearColor(%f,%f,%f,%f)\n", r, g, b, a);
+
     const bool supportsFloatColorBuffers = (IsExtensionEnabled(WebGLExtensionID::EXT_color_buffer_float) ||
                                             IsExtensionEnabled(WebGLExtensionID::EXT_color_buffer_half_float) ||
                                             IsExtensionEnabled(WebGLExtensionID::WEBGL_color_buffer_float));
@@ -100,6 +102,7 @@ WebGLContext::ClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
         b = GLClampFloat(b);
         a = GLClampFloat(a);
     }
+    printf_stderr("supportsFloatColorBuffers(%i)\n", int(supportsFloatColorBuffers));
 
     gl->fClearColor(r, g, b, a);
 
@@ -107,6 +110,9 @@ WebGLContext::ClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
     mColorClearValue[1] = g;
     mColorClearValue[2] = b;
     mColorClearValue[3] = a;
+    printf_stderr("mColorClearValue(%f,%f,%f,%f)\n",
+                  mColorClearValue[0], mColorClearValue[1],
+                  mColorClearValue[2], mColorClearValue[3]);
 }
 
 void
