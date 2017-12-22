@@ -1979,6 +1979,7 @@ protected:
     bool mNeedsFakeNoAlpha;
     bool mNeedsFakeNoDepth;
     bool mNeedsFakeNoStencil;
+    bool mNeedsFakeNoStencil_UserFBs;
 
     mutable uint8_t mDriverColorMask;
     bool mDriverDepthTest;
