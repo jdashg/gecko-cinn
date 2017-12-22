@@ -6,6 +6,7 @@
 #include "MozFramebuffer.h"
 
 #include "GLContext.h"
+#include "mozilla/gfx/Logging.h"
 #include "ScopedGLHelpers.h"
 
 namespace mozilla {
