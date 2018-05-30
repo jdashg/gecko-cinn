@@ -1,0 +1,32 @@
+# -*- Mode: python; indent-tabs-mode: nil; tab-width: 40 -*-
+# vim: set filetype=python:
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+with Files('**'):
+    BUG_COMPONENT = ('Core', 'Canvas: WebGL')
+
+TEST_DIRS += [
+#    'gtest'
+]
+
+MOCHITEST_MANIFESTS += [
+#    'test/mochitest.ini',
+]
+
+# Canvas 2D and common sources
+UNIFIED_SOURCES += [
+    'WebGPUBuffer.cpp',
+    'WebGPUCommandBuffer.cpp',
+    'WebGPUCommandEncoder.cpp',
+    'WebGPUDevice.cpp',
+    'WebGPUFence.cpp',
+    'WebGPUInstance.cpp',
+    'WebGPUQueue.cpp',
+]
+
+FINAL_LIBRARY = 'xul'
+
+if CONFIG['CC_TYPE'] in ('clang', 'gcc'):
+    CXXFLAGS += ['-Wno-error=shadow', '-Wno-missing-braces']
