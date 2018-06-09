@@ -370,7 +370,7 @@ def link_to_cpp(interfaces, fd):
 
         # Add the property hook reference to the sPropHooks table.
         prophooks.append(
-            "mozilla::dom::%sBinding::sNativePropertyHooks, // %d = %s(%s)" % \
+            "mozilla::dom::bindings::%s::sNativePropertyHooks, // %d = %s(%s)" % \
                 (iface['shim'], len(prophooks), iface['name'], iface['shim']))
 
     def collect_base_info(iface):
