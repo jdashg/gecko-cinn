@@ -1,0 +1,31 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<script src="/tests/SimpleTest/SimpleTest.js"></script>
+<link rel="stylesheet" href="/tests/SimpleTest/test.css">
+</head>
+<body>
+<script>
+
+function testEnabled() {
+  ok(SpecialPowers.getBoolPref('dom.webgpu.enable'), 'Pref should be enabled.');
+
+  ok(window.WebGPU !== undefined, 'window.WebGPU !== undefined');
+  ok(window.webgpu !== undefined, 'window.webgpu !== undefined');
+
+  SimpleTest.finish();
+}
+
+ok(window.WebGPU === undefined, 'window.WebGPU === undefined');
+ok(window.webgpu === undefined, 'window.webgpu === undefined');
+
+var prefArrArr = [
+  ['dom.webgpu.enable', true]
+];
+var prefEnv = {'set': prefArrArr};
+SpecialPowers.pushPrefEnv(prefEnv, testEnabled);
+SimpleTest.waitForExplicitFinish();
+
+</script>
+</body>
+</html>
