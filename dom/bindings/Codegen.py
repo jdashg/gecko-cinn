@@ -1743,14 +1743,14 @@ class CGClassFinalizeHook(CGAbstractClassHook):
 def objectMovedHook(descriptor, hookName, obj, old):
     assert descriptor.wrapperCache
     return fill("""
-	if (self) {
-	  UpdateWrapper(self, self, ${obj}, ${old});
-	}
+        if (self) {
+          UpdateWrapper(self, self, ${obj}, ${old});
+        }
 
-	return 0;
-	""",
-	obj=obj,
-	old=old)
+        return 0;
+        """,
+        obj=obj,
+        old=old)
 
 
 class CGClassObjectMovedHook(CGAbstractClassHook):
@@ -17146,12 +17146,12 @@ class GlobalGenRoots():
     @staticmethod
     def ResolveSystemBinding(config):
         curr = CGList([], "\n")
-        
+
         descriptors = config.getDescriptors(hasInterfaceObject=True,
                                             isExposedInSystemGlobals=True,
                                             register=True)
         properties = [desc.name for desc in descriptors]
-        
+
         curr.append(CGStringTable("IdString", properties, static=True))
 
         initValues = []
@@ -17170,7 +17170,7 @@ class GlobalGenRoots():
               ProtoGetter define;
               PinnedStringId id;
             };
-          
+
             static SystemProperty properties[] = {
               $*{init}
             };
