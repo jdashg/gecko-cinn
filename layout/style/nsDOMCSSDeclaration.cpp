@@ -28,7 +28,7 @@ nsDOMCSSDeclaration::~nsDOMCSSDeclaration() = default;
 /* virtual */ JSObject*
 nsDOMCSSDeclaration::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return dom::CSS2PropertiesBinding::Wrap(aCx, this, aGivenProto);
+  return dom::bindings::CSS2Properties::Wrap(aCx, this, aGivenProto);
 }
 
 NS_IMPL_QUERY_INTERFACE(nsDOMCSSDeclaration,

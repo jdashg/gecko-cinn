@@ -28,7 +28,7 @@ MIDIInputMap::MIDIInputMap(nsPIDOMWindowInner* aParent) :
 JSObject*
 MIDIInputMap::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MIDIInputMapBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MIDIInputMap::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

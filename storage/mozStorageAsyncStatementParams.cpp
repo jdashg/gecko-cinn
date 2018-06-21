@@ -40,7 +40,7 @@ AsyncStatementParams::AsyncStatementParams(nsPIDOMWindowInner* aWindow, AsyncSta
 JSObject*
 AsyncStatementParams::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return dom::MozStorageAsyncStatementParamsBinding::Wrap(aCx, this, aGivenProto);
+  return dom::bindings::MozStorageAsyncStatementParams::Wrap(aCx, this, aGivenProto);
 }
 
 void

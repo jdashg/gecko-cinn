@@ -79,7 +79,7 @@ public:
   NotNull<DeclarationBlock*> GetDeclarationBlock() const override;
 
   // WebIDL interface
-  uint16_t Type() const final { return dom::CSSRuleBinding::STYLE_RULE; }
+  uint16_t Type() const final { return dom::bindings::CSSRule::STYLE_RULE; }
   void GetCssText(nsAString& aCssText) const final;
   void GetSelectorText(nsAString& aSelectorText) final;
   void SetSelectorText(const nsAString& aSelectorText) final;

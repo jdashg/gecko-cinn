@@ -658,7 +658,7 @@ public:
   virtual JSObject* WrapObject(JSContext *aCx,
                                JS::Handle<JSObject*> aGivenProto) override
   {
-    return HTMLCollectionBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLCollection::Wrap(aCx, this, aGivenProto);
   }
 
   using nsBaseContentList::Item;

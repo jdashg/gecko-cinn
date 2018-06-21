@@ -219,7 +219,7 @@ Event::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 JSObject*
 Event::WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return EventBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Event::Wrap(aCx, this, aGivenProto);
 }
 
 void
@@ -357,15 +357,15 @@ Event::EventPhase() const
   if ((mEvent->mCurrentTarget &&
        mEvent->mCurrentTarget == mEvent->mTarget) ||
        mEvent->mFlags.InTargetPhase()) {
-    return EventBinding::AT_TARGET;
+    return bindings::Event::AT_TARGET;
   }
   if (mEvent->mFlags.mInCapturePhase) {
-    return EventBinding::CAPTURING_PHASE;
+    return bindings::Event::CAPTURING_PHASE;
   }
   if (mEvent->mFlags.mInBubblingPhase) {
-    return EventBinding::BUBBLING_PHASE;
+    return bindings::Event::BUBBLING_PHASE;
   }
-  return EventBinding::NONE;
+  return bindings::Event::NONE;
 }
 
 void

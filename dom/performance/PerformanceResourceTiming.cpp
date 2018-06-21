@@ -69,7 +69,7 @@ PerformanceResourceTiming::StartTime() const
 JSObject*
 PerformanceResourceTiming::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return PerformanceResourceTimingBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PerformanceResourceTiming::Wrap(aCx, this, aGivenProto);
 }
 
 size_t

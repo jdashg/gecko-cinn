@@ -32,15 +32,15 @@ using namespace SVGAngleBinding;
 JSObject*
 SVGMarkerElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGMarkerElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGMarkerElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGElement::LengthInfo SVGMarkerElement::sLengthInfo[4] =
 {
-  { &nsGkAtoms::refX, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
-  { &nsGkAtoms::refY, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
-  { &nsGkAtoms::markerWidth, 3, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
-  { &nsGkAtoms::markerHeight, 3, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
+  { &nsGkAtoms::refX, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
+  { &nsGkAtoms::refY, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
+  { &nsGkAtoms::markerWidth, 3, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
+  { &nsGkAtoms::markerHeight, 3, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
 };
 
 nsSVGEnumMapping SVGMarkerElement::sUnitsMap[] = {

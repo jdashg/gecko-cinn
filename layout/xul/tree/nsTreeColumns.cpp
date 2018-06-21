@@ -353,7 +353,7 @@ nsTreeColumn::GetParentObject() const
 /* virtual */ JSObject*
 nsTreeColumn::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return dom::TreeColumnBinding::Wrap(aCx, this, aGivenProto);
+  return dom::bindings::TreeColumn::Wrap(aCx, this, aGivenProto);
 }
 
 mozilla::dom::Element*
@@ -419,7 +419,7 @@ nsTreeColumns::GetParentObject() const
 /* virtual */ JSObject*
 nsTreeColumns::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return dom::TreeColumnsBinding::Wrap(aCx, this, aGivenProto);
+  return dom::bindings::TreeColumns::Wrap(aCx, this, aGivenProto);
 }
 
 dom::TreeBoxObject*

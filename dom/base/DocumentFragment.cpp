@@ -27,7 +27,7 @@ namespace dom {
 JSObject*
 DocumentFragment::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return DocumentFragmentBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::DocumentFragment::Wrap(aCx, this, aGivenProto);
 }
 
 bool

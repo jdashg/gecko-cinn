@@ -48,7 +48,7 @@ JSObject*
 TestInterfaceMaplikeObject::WrapObject(JSContext* aCx,
                                        JS::Handle<JSObject*> aGivenProto)
 {
-  return TestInterfaceMaplikeObjectBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::TestInterfaceMaplikeObject::Wrap(aCx, this, aGivenProto);
 }
 
 nsPIDOMWindowInner*
@@ -62,28 +62,28 @@ TestInterfaceMaplikeObject::SetInternal(const nsAString& aKey)
 {
   RefPtr<TestInterfaceMaplike> p(new TestInterfaceMaplike(mParent));
   ErrorResult rv;
-  TestInterfaceMaplikeObjectBinding::MaplikeHelpers::Set(this, aKey, *p, rv);
+  bindings::TestInterfaceMaplikeObject::MaplikeHelpers::Set(this, aKey, *p, rv);
 }
 
 void
 TestInterfaceMaplikeObject::ClearInternal()
 {
   ErrorResult rv;
-  TestInterfaceMaplikeObjectBinding::MaplikeHelpers::Clear(this, rv);
+  bindings::TestInterfaceMaplikeObject::MaplikeHelpers::Clear(this, rv);
 }
 
 bool
 TestInterfaceMaplikeObject::DeleteInternal(const nsAString& aKey)
 {
   ErrorResult rv;
-  return TestInterfaceMaplikeObjectBinding::MaplikeHelpers::Delete(this, aKey, rv);
+  return bindings::TestInterfaceMaplikeObject::MaplikeHelpers::Delete(this, aKey, rv);
 }
 
 bool
 TestInterfaceMaplikeObject::HasInternal(const nsAString& aKey)
 {
   ErrorResult rv;
-  return TestInterfaceMaplikeObjectBinding::MaplikeHelpers::Has(this, aKey, rv);
+  return bindings::TestInterfaceMaplikeObject::MaplikeHelpers::Has(this, aKey, rv);
 }
 
 } // namespace dom

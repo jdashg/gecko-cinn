@@ -110,7 +110,7 @@ ConsoleInstance::~ConsoleInstance()
 JSObject*
 ConsoleInstance::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ConsoleInstanceBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ConsoleInstance::Wrap(aCx, this, aGivenProto);
 }
 
 #define METHOD(name, string)                                               \

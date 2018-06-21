@@ -206,7 +206,7 @@ AnonymousContent::WrapObject(JSContext* aCx,
                              JS::Handle<JSObject*> aGivenProto,
                              JS::MutableHandle<JSObject*> aReflector)
 {
-  return AnonymousContentBinding::Wrap(aCx, this, aGivenProto, aReflector);
+  return bindings::AnonymousContent::Wrap(aCx, this, aGivenProto, aReflector);
 }
 
 void

@@ -39,7 +39,7 @@ public:
     WrapObjectInternal(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) override
   {
-    return KeyboardEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::KeyboardEvent::Wrap(aCx, this, aGivenProto);
   }
 
   bool AltKey(CallerType aCallerType = CallerType::System);

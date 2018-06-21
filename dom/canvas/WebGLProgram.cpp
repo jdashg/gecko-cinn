@@ -1709,7 +1709,7 @@ webgl::LinkedProgramInfo::MapFragDataName(const nsCString& userName,
 JSObject*
 WebGLProgram::WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto)
 {
-    return dom::WebGLProgramBinding::Wrap(js, this, givenProto);
+    return dom::bindings::WebGLProgram::Wrap(js, this, givenProto);
 }
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgram, mVertShader, mFragShader)

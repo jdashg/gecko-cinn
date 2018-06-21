@@ -41,7 +41,7 @@ StatementRow::StatementRow(nsPIDOMWindowInner* aWindow, Statement *aStatement)
 JSObject*
 StatementRow::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return dom::MozStorageStatementRowBinding::Wrap(aCx, this, aGivenProto);
+  return dom::bindings::MozStorageStatementRow::Wrap(aCx, this, aGivenProto);
 }
 
 void

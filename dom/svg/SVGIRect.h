@@ -28,7 +28,7 @@ public:
 
   JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return SVGRectBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::SVGRect::Wrap(aCx, this, aGivenProto);
   }
 
   virtual nsIContent* GetParentObject() const = 0;

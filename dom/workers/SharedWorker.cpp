@@ -184,7 +184,7 @@ SharedWorker::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
   AssertIsOnMainThread();
 
-  return SharedWorkerBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SharedWorker::Wrap(aCx, this, aGivenProto);
 }
 
 void

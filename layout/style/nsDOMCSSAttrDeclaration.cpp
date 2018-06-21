@@ -116,7 +116,7 @@ nsDOMCSSAttributeDeclaration::GetCSSDeclaration(Operation aOperation)
        (aOperation == eOperation_RemoveProperty && declaration))) {
     nsNodeUtils::AttributeWillChange(mElement, kNameSpaceID_None,
                                      nsGkAtoms::style,
-                                     dom::MutationEventBinding::MODIFICATION,
+                                     dom::bindings::MutationEvent::MODIFICATION,
                                      nullptr);
   }
 

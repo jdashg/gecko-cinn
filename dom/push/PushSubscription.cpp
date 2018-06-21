@@ -234,7 +234,7 @@ NS_INTERFACE_MAP_END
 JSObject*
 PushSubscription::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return PushSubscriptionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PushSubscription::Wrap(aCx, this, aGivenProto);
 }
 
 // static

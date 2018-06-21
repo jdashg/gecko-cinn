@@ -334,9 +334,9 @@ SandboxCreateFetch(JSContext* cx, HandleObject obj)
     MOZ_ASSERT(JS_IsGlobalObject(obj));
 
     return JS_DefineFunction(cx, obj, "fetch", SandboxFetchPromise, 2, 0) &&
-        dom::RequestBinding::GetConstructorObject(cx) &&
-        dom::ResponseBinding::GetConstructorObject(cx) &&
-        dom::HeadersBinding::GetConstructorObject(cx);
+        dom::bindings::Request::GetConstructorObject(cx) &&
+        dom::bindings::Response::GetConstructorObject(cx) &&
+        dom::bindings::Headers::GetConstructorObject(cx);
 }
 
 static bool
@@ -881,82 +881,82 @@ xpc::GlobalProperties::Define(JSContext* cx, JS::HandleObject obj)
     // to be requested either in |Cu.importGlobalProperties| or
     // |wantGlobalProperties| of a sandbox.
     if (Blob &&
-        !dom::BlobBinding::GetConstructorObject(cx))
+        !dom::bindings::Blob::GetConstructorObject(cx))
         return false;
 
-    if (ChromeUtils && !dom::ChromeUtilsBinding::GetConstructorObject(cx))
+    if (ChromeUtils && !dom::bindings::ChromeUtils::GetConstructorObject(cx))
         return false;
 
-    if (CSS && !dom::CSSBinding::GetConstructorObject(cx))
+    if (CSS && !dom::bindings::CSS::GetConstructorObject(cx))
         return false;
 
-    if (CSSRule && !dom::CSSRuleBinding::GetConstructorObject(cx))
+    if (CSSRule && !dom::bindings::CSSRule::GetConstructorObject(cx))
         return false;
 
     if (Directory &&
-        !dom::DirectoryBinding::GetConstructorObject(cx))
+        !dom::bindings::Directory::GetConstructorObject(cx))
         return false;
 
     if (DOMParser &&
-        !dom::DOMParserBinding::GetConstructorObject(cx))
+        !dom::bindings::DOMParser::GetConstructorObject(cx))
         return false;
 
     if (Element &&
-        !dom::ElementBinding::GetConstructorObject(cx))
+        !dom::bindings::Element::GetConstructorObject(cx))
         return false;
 
     if (Event &&
-        !dom::EventBinding::GetConstructorObject(cx))
+        !dom::bindings::Event::GetConstructorObject(cx))
         return false;
 
     if (File &&
-        !dom::FileBinding::GetConstructorObject(cx))
+        !dom::bindings::File::GetConstructorObject(cx))
         return false;
 
-    if (FileReader && !dom::FileReaderBinding::GetConstructorObject(cx))
+    if (FileReader && !dom::bindings::FileReader::GetConstructorObject(cx))
         return false;
 
     if (FormData &&
-        !dom::FormDataBinding::GetConstructorObject(cx))
+        !dom::bindings::FormData::GetConstructorObject(cx))
         return false;
 
     if (InspectorUtils &&
-        !dom::InspectorUtilsBinding::GetConstructorObject(cx))
+        !dom::bindings::InspectorUtils::GetConstructorObject(cx))
         return false;
 
     if (MessageChannel &&
-        (!dom::MessageChannelBinding::GetConstructorObject(cx) ||
-         !dom::MessagePortBinding::GetConstructorObject(cx)))
+        (!dom::bindings::MessageChannel::GetConstructorObject(cx) ||
+         !dom::bindings::MessagePort::GetConstructorObject(cx)))
         return false;
 
-    if (Node && !dom::NodeBinding::GetConstructorObject(cx))
+    if (Node && !dom::bindings::Node::GetConstructorObject(cx))
         return false;
 
-    if (NodeFilter && !dom::NodeFilterBinding::GetConstructorObject(cx))
+    if (NodeFilter && !dom::bindings::NodeFilter::GetConstructorObject(cx))
         return false;
 
     if (TextDecoder &&
-        !dom::TextDecoderBinding::GetConstructorObject(cx))
+        !dom::bindings::TextDecoder::GetConstructorObject(cx))
         return false;
 
     if (TextEncoder &&
-        !dom::TextEncoderBinding::GetConstructorObject(cx))
+        !dom::bindings::TextEncoder::GetConstructorObject(cx))
         return false;
 
     if (URL &&
-        !dom::URLBinding::GetConstructorObject(cx))
+        !dom::bindings::URL::GetConstructorObject(cx))
         return false;
 
     if (URLSearchParams &&
-        !dom::URLSearchParamsBinding::GetConstructorObject(cx))
+        !dom::bindings::URLSearchParams::GetConstructorObject(cx))
         return false;
 
     if (XMLHttpRequest &&
-        !dom::XMLHttpRequestBinding::GetConstructorObject(cx))
+        !dom::bindings::XMLHttpRequest::GetConstructorObject(cx))
         return false;
 
     if (XMLSerializer &&
-        !dom::XMLSerializerBinding::GetConstructorObject(cx))
+        !dom::bindings::XMLSerializer::GetConstructorObject(cx))
         return false;
 
     if (atob &&

@@ -13,7 +13,7 @@ namespace dom {
 JSObject*
 ConstructibleEventTarget::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return EventTargetBinding::Wrap(cx, this, aGivenProto);
+  return bindings::EventTarget::Wrap(cx, this, aGivenProto);
 }
 
 } // namespace dom

@@ -18,7 +18,7 @@ CDATASection::~CDATASection()
 JSObject*
 CDATASection::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return CDATASectionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CDATASection::Wrap(aCx, this, aGivenProto);
 }
 
 bool

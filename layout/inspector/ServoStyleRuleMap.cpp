@@ -91,26 +91,26 @@ ServoStyleRuleMap::RuleRemoved(StyleSheet& aStyleSheet,
   }
 
   switch (aStyleRule.Type()) {
-    case CSSRuleBinding::STYLE_RULE: {
+    case bindings::CSSRule::STYLE_RULE: {
       auto& rule = static_cast<ServoStyleRule&>(aStyleRule);
       mTable.Remove(rule.Raw());
       break;
     }
-    case CSSRuleBinding::IMPORT_RULE:
-    case CSSRuleBinding::MEDIA_RULE:
-    case CSSRuleBinding::SUPPORTS_RULE:
-    case CSSRuleBinding::DOCUMENT_RULE: {
+    case bindings::CSSRule::IMPORT_RULE:
+    case bindings::CSSRule::MEDIA_RULE:
+    case bindings::CSSRule::SUPPORTS_RULE:
+    case bindings::CSSRule::DOCUMENT_RULE: {
       // See the comment in StyleSheetRemoved.
       mTable.Clear();
       break;
     }
-    case CSSRuleBinding::FONT_FACE_RULE:
-    case CSSRuleBinding::PAGE_RULE:
-    case CSSRuleBinding::KEYFRAMES_RULE:
-    case CSSRuleBinding::KEYFRAME_RULE:
-    case CSSRuleBinding::NAMESPACE_RULE:
-    case CSSRuleBinding::COUNTER_STYLE_RULE:
-    case CSSRuleBinding::FONT_FEATURE_VALUES_RULE:
+    case bindings::CSSRule::FONT_FACE_RULE:
+    case bindings::CSSRule::PAGE_RULE:
+    case bindings::CSSRule::KEYFRAMES_RULE:
+    case bindings::CSSRule::KEYFRAME_RULE:
+    case bindings::CSSRule::NAMESPACE_RULE:
+    case bindings::CSSRule::COUNTER_STYLE_RULE:
+    case bindings::CSSRule::FONT_FEATURE_VALUES_RULE:
       break;
     default:
       MOZ_ASSERT_UNREACHABLE("Unhandled rule");
@@ -129,20 +129,20 @@ void
 ServoStyleRuleMap::FillTableFromRule(css::Rule& aRule)
 {
   switch (aRule.Type()) {
-    case CSSRuleBinding::STYLE_RULE: {
+    case bindings::CSSRule::STYLE_RULE: {
       auto& rule = static_cast<ServoStyleRule&>(aRule);
       mTable.Put(rule.Raw(), &rule);
       break;
     }
-    case CSSRuleBinding::MEDIA_RULE:
-    case CSSRuleBinding::SUPPORTS_RULE:
-    case CSSRuleBinding::DOCUMENT_RULE: {
+    case bindings::CSSRule::MEDIA_RULE:
+    case bindings::CSSRule::SUPPORTS_RULE:
+    case bindings::CSSRule::DOCUMENT_RULE: {
       auto& rule = static_cast<css::GroupRule&>(aRule);
       auto ruleList = static_cast<ServoCSSRuleList*>(rule.CssRules());
       FillTableFromRuleList(*ruleList);
       break;
     }
-    case CSSRuleBinding::IMPORT_RULE: {
+    case bindings::CSSRule::IMPORT_RULE: {
       auto& rule = static_cast<ServoImportRule&>(aRule);
       MOZ_ASSERT(aRule.GetStyleSheet());
       FillTableFromStyleSheet(*rule.GetStyleSheet());

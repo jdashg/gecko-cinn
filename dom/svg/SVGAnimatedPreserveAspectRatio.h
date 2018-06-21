@@ -28,9 +28,9 @@ class SVGAnimatedPreserveAspectRatio final
 public:
   void Init() {
     mBaseVal.mAlign =
-      dom::SVGPreserveAspectRatioBinding::SVG_PRESERVEASPECTRATIO_XMIDYMID;
+      dom::bindings::SVGPreserveAspectRatio::SVG_PRESERVEASPECTRATIO_XMIDYMID;
     mBaseVal.mMeetOrSlice =
-      dom::SVGPreserveAspectRatioBinding::SVG_MEETORSLICE_MEET;
+      dom::bindings::SVGPreserveAspectRatio::SVG_MEETORSLICE_MEET;
     mAnimVal = mBaseVal;
     mIsAnimated = false;
     mIsBaseSet = false;

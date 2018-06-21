@@ -208,8 +208,8 @@ nsXBLProtoImpl::InitTargetObjects(nsXBLPrototypeBinding* aBinding,
   JSAutoRealm ar(cx, global);
   // Make sure the interface object is created before the prototype object
   // so that XULElement is hidden from content. See bug 909340.
-  bool defineOnGlobal = dom::XULElementBinding::ConstructorEnabled(cx, global);
-  dom::XULElementBinding::GetConstructorObjectHandle(cx, defineOnGlobal);
+  bool defineOnGlobal = dom::bindings::XULElement::ConstructorEnabled(cx, global);
+  dom::bindings::XULElement::GetConstructorObjectHandle(cx, defineOnGlobal);
 
   rv = nsContentUtils::WrapNative(cx, aBoundElement, &v,
                                   /* aAllowWrapping = */ false);

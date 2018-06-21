@@ -201,7 +201,7 @@ HTMLAllCollection::GetSupportedNames(nsTArray<nsString>& aNames)
 JSObject*
 HTMLAllCollection::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLAllCollectionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLAllCollection::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

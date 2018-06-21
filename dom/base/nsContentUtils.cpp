@@ -2693,9 +2693,9 @@ bool
 nsContentUtils::PositionIsBefore(nsINode* aNode1, nsINode* aNode2)
 {
   return (aNode2->CompareDocumentPosition(*aNode1) &
-    (NodeBinding::DOCUMENT_POSITION_PRECEDING |
-     NodeBinding::DOCUMENT_POSITION_DISCONNECTED)) ==
-    NodeBinding::DOCUMENT_POSITION_PRECEDING;
+    (bindings::Node::DOCUMENT_POSITION_PRECEDING |
+     bindings::Node::DOCUMENT_POSITION_DISCONNECTED)) ==
+    bindings::Node::DOCUMENT_POSITION_PRECEDING;
 }
 
 /* static */
@@ -8457,8 +8457,8 @@ nsContentUtils::SendMouseEvent(const nsCOMPtr<nsIPresShell>& aPresShell,
     return NS_ERROR_FAILURE;
   }
 
-  if (aInputSourceArg == MouseEventBinding::MOZ_SOURCE_UNKNOWN) {
-    aInputSourceArg = MouseEventBinding::MOZ_SOURCE_MOUSE;
+  if (aInputSourceArg == bindings::MouseEvent::MOZ_SOURCE_UNKNOWN) {
+    aInputSourceArg = bindings::MouseEvent::MOZ_SOURCE_MOUSE;
   }
 
   WidgetMouseEvent event(true, msg, widget,
@@ -10376,8 +10376,8 @@ nsContentUtils::QueryTriggeringPrincipal(nsIContent* aLoadingNode,
   nsAutoString loadingStr;
   if (aLoadingNode->IsElement()) {
     aLoadingNode->AsElement()->GetAttr(kNameSpaceID_None,
-				       nsGkAtoms::triggeringprincipal,
-				       loadingStr);
+               nsGkAtoms::triggeringprincipal,
+               loadingStr);
   }
 
   // Fall back if 'triggeringprincipal' isn't specified,
@@ -10808,7 +10808,7 @@ nsContentUtils::IsOverridingWindowName(const nsAString& aName)
 // wrapping our templated function in a macro.
 #define EXTRACT_EXN_VALUES(T, ...)                                \
   ExtractExceptionValues<mozilla::dom::prototypes::id::T,         \
-                         T##Binding::NativeType, T>(__VA_ARGS__).isOk()
+                         bindings::T::NativeType, T>(__VA_ARGS__).isOk()
 
 template <prototypes::ID PrototypeID, class NativeType, typename T>
 static Result<Ok, nsresult>

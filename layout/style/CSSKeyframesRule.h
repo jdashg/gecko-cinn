@@ -24,7 +24,7 @@ public:
   bool IsCCLeaf() const override { return false; }
 
   // WebIDL interface
-  uint16_t Type() const final { return CSSRuleBinding::KEYFRAMES_RULE; }
+  uint16_t Type() const final { return bindings::CSSRule::KEYFRAMES_RULE; }
   virtual void GetName(nsAString& aName) const = 0;
   virtual void SetName(const nsAString& aName) = 0;
   virtual CSSRuleList* CssRules() = 0;

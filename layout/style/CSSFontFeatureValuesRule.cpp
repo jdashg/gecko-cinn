@@ -23,7 +23,7 @@ CSSFontFeatureValuesRule::IsCCLeaf() const
 CSSFontFeatureValuesRule::WrapObject(JSContext* aCx,
                                        JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSFontFeatureValuesRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSFontFeatureValuesRule::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

@@ -31,7 +31,7 @@ SubtleCrypto::SubtleCrypto(nsIGlobalObject* aParent)
 JSObject*
 SubtleCrypto::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SubtleCryptoBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SubtleCrypto::Wrap(aCx, this, aGivenProto);
 }
 
 #define SUBTLECRYPTO_METHOD_BODY(Operation, aRv, ...)                   \

@@ -131,7 +131,7 @@ public:
 
     bool IsLoadDisabled()
     {
-        return (mFlags & mozilla::dom::XSLTProcessorBinding::DISABLE_ALL_LOADS) != 0;
+        return (mFlags & mozilla::dom::bindings::XSLTProcessor::DISABLE_ALL_LOADS) != 0;
     }
 
     static nsresult Startup();

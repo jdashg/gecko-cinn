@@ -105,7 +105,7 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(HTMLOptionsCollection)
 JSObject*
 HTMLOptionsCollection::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLOptionsCollectionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLOptionsCollection::Wrap(aCx, this, aGivenProto);
 }
 
 uint32_t

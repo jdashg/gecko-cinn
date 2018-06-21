@@ -102,7 +102,7 @@ DOMSVGTranslatePoint::MatrixTransform(SVGMatrix& matrix)
 JSObject*
 SVGSVGElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGSVGElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGSVGElement::Wrap(aCx, this, aGivenProto);
 }
 
 //----------------------------------------------------------------------

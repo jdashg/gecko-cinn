@@ -283,23 +283,23 @@ JSObject*
 HTMLSharedElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
   if (mNodeInfo->Equals(nsGkAtoms::param)) {
-    return HTMLParamElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLParamElement::Wrap(aCx, this, aGivenProto);
   }
   if (mNodeInfo->Equals(nsGkAtoms::base)) {
-    return HTMLBaseElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLBaseElement::Wrap(aCx, this, aGivenProto);
   }
   if (mNodeInfo->Equals(nsGkAtoms::dir)) {
-    return HTMLDirectoryElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLDirectoryElement::Wrap(aCx, this, aGivenProto);
   }
   if (mNodeInfo->Equals(nsGkAtoms::q) ||
       mNodeInfo->Equals(nsGkAtoms::blockquote)) {
-    return HTMLQuoteElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLQuoteElement::Wrap(aCx, this, aGivenProto);
   }
   if (mNodeInfo->Equals(nsGkAtoms::head)) {
-    return HTMLHeadElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLHeadElement::Wrap(aCx, this, aGivenProto);
   }
   MOZ_ASSERT(mNodeInfo->Equals(nsGkAtoms::html));
-  return HTMLHtmlElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLHtmlElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

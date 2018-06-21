@@ -77,7 +77,7 @@ public:
                   JS::Handle<JSObject*> aGivenProto,
                   JS::MutableHandle<JSObject*> aReflector)
   {
-    return InspectorFontFaceBinding::Wrap(aCx, this, aGivenProto, aReflector);
+    return bindings::InspectorFontFace::Wrap(aCx, this, aGivenProto, aReflector);
   }
 
 protected:

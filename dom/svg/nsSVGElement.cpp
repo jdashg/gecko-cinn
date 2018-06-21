@@ -102,7 +102,7 @@ nsSVGElement::~nsSVGElement()
 JSObject*
 nsSVGElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGElement::Wrap(aCx, this, aGivenProto);
 }
 
 //----------------------------------------------------------------------
@@ -1376,8 +1376,8 @@ nsSVGElement::WillChangeValue(nsAtom* aName)
   }
 
   uint8_t modType = attrValue
-                  ? static_cast<uint8_t>(MutationEventBinding::MODIFICATION)
-                  : static_cast<uint8_t>(MutationEventBinding::ADDITION);
+                  ? static_cast<uint8_t>(bindings::MutationEvent::MODIFICATION)
+                  : static_cast<uint8_t>(bindings::MutationEvent::ADDITION);
   nsNodeUtils::AttributeWillChange(this, kNameSpaceID_None, aName, modType,
                                    nullptr);
 
@@ -1422,8 +1422,8 @@ nsSVGElement::DidChangeValue(nsAtom* aName,
                                          NS_EVENT_BITS_MUTATION_ATTRMODIFIED,
                                          this);
   uint8_t modType = HasAttr(kNameSpaceID_None, aName)
-                  ? static_cast<uint8_t>(MutationEventBinding::MODIFICATION)
-                  : static_cast<uint8_t>(MutationEventBinding::ADDITION);
+                  ? static_cast<uint8_t>(bindings::MutationEvent::MODIFICATION)
+                  : static_cast<uint8_t>(bindings::MutationEvent::ADDITION);
 
   nsIDocument* document = GetComposedDoc();
   mozAutoDocUpdate updateBatch(document, kNotifyDocumentObservers);
@@ -1557,7 +1557,7 @@ nsSVGElement::DidAnimateLength(uint8_t aAttrEnum)
     LengthAttributesInfo info = GetLengthInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mLengthInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1594,12 +1594,12 @@ nsSVGElement::GetAnimatedLengthValues(float *aFirst, ...)
   while (f && i < info.mLengthCount) {
     uint8_t type = info.mLengths[i].GetSpecifiedUnitType();
     if (!ctx) {
-      if (type != SVGLengthBinding::SVG_LENGTHTYPE_NUMBER &&
-          type != SVGLengthBinding::SVG_LENGTHTYPE_PX)
+      if (type != bindings::SVGLength::SVG_LENGTHTYPE_NUMBER &&
+          type != bindings::SVGLength::SVG_LENGTHTYPE_PX)
         ctx = GetCtx();
     }
-    if (type == SVGLengthBinding::SVG_LENGTHTYPE_EMS ||
-        type == SVGLengthBinding::SVG_LENGTHTYPE_EXS)
+    if (type == bindings::SVGLength::SVG_LENGTHTYPE_EMS ||
+        type == bindings::SVGLength::SVG_LENGTHTYPE_EXS)
       *f = info.mLengths[i++].GetAnimValue(this);
     else
       *f = info.mLengths[i++].GetAnimValue(ctx);
@@ -1654,7 +1654,7 @@ nsSVGElement::DidAnimateLengthList(uint8_t aAttrEnum)
     LengthListAttributesInfo info = GetLengthListInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mLengthListInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1742,7 +1742,7 @@ nsSVGElement::DidAnimateNumberList(uint8_t aAttrEnum)
 
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mNumberListInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1803,7 +1803,7 @@ nsSVGElement::DidAnimatePointList()
   if (frame) {
     frame->AttributeChanged(kNameSpaceID_None,
                             GetPointListAttrName(),
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1840,7 +1840,7 @@ nsSVGElement::DidAnimatePathSegList()
   if (frame) {
     frame->AttributeChanged(kNameSpaceID_None,
                             GetPathDataAttrName(),
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1882,7 +1882,7 @@ nsSVGElement::DidAnimateNumber(uint8_t aAttrEnum)
     NumberAttributesInfo info = GetNumberInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mNumberInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1953,7 +1953,7 @@ nsSVGElement::DidAnimateNumberPair(uint8_t aAttrEnum)
     NumberPairAttributesInfo info = GetNumberPairInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mNumberPairInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -1995,7 +1995,7 @@ nsSVGElement::DidAnimateInteger(uint8_t aAttrEnum)
     IntegerAttributesInfo info = GetIntegerInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mIntegerInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2067,7 +2067,7 @@ nsSVGElement::DidAnimateIntegerPair(uint8_t aAttrEnum)
     IntegerPairAttributesInfo info = GetIntegerPairInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mIntegerPairInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2116,7 +2116,7 @@ nsSVGElement::DidAnimateAngle(uint8_t aAttrEnum)
     AngleAttributesInfo info = GetAngleInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mAngleInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2156,7 +2156,7 @@ nsSVGElement::DidAnimateBoolean(uint8_t aAttrEnum)
     BooleanAttributesInfo info = GetBooleanInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mBooleanInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2203,7 +2203,7 @@ nsSVGElement::DidAnimateEnum(uint8_t aAttrEnum)
     EnumAttributesInfo info = GetEnumInfo();
     frame->AttributeChanged(kNameSpaceID_None,
                             *info.mEnumInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2240,7 +2240,7 @@ nsSVGElement::DidAnimateViewBox()
   if (frame) {
     frame->AttributeChanged(kNameSpaceID_None,
                             nsGkAtoms::viewBox,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2280,7 +2280,7 @@ nsSVGElement::DidAnimatePreserveAspectRatio()
   if (frame) {
     frame->AttributeChanged(kNameSpaceID_None,
                             nsGkAtoms::preserveAspectRatio,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 
@@ -2381,7 +2381,7 @@ nsSVGElement::DidAnimateString(uint8_t aAttrEnum)
     StringAttributesInfo info = GetStringInfo();
     frame->AttributeChanged(info.mStringInfo[aAttrEnum].mNamespaceID,
                             *info.mStringInfo[aAttrEnum].mName,
-                            MutationEventBinding::SMIL);
+                            bindings::MutationEvent::SMIL);
   }
 }
 

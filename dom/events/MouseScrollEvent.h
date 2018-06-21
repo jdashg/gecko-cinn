@@ -24,7 +24,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return MouseScrollEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::MouseScrollEvent::Wrap(aCx, this, aGivenProto);
   }
 
   int32_t Axis();

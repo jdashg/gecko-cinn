@@ -248,7 +248,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_END
 JSObject*
 IDBMutableFile::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return IDBMutableFileBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::IDBMutableFile::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

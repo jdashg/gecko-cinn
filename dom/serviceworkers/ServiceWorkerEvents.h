@@ -80,7 +80,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return mozilla::dom::ExtendableEventBinding::Wrap(aCx, this, aGivenProto);
+    return mozilla::dom::bindings::ExtendableEvent::Wrap(aCx, this, aGivenProto);
   }
 
   static already_AddRefed<ExtendableEvent>
@@ -137,7 +137,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return FetchEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::FetchEvent::Wrap(aCx, this, aGivenProto);
   }
 
   void PostInit(nsMainThreadPtrHandle<nsIInterceptedChannel>& aChannel,
@@ -284,7 +284,7 @@ public:
   virtual JSObject* WrapObjectInternal(
     JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return mozilla::dom::ExtendableMessageEventBinding::Wrap(aCx, this, aGivenProto);
+    return mozilla::dom::bindings::ExtendableMessageEvent::Wrap(aCx, this, aGivenProto);
   }
 
   static already_AddRefed<ExtendableMessageEvent>

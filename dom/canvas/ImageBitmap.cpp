@@ -24,8 +24,8 @@
 
 using namespace mozilla::gfx;
 using namespace mozilla::layers;
-using mozilla::dom::HTMLMediaElementBinding::NETWORK_EMPTY;
-using mozilla::dom::HTMLMediaElementBinding::HAVE_METADATA;
+using mozilla::dom::bindings::HTMLMediaElement::NETWORK_EMPTY;
+using mozilla::dom::bindings::HTMLMediaElement::HAVE_METADATA;
 
 namespace mozilla {
 namespace dom {
@@ -542,7 +542,7 @@ ImageBitmap::~ImageBitmap()
 JSObject*
 ImageBitmap::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ImageBitmapBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ImageBitmap::Wrap(aCx, this, aGivenProto);
 }
 
 void

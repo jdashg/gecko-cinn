@@ -949,7 +949,7 @@ NS_IMPL_CYCLE_COLLECTION_TRACE_END
 JSObject*
 IDBFactory::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return IDBFactoryBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::IDBFactory::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

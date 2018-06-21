@@ -20,7 +20,7 @@ protected:
 
 public:
   // WebIDL interface
-  uint16_t Type() const override { return CSSRuleBinding::SUPPORTS_RULE; }
+  uint16_t Type() const override { return bindings::CSSRule::SUPPORTS_RULE; }
 
   JSObject* WrapObject(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) override;

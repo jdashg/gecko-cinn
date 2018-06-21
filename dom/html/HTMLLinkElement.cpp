@@ -483,7 +483,7 @@ HTMLLinkElement::AddSizeOfExcludingThis(nsWindowSizes& aSizes,
 JSObject*
 HTMLLinkElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLLinkElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLLinkElement::Wrap(aCx, this, aGivenProto);
 }
 
 void

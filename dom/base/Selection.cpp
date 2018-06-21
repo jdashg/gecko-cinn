@@ -3862,7 +3862,7 @@ Selection::ResetColors(ErrorResult& aRv)
 JSObject*
 Selection::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return mozilla::dom::SelectionBinding::Wrap(aCx, this, aGivenProto);
+  return mozilla::dom::bindings::Selection::Wrap(aCx, this, aGivenProto);
 }
 
 // AutoHideSelectionChanges

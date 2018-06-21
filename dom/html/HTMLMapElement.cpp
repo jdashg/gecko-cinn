@@ -53,7 +53,7 @@ HTMLMapElement::Areas()
 JSObject*
 HTMLMapElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLMapElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLMapElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

@@ -177,7 +177,7 @@ AnalyserNode::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 JSObject*
 AnalyserNode::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return AnalyserNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::AnalyserNode::Wrap(aCx, this, aGivenProto);
 }
 
 void

@@ -121,7 +121,7 @@ WebGLTexture::ImageInfo::SetIsDataInitialized(bool isDataInitialized, WebGLTextu
 
 JSObject*
 WebGLTexture::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto) {
-    return dom::WebGLTextureBinding::Wrap(cx, this, givenProto);
+    return dom::bindings::WebGLTexture::Wrap(cx, this, givenProto);
 }
 
 WebGLTexture::WebGLTexture(WebGLContext* webgl, GLuint tex)

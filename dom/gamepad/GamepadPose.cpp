@@ -35,7 +35,7 @@ GamepadPose::~GamepadPose()
 /* virtual */ JSObject*
 GamepadPose::WrapObject(JSContext* aJSContext, JS::Handle<JSObject*> aGivenProto)
 {
-  return GamepadPoseBinding::Wrap(aJSContext, this, aGivenProto);
+  return bindings::GamepadPose::Wrap(aJSContext, this, aGivenProto);
 }
 
 bool

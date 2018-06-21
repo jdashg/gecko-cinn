@@ -980,11 +980,11 @@ IDBCursor::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   switch (mType) {
     case Type_ObjectStore:
     case Type_Index:
-      return IDBCursorWithValueBinding::Wrap(aCx, this, aGivenProto);
+      return bindings::IDBCursorWithValue::Wrap(aCx, this, aGivenProto);
 
     case Type_ObjectStoreKey:
     case Type_IndexKey:
-      return IDBCursorBinding::Wrap(aCx, this, aGivenProto);
+      return bindings::IDBCursor::Wrap(aCx, this, aGivenProto);
 
     default:
       MOZ_CRASH("Bad type!");

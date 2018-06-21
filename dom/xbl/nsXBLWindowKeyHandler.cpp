@@ -491,7 +491,7 @@ nsXBLWindowKeyHandler::HandleEvent(Event* aEvent)
   RefPtr<KeyboardEvent> keyEvent = aEvent->AsKeyboardEvent();
   NS_ENSURE_TRUE(keyEvent, NS_ERROR_INVALID_ARG);
 
-  if (aEvent->EventPhase() == EventBinding::CAPTURING_PHASE) {
+  if (aEvent->EventPhase() == bindings::Event::CAPTURING_PHASE) {
     if (aEvent->WidgetEventPtr()->mFlags.mInSystemGroup) {
       HandleEventOnCaptureInSystemEventGroup(keyEvent);
     } else {

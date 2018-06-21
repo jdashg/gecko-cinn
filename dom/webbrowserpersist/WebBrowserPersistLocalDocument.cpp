@@ -1141,9 +1141,9 @@ WebBrowserPersistLocalDocument::ReadResources(nsIWebBrowserPersistResourceVisito
     ErrorResult err;
     RefPtr<dom::TreeWalker> walker =
         mDocument->CreateTreeWalker(*mDocument,
-            dom::NodeFilterBinding::SHOW_ELEMENT |
-            dom::NodeFilterBinding::SHOW_DOCUMENT |
-            dom::NodeFilterBinding::SHOW_PROCESSING_INSTRUCTION,
+            dom::bindings::NodeFilter::SHOW_ELEMENT |
+            dom::bindings::NodeFilter::SHOW_DOCUMENT |
+            dom::bindings::NodeFilter::SHOW_PROCESSING_INSTRUCTION,
             nullptr, err);
 
     if (NS_WARN_IF(err.Failed())) {

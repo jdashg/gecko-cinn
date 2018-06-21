@@ -39,7 +39,7 @@ PresentationConnectionList::PresentationConnectionList(nsPIDOMWindowInner* aWind
 PresentationConnectionList::WrapObject(JSContext* aCx,
                                        JS::Handle<JSObject*> aGivenProto)
 {
-  return PresentationConnectionListBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PresentationConnectionList::Wrap(aCx, this, aGivenProto);
 }
 
 void
@@ -108,7 +108,7 @@ PresentationConnectionList::NotifyStateChange(const nsAString& aSessionId,
   bool connectionFound =
     FindConnectionById(aSessionId) != ConnectionArray::NoIndex ? true : false;
 
-  PresentationConnectionListBinding::ClearCachedConnectionsValue(this);
+  bindings::PresentationConnectionList::ClearCachedConnectionsValue(this);
   switch (aConnection->State()) {
     case PresentationConnectionState::Connected:
       if (!connectionFound) {

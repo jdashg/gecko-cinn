@@ -1379,7 +1379,7 @@ Navigator::NotifyVRDisplaysUpdated()
 void
 Navigator::NotifyActiveVRDisplaysChanged()
 {
-  NavigatorBinding::ClearCachedActiveVRDisplaysValue(this);
+  bindings::Navigator::ClearCachedActiveVRDisplaysValue(this);
 }
 
 VRServiceTest*
@@ -1497,7 +1497,7 @@ Navigator::OnNavigation()
 JSObject*
 Navigator::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return NavigatorBinding::Wrap(cx, this, aGivenProto);
+  return bindings::Navigator::Wrap(cx, this, aGivenProto);
 }
 
 /* static */
@@ -1644,7 +1644,7 @@ Navigator::AppName(nsAString& aAppName, bool aUsePrefOverriddenValue)
 void
 Navigator::ClearUserAgentCache()
 {
-  NavigatorBinding::ClearCachedUserAgentValue(this);
+  bindings::Navigator::ClearCachedUserAgentValue(this);
 }
 
 nsresult

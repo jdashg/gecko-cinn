@@ -427,7 +427,7 @@ WebGLShader::MapTransformFeedbackVaryings(const std::vector<nsString>& varyings,
 JSObject*
 WebGLShader::WrapObject(JSContext* js, JS::Handle<JSObject*> givenProto)
 {
-    return dom::WebGLShaderBinding::Wrap(js, this, givenProto);
+    return dom::bindings::WebGLShader::Wrap(js, this, givenProto);
 }
 
 size_t

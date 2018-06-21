@@ -17,7 +17,7 @@ using namespace SVGViewElementBinding;
 JSObject*
 SVGViewElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGViewElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGViewElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGEnumMapping SVGViewElement::sZoomAndPanMap[] = {

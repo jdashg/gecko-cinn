@@ -79,7 +79,7 @@ File::CreateFromFile(nsISupports* aParent, nsIFile* aFile,
 JSObject*
 File::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return FileBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::File::Wrap(aCx, this, aGivenProto);
 }
 
 void

@@ -338,7 +338,7 @@ public:
 
   bool HasPercentageValueAt(uint32_t aIndex) const {
     const SVGLength& length = (*mList)[aIndex];
-    return length.GetUnit() == dom::SVGLengthBinding::SVG_LENGTHTYPE_PERCENTAGE;
+    return length.GetUnit() == dom::bindings::SVGLength::SVG_LENGTHTYPE_PERCENTAGE;
   }
 
 private:

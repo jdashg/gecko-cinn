@@ -29,7 +29,7 @@ NS_IMPL_ELEMENT_CLONE(HTMLTimeElement)
 JSObject*
 HTMLTimeElement::WrapNode(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLTimeElementBinding::Wrap(cx, this, aGivenProto);
+  return bindings::HTMLTimeElement::Wrap(cx, this, aGivenProto);
 }
 
 } // namespace dom

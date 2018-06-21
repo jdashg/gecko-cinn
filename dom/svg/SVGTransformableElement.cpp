@@ -65,11 +65,11 @@ SVGTransformableElement::GetAttributeChangeHint(const nsAtom* aAttribute,
     }
 
     bool isAdditionOrRemoval = false;
-    if (aModType == MutationEventBinding::ADDITION ||
-        aModType == MutationEventBinding::REMOVAL) {
+    if (aModType == bindings::MutationEvent::ADDITION ||
+        aModType == bindings::MutationEvent::REMOVAL) {
       isAdditionOrRemoval = true;
     } else {
-      MOZ_ASSERT(aModType == MutationEventBinding::MODIFICATION,
+      MOZ_ASSERT(aModType == bindings::MutationEvent::MODIFICATION,
                  "Unknown modification type.");
       if (!mTransforms ||
           !mTransforms->HasTransform()) {
@@ -133,11 +133,11 @@ SVGTransformableElement::SetAnimateMotionTransform(const gfx::Matrix* aMatrix)
   bool nowSet = mAnimateMotionTransform || transformSet;
   int32_t modType;
   if (prevSet && !nowSet) {
-    modType = MutationEventBinding::REMOVAL;
+    modType = bindings::MutationEvent::REMOVAL;
   } else if(!prevSet && nowSet) {
-    modType = MutationEventBinding::ADDITION;
+    modType = bindings::MutationEvent::ADDITION;
   } else {
-    modType = MutationEventBinding::MODIFICATION;
+    modType = bindings::MutationEvent::MODIFICATION;
   }
   DidAnimateTransformList(modType);
   nsIFrame* frame = GetPrimaryFrame();

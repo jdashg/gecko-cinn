@@ -1428,7 +1428,7 @@ MediaRecorder::RequestData(ErrorResult& aResult)
 JSObject*
 MediaRecorder::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MediaRecorderBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MediaRecorder::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<MediaRecorder>

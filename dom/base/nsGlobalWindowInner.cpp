@@ -5868,8 +5868,8 @@ nsGlobalWindowInner::Observe(nsISupports* aSubject, const char* aTopic,
     // very likely situation where an event handler will try to read its value.
 
     if (mNavigator) {
-      NavigatorBinding::ClearCachedLanguageValue(mNavigator);
-      NavigatorBinding::ClearCachedLanguagesValue(mNavigator);
+      bindings::Navigator::ClearCachedLanguageValue(mNavigator);
+      bindings::Navigator::ClearCachedLanguagesValue(mNavigator);
     }
 
     // The event has to be dispatched only to the current inner window.
@@ -7667,8 +7667,8 @@ void
 nsGlobalWindowInner::ClearDocumentDependentSlots(JSContext* aCx)
 {
   // If JSAPI OOMs here, there is basically nothing we can do to recover safely.
-  if (!WindowBinding::ClearCachedDocumentValue(aCx, this) ||
-      !WindowBinding::ClearCachedPerformanceValue(aCx, this)) {
+  if (!bindings::Window::ClearCachedDocumentValue(aCx, this) ||
+      !bindings::Window::ClearCachedPerformanceValue(aCx, this)) {
     MOZ_CRASH("Unhandlable OOM while clearing document dependent slots.");
   }
 }

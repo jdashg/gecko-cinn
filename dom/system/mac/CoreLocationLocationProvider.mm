@@ -67,7 +67,7 @@ static const CLLocationAccuracy kDEFAULT_ACCURACY = kCLLocationAccuracyNearestTe
   console->LogStringMessage(NS_ConvertUTF8toUTF16([message UTF8String]).get());
 
   if ([aError code] == kCLErrorDenied) {
-    mProvider->NotifyError(dom::PositionErrorBinding::PERMISSION_DENIED);
+    mProvider->NotifyError(dom::bindings::PositionError::PERMISSION_DENIED);
     return;
   }
 

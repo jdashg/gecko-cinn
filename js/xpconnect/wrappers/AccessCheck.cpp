@@ -122,9 +122,9 @@ IsPermitted(CrossOriginObjectType type, JSFlatString* prop, bool set)
 
     char16_t propChar0 = JS_GetFlatStringCharAt(prop, 0);
     if (type == CrossOriginLocation)
-        return dom::LocationBinding::IsPermitted(prop, propChar0, set);
+        return dom::bindings::Location::IsPermitted(prop, propChar0, set);
     if (type == CrossOriginWindow)
-        return dom::WindowBinding::IsPermitted(prop, propChar0, set);
+        return dom::bindings::Window::IsPermitted(prop, propChar0, set);
 
     return false;
 }

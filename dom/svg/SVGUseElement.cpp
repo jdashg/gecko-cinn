@@ -29,7 +29,7 @@ namespace dom {
 JSObject*
 SVGUseElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGUseElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGUseElement::Wrap(aCx, this, aGivenProto);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -37,10 +37,10 @@ SVGUseElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 
 nsSVGElement::LengthInfo SVGUseElement::sLengthInfo[4] =
 {
-  { &nsGkAtoms::x, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
-  { &nsGkAtoms::y, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
-  { &nsGkAtoms::width, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
-  { &nsGkAtoms::height, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
+  { &nsGkAtoms::x, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
+  { &nsGkAtoms::y, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
+  { &nsGkAtoms::width, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
+  { &nsGkAtoms::height, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
 };
 
 nsSVGElement::StringInfo SVGUseElement::sStringInfo[2] =
@@ -346,7 +346,7 @@ SVGUseElement::SyncWidthOrHeight(nsAtom* aName)
     // need to set the value to 100%
     nsSVGLength2 length;
     length.Init(SVGContentUtils::XY, 0xff,
-                100, SVGLengthBinding::SVG_LENGTHTYPE_PERCENTAGE);
+                100, bindings::SVGLength::SVG_LENGTHTYPE_PERCENTAGE);
     target->SetLength(aName, length);
     return;
   }

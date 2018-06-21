@@ -234,7 +234,7 @@ bool HTMLVideoElement::MozHasAudio() const
 JSObject*
 HTMLVideoElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLVideoElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLVideoElement::Wrap(aCx, this, aGivenProto);
 }
 
 FrameStatistics*

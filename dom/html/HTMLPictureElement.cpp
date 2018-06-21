@@ -143,7 +143,7 @@ HTMLPictureElement::InsertChildAt_Deprecated(nsIContent* aKid, uint32_t aIndex, 
 JSObject*
 HTMLPictureElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLPictureElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLPictureElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

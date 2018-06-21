@@ -193,5 +193,5 @@ nsAnonymousContentList::IndexOf(nsIContent* aContent)
 JSObject*
 nsAnonymousContentList::WrapObject(JSContext *cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return mozilla::dom::NodeListBinding::Wrap(cx, this, aGivenProto);
+  return mozilla::dom::bindings::NodeList::Wrap(cx, this, aGivenProto);
 }

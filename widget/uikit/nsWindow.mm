@@ -148,7 +148,7 @@ private:
     event.mClickCount = 1;
     event.button = WidgetMouseEvent::eLeftButton;
     event.mTime = PR_IntervalNow();
-    event.inputSource = MouseEventBinding::MOZ_SOURCE_UNKNOWN;
+    event.inputSource = bindings::MouseEvent::MOZ_SOURCE_UNKNOWN;
 
     nsEventStatus status;
     aWindow->DispatchEvent(&event, status);

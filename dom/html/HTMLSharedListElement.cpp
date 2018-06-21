@@ -130,13 +130,13 @@ JSObject*
 HTMLSharedListElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
   if (mNodeInfo->Equals(nsGkAtoms::ol)) {
-    return HTMLOListElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLOListElement::Wrap(aCx, this, aGivenProto);
   }
   if (mNodeInfo->Equals(nsGkAtoms::dl)) {
-    return HTMLDListElementBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::HTMLDListElement::Wrap(aCx, this, aGivenProto);
   }
   MOZ_ASSERT(mNodeInfo->Equals(nsGkAtoms::ul));
-  return HTMLUListElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLUListElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

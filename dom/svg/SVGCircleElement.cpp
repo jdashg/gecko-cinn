@@ -20,14 +20,14 @@ namespace dom {
 JSObject*
 SVGCircleElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGCircleElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGCircleElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGElement::LengthInfo SVGCircleElement::sLengthInfo[3] =
 {
-  { &nsGkAtoms::cx, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
-  { &nsGkAtoms::cy, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
-  { &nsGkAtoms::r, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::XY }
+  { &nsGkAtoms::cx, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X },
+  { &nsGkAtoms::cy, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::Y },
+  { &nsGkAtoms::r, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::XY }
 };
 
 //----------------------------------------------------------------------

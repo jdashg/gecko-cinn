@@ -78,7 +78,7 @@ NS_INTERFACE_MAP_END
 JSObject*
 XPathResult::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-    return XPathResultBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::XPathResult::Wrap(aCx, this, aGivenProto);
 }
 
 void

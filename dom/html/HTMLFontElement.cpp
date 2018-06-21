@@ -23,7 +23,7 @@ HTMLFontElement::~HTMLFontElement()
 JSObject*
 HTMLFontElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLFontElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLFontElement::Wrap(aCx, this, aGivenProto);
 }
 
 NS_IMPL_ELEMENT_CLONE(HTMLFontElement)

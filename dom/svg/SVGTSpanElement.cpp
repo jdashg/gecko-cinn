@@ -15,7 +15,7 @@ namespace dom {
 JSObject*
 SVGTSpanElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGTSpanElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGTSpanElement::Wrap(aCx, this, aGivenProto);
 }
 
 

@@ -39,7 +39,7 @@ FetchObserver::FetchObserver(nsIGlobalObject* aGlobal,
 JSObject*
 FetchObserver::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return FetchObserverBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::FetchObserver::Wrap(aCx, this, aGivenProto);
 }
 
 FetchState

@@ -220,7 +220,7 @@ StereoPannerNode::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 JSObject*
 StereoPannerNode::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return StereoPannerNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::StereoPannerNode::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

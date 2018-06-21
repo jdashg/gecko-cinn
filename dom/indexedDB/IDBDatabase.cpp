@@ -1231,7 +1231,7 @@ IDBDatabase::PostHandleEvent(EventChainPostVisitor& aVisitor)
 JSObject*
 IDBDatabase::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return IDBDatabaseBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::IDBDatabase::Wrap(aCx, this, aGivenProto);
 }
 
 NS_IMETHODIMP

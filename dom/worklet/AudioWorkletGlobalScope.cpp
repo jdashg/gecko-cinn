@@ -23,7 +23,7 @@ AudioWorkletGlobalScope::WrapGlobalObject(JSContext* aCx,
                                           JS::MutableHandle<JSObject*> aReflector)
 {
   JS::RealmOptions options;
-  return AudioWorkletGlobalScopeBinding::Wrap(aCx, this, this,
+  return bindings::AudioWorkletGlobalScope::Wrap(aCx, this, this,
                                               options,
                                               WorkletPrincipal::GetWorkletPrincipal(),
                                               true, aReflector);

@@ -602,7 +602,7 @@ bool
 TransceiverImpl::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto,
                             JS::MutableHandle<JSObject*> aReflector)
 {
-  return dom::TransceiverImplBinding::Wrap(aCx, this, aGivenProto, aReflector);
+  return dom::bindings::TransceiverImpl::Wrap(aCx, this, aGivenProto, aReflector);
 }
 
 already_AddRefed<dom::MediaStreamTrack>

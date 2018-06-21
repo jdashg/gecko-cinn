@@ -717,7 +717,7 @@ DocAccessible::AttributeWillChange(dom::Element* aElement,
   // Update dependent IDs cache. Take care of elements that are accessible
   // because dependent IDs cache doesn't contain IDs from non accessible
   // elements.
-  if (aModType != dom::MutationEventBinding::ADDITION)
+  if (aModType != dom::bindings::MutationEvent::ADDITION)
     RemoveDependentIDsFor(accessible, aAttribute);
 
   if (aAttribute == nsGkAtoms::id) {
@@ -735,7 +735,7 @@ DocAccessible::AttributeWillChange(dom::Element* aElement,
   // need to newly expose it as a toggle button) etc.
   if (aAttribute == nsGkAtoms::aria_checked ||
       aAttribute == nsGkAtoms::aria_pressed) {
-    mARIAAttrOldValue = (aModType != dom::MutationEventBinding::ADDITION) ?
+    mARIAAttrOldValue = (aModType != dom::bindings::MutationEvent::ADDITION) ?
       nsAccUtils::GetARIAToken(aElement, aAttribute) : nullptr;
     return;
   }
@@ -790,8 +790,8 @@ DocAccessible::AttributeChanged(dom::Element* aElement,
   // its accessible will be created later. It doesn't make sense to keep
   // dependent IDs for non accessible elements. For the second case we'll update
   // dependent IDs cache when its accessible is created.
-  if (aModType == dom::MutationEventBinding::MODIFICATION ||
-      aModType == dom::MutationEventBinding::ADDITION) {
+  if (aModType == dom::bindings::MutationEvent::MODIFICATION ||
+      aModType == dom::bindings::MutationEvent::ADDITION) {
     AddDependentIDsFor(accessible, aAttribute);
   }
 }

@@ -359,7 +359,7 @@ URLSearchParams::~URLSearchParams()
 JSObject*
 URLSearchParams::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return URLSearchParamsBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::URLSearchParams::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<URLSearchParams>

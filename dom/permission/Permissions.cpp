@@ -38,7 +38,7 @@ Permissions::~Permissions()
 JSObject*
 Permissions::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return PermissionsBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Permissions::Wrap(aCx, this, aGivenProto);
 }
 
 namespace {

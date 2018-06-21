@@ -57,7 +57,7 @@ bool
 CSSLexer::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto,
                      JS::MutableHandle<JSObject*> aReflector)
 {
-  return CSSLexerBinding::Wrap(aCx, this, aGivenProto, aReflector);
+  return bindings::CSSLexer::Wrap(aCx, this, aGivenProto, aReflector);
 }
 
 uint32_t

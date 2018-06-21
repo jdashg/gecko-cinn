@@ -138,7 +138,7 @@ ServoFontFaceRuleDecl::GetParentObject()
 JSObject*
 ServoFontFaceRuleDecl::WrapObject(JSContext *cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSStyleDeclarationBinding::Wrap(cx, this, aGivenProto);
+  return bindings::CSSStyleDeclaration::Wrap(cx, this, aGivenProto);
 }
 
 // -------------------------------------------
@@ -200,7 +200,7 @@ ServoFontFaceRule::List(FILE* out, int32_t aIndent) const
 uint16_t
 ServoFontFaceRule::Type() const
 {
-  return CSSRuleBinding::FONT_FACE_RULE;
+  return bindings::CSSRule::FONT_FACE_RULE;
 }
 
 void
@@ -226,5 +226,5 @@ ServoFontFaceRule::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 ServoFontFaceRule::WrapObject(JSContext* aCx,
                               JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSFontFaceRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSFontFaceRule::Wrap(aCx, this, aGivenProto);
 }

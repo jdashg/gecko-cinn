@@ -56,7 +56,7 @@ JSObject*
 PushSubscriptionOptions::WrapObject(JSContext* aCx,
                                     JS::Handle<JSObject*> aGivenProto)
 {
-  return PushSubscriptionOptionsBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PushSubscriptionOptions::Wrap(aCx, this, aGivenProto);
 }
 
 void

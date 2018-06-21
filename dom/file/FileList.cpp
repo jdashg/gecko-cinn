@@ -25,7 +25,7 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(FileList)
 JSObject*
 FileList::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return mozilla::dom::FileListBinding::Wrap(aCx, this, aGivenProto);
+  return mozilla::dom::bindings::FileList::Wrap(aCx, this, aGivenProto);
 }
 
 File*

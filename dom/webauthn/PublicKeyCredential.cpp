@@ -48,7 +48,7 @@ JSObject*
 PublicKeyCredential::WrapObject(JSContext* aCx,
                                 JS::Handle<JSObject*> aGivenProto)
 {
-  return PublicKeyCredentialBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PublicKeyCredential::Wrap(aCx, this, aGivenProto);
 }
 
 void

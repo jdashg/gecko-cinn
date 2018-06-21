@@ -271,7 +271,7 @@ MediaStreamAudioSourceNode::DestroyMediaStream()
 JSObject*
 MediaStreamAudioSourceNode::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MediaStreamAudioSourceNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MediaStreamAudioSourceNode::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

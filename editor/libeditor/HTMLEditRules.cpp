@@ -10430,7 +10430,7 @@ HTMLEditRules::UpdateDocChangeRange(nsRange* aRange)
     // compare starts of ranges
     ErrorResult error;
     int16_t result =
-      mDocChangeRange->CompareBoundaryPoints(RangeBinding::START_TO_START,
+      mDocChangeRange->CompareBoundaryPoints(bindings::Range::START_TO_START,
                                              *aRange, error);
     if (error.ErrorCodeIs(NS_ERROR_NOT_INITIALIZED)) {
       // This will happen is mDocChangeRange is non-null, but the range is
@@ -10454,7 +10454,7 @@ HTMLEditRules::UpdateDocChangeRange(nsRange* aRange)
 
     // compare ends of ranges
     result =
-      mDocChangeRange->CompareBoundaryPoints(RangeBinding::END_TO_END,
+      mDocChangeRange->CompareBoundaryPoints(bindings::Range::END_TO_END,
                                              *aRange, error);
     if (NS_WARN_IF(error.Failed())) {
       return error.StealNSResult();

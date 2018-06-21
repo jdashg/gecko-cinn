@@ -217,5 +217,5 @@ nsButtonBoxFrame::MouseClicked(WidgetGUIEvent* aEvent)
                                      inputEvent->IsAlt(), inputEvent->IsShift(),
                                      inputEvent->IsMeta(),
                                      mouseEvent ? mouseEvent->inputSource
-                                                : MouseEventBinding::MOZ_SOURCE_UNKNOWN);
+                                                : bindings::MouseEvent::MOZ_SOURCE_UNKNOWN);
 }

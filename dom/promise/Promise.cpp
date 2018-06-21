@@ -362,7 +362,7 @@ public:
   WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto,
              JS::MutableHandle<JSObject*> aWrapper)
   {
-    return PromiseNativeHandlerBinding::Wrap(aCx, this, aGivenProto, aWrapper);
+    return bindings::PromiseNativeHandler::Wrap(aCx, this, aGivenProto, aWrapper);
   }
 
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS

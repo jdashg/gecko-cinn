@@ -1499,6 +1499,8 @@ class Argument():
     A class for outputting the type and name of an argument
     """
     def __init__(self, argType, name, default=None):
+        #if 'TestInterfaceMaplike' not in argType:
+        #    print(argType)
         self.argType = argType
         self.name = name
         self.default = default
@@ -16694,6 +16696,7 @@ class CGMaplikeOrSetlikeHelperFunctionGenerator(CallbackMember):
             args.append(FakeArgument(maplikeOrSetlike.keyType, None, 'aKey'))
         if needsValueArg:
             assert needsKeyArg
+            print(maplikeOrSetlike.valueType.__class__)
             args.append(FakeArgument(maplikeOrSetlike.valueType, None, 'aValue'))
         # Run CallbackMember init function to generate argument conversion code.
         # wrapScope is set to 'obj' when generating maplike or setlike helper
@@ -16780,6 +16783,7 @@ class CGMaplikeOrSetlikeHelperGenerator(CGNamespace):
     """
     def __init__(self, descriptor, maplikeOrSetlike):
         self.descriptor = descriptor
+        print(descriptor)
         # Since iterables are folded in with maplike/setlike, make sure we've
         # got the right type here.
         assert maplikeOrSetlike.isMaplike() or maplikeOrSetlike.isSetlike()
@@ -16800,6 +16804,7 @@ class CGMaplikeOrSetlikeHelperGenerator(CGNamespace):
                                                       needsKeyArg=True,
                                                       needsBoolReturn=True)]
         if self.maplikeOrSetlike.isMaplike():
+            #print(dir(maplikeOrSetlike))
             self.helpers.append(
                 CGMaplikeOrSetlikeHelperFunctionGenerator(descriptor,
                                                           maplikeOrSetlike,

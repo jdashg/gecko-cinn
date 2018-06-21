@@ -674,8 +674,8 @@ public:
    * @param aOldValue [out] Set to the old value of the attribute, but only if
    *   there are event listeners. If set, the type of aOldValue will be either
    *   nsAttrValue::eString or nsAttrValue::eAtom.
-   * @param aModType [out] Set to MutationEventBinding::MODIFICATION or to
-   *   MutationEventBinding::ADDITION, but only if this helper returns true
+   * @param aModType [out] Set to bindings::MutationEvent::MODIFICATION or to
+   *   bindings::MutationEvent::ADDITION, but only if this helper returns true
    * @param aHasListeners [out] Set to true if there are mutation event
    *   listeners listening for NS_EVENT_BITS_MUTATION_ATTRMODIFIED
    * @param aOldValueSet [out] Indicates whether an old attribute value has been
@@ -701,8 +701,8 @@ public:
    * @param aOldValue [out] Set to the old value of the attribute, but only if
    *   there are event listeners. If set, the type of aOldValue will be either
    *   nsAttrValue::eString or nsAttrValue::eAtom.
-   * @param aModType [out] Set to MutationEventBinding::MODIFICATION or to
-   *   MutationEventBinding::ADDITION, but only if this helper returns true
+   * @param aModType [out] Set to bindings::MutationEvent::MODIFICATION or to
+   *   bindings::MutationEvent::ADDITION, but only if this helper returns true
    * @param aHasListeners [out] Set to true if there are mutation event
    *   listeners listening for NS_EVENT_BITS_MUTATION_ATTRMODIFIED
    * @param aOldValueSet [out] Indicates whether an old attribute value has been
@@ -1690,7 +1690,7 @@ protected:
    *                      non-null value does guarantee that a scripted caller
    *                      with the given principal is directly responsible for
    *                      the attribute change.
-   * @param aModType      MutationEventBinding::MODIFICATION or ADDITION.  Only
+   * @param aModType      bindings::MutationEvent::MODIFICATION or ADDITION.  Only
    *                      needed if aFireMutation or aNotify is true.
    * @param aFireMutation should mutation-events be fired?
    * @param aNotify       should we notify document-observers?

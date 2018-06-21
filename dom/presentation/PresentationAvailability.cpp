@@ -121,7 +121,7 @@ PresentationAvailability::DisconnectFromOwner()
 PresentationAvailability::WrapObject(JSContext* aCx,
                                      JS::Handle<JSObject*> aGivenProto)
 {
-  return PresentationAvailabilityBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PresentationAvailability::Wrap(aCx, this, aGivenProto);
 }
 
 bool

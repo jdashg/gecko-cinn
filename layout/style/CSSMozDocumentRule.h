@@ -27,7 +27,7 @@ public:
                     css::URLMatchingFunction aUrlMatchingFunction);
 
   // WebIDL interface
-  uint16_t Type() const final { return CSSRuleBinding::DOCUMENT_RULE; }
+  uint16_t Type() const final { return bindings::CSSRule::DOCUMENT_RULE; }
 
   JSObject* WrapObject(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) override;

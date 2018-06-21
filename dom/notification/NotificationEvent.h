@@ -31,7 +31,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return NotificationEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::NotificationEvent::Wrap(aCx, this, aGivenProto);
   }
 
   static already_AddRefed<NotificationEvent>

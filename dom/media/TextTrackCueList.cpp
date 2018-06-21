@@ -42,7 +42,7 @@ TextTrackCueList::~TextTrackCueList()
 JSObject*
 TextTrackCueList::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return TextTrackCueListBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::TextTrackCueList::Wrap(aCx, this, aGivenProto);
 }
 
 TextTrackCue*

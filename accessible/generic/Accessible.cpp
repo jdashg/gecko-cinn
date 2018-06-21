@@ -255,13 +255,13 @@ Accessible::AccessKey() const
   switch (Preferences::GetInt("ui.key.generalAccessKey", -1)) {
   case -1:
     break;
-  case dom::KeyboardEventBinding::DOM_VK_SHIFT:
+  case dom::bindings::KeyboardEvent::DOM_VK_SHIFT:
     return KeyBinding(key, KeyBinding::kShift);
-  case dom::KeyboardEventBinding::DOM_VK_CONTROL:
+  case dom::bindings::KeyboardEvent::DOM_VK_CONTROL:
     return KeyBinding(key, KeyBinding::kControl);
-  case dom::KeyboardEventBinding::DOM_VK_ALT:
+  case dom::bindings::KeyboardEvent::DOM_VK_ALT:
     return KeyBinding(key, KeyBinding::kAlt);
-  case dom::KeyboardEventBinding::DOM_VK_META:
+  case dom::bindings::KeyboardEvent::DOM_VK_META:
     return KeyBinding(key, KeyBinding::kMeta);
   default:
     return KeyBinding();

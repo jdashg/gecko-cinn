@@ -42,7 +42,7 @@ public:
     WrapObjectInternal(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) override
   {
-    return UIEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::UIEvent::Wrap(aCx, this, aGivenProto);
   }
 
   UIEvent* AsUIEvent() override

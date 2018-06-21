@@ -35,7 +35,7 @@ ServoCounterStyleRule::List(FILE* out, int32_t aIndent) const
 uint16_t
 ServoCounterStyleRule::Type() const
 {
-  return CSSRuleBinding::COUNTER_STYLE_RULE;
+  return bindings::CSSRule::COUNTER_STYLE_RULE;
 }
 
 void
@@ -96,7 +96,7 @@ ServoCounterStyleRule::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 ServoCounterStyleRule::WrapObject(JSContext* aCx,
                                   JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSCounterStyleRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSCounterStyleRule::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace mozilla

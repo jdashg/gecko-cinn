@@ -951,7 +951,7 @@ WebSocket::~WebSocket()
 JSObject*
 WebSocket::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return WebSocketBinding::Wrap(cx, this, aGivenProto);
+  return bindings::WebSocket::Wrap(cx, this, aGivenProto);
 }
 
 void

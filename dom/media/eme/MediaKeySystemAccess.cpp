@@ -72,7 +72,7 @@ MediaKeySystemAccess::~MediaKeySystemAccess()
 JSObject*
 MediaKeySystemAccess::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MediaKeySystemAccessBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MediaKeySystemAccess::Wrap(aCx, this, aGivenProto);
 }
 
 nsPIDOMWindowInner*

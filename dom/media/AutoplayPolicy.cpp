@@ -50,7 +50,7 @@ AutoplayPolicy::IsMediaElementAllowedToPlay(NotNull<HTMLMediaElement*> aElement)
 
   // Media has already loaded metadata and doesn't contain audio track
   if (aElement->IsVideo() &&
-      aElement->ReadyState() >= HTMLMediaElementBinding::HAVE_METADATA &&
+      aElement->ReadyState() >= bindings::HTMLMediaElement::HAVE_METADATA &&
       !aElement->HasAudio()) {
     return true;
   }

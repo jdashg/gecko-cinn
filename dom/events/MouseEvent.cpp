@@ -33,7 +33,7 @@ MouseEvent::MouseEvent(EventTarget* aOwner,
     mEventIsInternal = true;
     mEvent->mTime = PR_Now();
     mEvent->mRefPoint = LayoutDeviceIntPoint(0, 0);
-    mouseEvent->inputSource = MouseEventBinding::MOZ_SOURCE_UNKNOWN;
+    mouseEvent->inputSource = bindings::MouseEvent::MOZ_SOURCE_UNKNOWN;
   }
 
   if (mouseEvent) {

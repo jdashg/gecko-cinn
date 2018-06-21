@@ -41,7 +41,7 @@ Clients::Clients(nsIGlobalObject* aGlobal)
 JSObject*
 Clients::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ClientsBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Clients::Wrap(aCx, this, aGivenProto);
 }
 
 nsIGlobalObject*

@@ -246,7 +246,7 @@ static const DOMIfaceAndProtoJSClass WindowNamedPropertiesClass = {
   0,
   &sEmptyNativePropertyHooks,
   "[object WindowProperties]",
-  EventTargetBinding::GetProtoObject
+  bindings::EventTarget::GetProtoObject
 };
 
 // static

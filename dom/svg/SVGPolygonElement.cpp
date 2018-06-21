@@ -20,7 +20,7 @@ namespace dom {
 JSObject*
 SVGPolygonElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGPolygonElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGPolygonElement::Wrap(aCx, this, aGivenProto);
 }
 
 //----------------------------------------------------------------------

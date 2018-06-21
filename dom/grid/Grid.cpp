@@ -97,7 +97,7 @@ Grid::~Grid()
 JSObject*
 Grid::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return GridBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Grid::Wrap(aCx, this, aGivenProto);
 }
 
 GridDimension*

@@ -142,7 +142,7 @@ public:
                                nsAString& aUserAgent);
 
   // Clears the user agent cache by calling:
-  // NavigatorBinding::ClearCachedUserAgentValue(this);
+  // bindings::Navigator::ClearCachedUserAgentValue(this);
   void ClearUserAgentCache();
 
   bool Vibrate(uint32_t aDuration);

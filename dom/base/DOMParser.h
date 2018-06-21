@@ -68,7 +68,7 @@ public:
 
   virtual JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return mozilla::dom::DOMParserBinding::Wrap(aCx, this, aGivenProto);
+    return mozilla::dom::bindings::DOMParser::Wrap(aCx, this, aGivenProto);
   }
 
   // A way to create a non-global-associated DOMParser from C++.

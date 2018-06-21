@@ -31,7 +31,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return AnimationEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::AnimationEvent::Wrap(aCx, this, aGivenProto);
   }
 
   void GetAnimationName(nsAString& aAnimationName);

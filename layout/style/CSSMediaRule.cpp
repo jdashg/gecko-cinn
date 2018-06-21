@@ -15,7 +15,7 @@ namespace dom {
 /* virtual */ JSObject*
 CSSMediaRule::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSMediaRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSMediaRule::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

@@ -23,7 +23,7 @@ AudioParamMap::AudioParamMap(nsPIDOMWindowInner* aParent) :
 JSObject*
 AudioParamMap::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return AudioParamMapBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::AudioParamMap::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

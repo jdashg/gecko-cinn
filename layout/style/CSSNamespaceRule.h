@@ -29,7 +29,7 @@ public:
   virtual void GetURLSpec(nsString& aURLSpec) const = 0;
 
   // WebIDL interfaces
-  uint16_t Type() const final { return CSSRuleBinding::NAMESPACE_RULE; }
+  uint16_t Type() const final { return bindings::CSSRule::NAMESPACE_RULE; }
   void GetNamespaceURI(nsString& aNamespaceURI) {
     GetURLSpec(aNamespaceURI);
   }
@@ -41,7 +41,7 @@ public:
 
   JSObject* WrapObject(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) final {
-    return CSSNamespaceRuleBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::CSSNamespaceRule::Wrap(aCx, this, aGivenProto);
   }
 };
 

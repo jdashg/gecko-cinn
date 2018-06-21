@@ -125,7 +125,7 @@ IDBFileRequest::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
   if (mWrapAsDOMRequest) {
     return DOMRequest::WrapObject(aCx, aGivenProto);
   }
-  return IDBFileRequestBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::IDBFileRequest::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

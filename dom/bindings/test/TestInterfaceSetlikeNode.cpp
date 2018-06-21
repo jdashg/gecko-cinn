@@ -47,7 +47,7 @@ JSObject*
 TestInterfaceSetlikeNode::WrapObject(JSContext* aCx,
                                      JS::Handle<JSObject*> aGivenProto)
 {
-  return TestInterfaceSetlikeNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::TestInterfaceSetlikeNode::Wrap(aCx, this, aGivenProto);
 }
 
 nsPIDOMWindowInner*

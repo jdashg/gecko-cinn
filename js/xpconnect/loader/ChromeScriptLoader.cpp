@@ -336,7 +336,7 @@ PrecompiledScript::HasReturnValue()
 JSObject*
 PrecompiledScript::WrapObject(JSContext* aCx, HandleObject aGivenProto)
 {
-    return PrecompiledScriptBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::PrecompiledScript::Wrap(aCx, this, aGivenProto);
 }
 
 bool

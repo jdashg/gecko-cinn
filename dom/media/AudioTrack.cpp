@@ -26,7 +26,7 @@ AudioTrack::AudioTrack(nsIGlobalObject* aOwnerGlobal,
 JSObject*
 AudioTrack::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return AudioTrackBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::AudioTrack::Wrap(aCx, this, aGivenProto);
 }
 
 void

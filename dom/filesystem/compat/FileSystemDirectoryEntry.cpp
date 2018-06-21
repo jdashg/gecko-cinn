@@ -40,7 +40,7 @@ JSObject*
 FileSystemDirectoryEntry::WrapObject(JSContext* aCx,
                                      JS::Handle<JSObject*> aGivenProto)
 {
-  return FileSystemDirectoryEntryBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::FileSystemDirectoryEntry::Wrap(aCx, this, aGivenProto);
 }
 
 void

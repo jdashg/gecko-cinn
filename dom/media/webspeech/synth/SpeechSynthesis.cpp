@@ -78,7 +78,7 @@ SpeechSynthesis::~SpeechSynthesis()
 JSObject*
 SpeechSynthesis::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SpeechSynthesisBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SpeechSynthesis::Wrap(aCx, this, aGivenProto);
 }
 
 bool

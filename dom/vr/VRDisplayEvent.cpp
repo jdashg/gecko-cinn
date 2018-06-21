@@ -46,7 +46,7 @@ JSObject*
 VRDisplayEvent::WrapObjectInternal(JSContext* aCx,
                                    JS::Handle<JSObject*> aGivenProto)
 {
-  return VRDisplayEventBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::VRDisplayEvent::Wrap(aCx, this, aGivenProto);
 }
 
 already_AddRefed<VRDisplayEvent>

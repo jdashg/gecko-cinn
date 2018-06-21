@@ -295,7 +295,7 @@ StreamFilter::IsAllowedInContext(JSContext* aCx, JSObject* /* unused */)
 JSObject*
 StreamFilter::WrapObject(JSContext* aCx, HandleObject aGivenProto)
 {
-  return StreamFilterBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::StreamFilter::Wrap(aCx, this, aGivenProto);
 }
 
 NS_IMPL_CYCLE_COLLECTION_CLASS(StreamFilter)

@@ -2546,7 +2546,7 @@ HTMLFormElement::RemoveElementFromPastNamesMap(Element* aElement)
 JSObject*
 HTMLFormElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLFormElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLFormElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

@@ -17,7 +17,7 @@ namespace dom {
 JSObject*
 SVGFECompositeElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGFECompositeElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGFECompositeElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGElement::NumberInfo SVGFECompositeElement::sNumberInfo[4] =

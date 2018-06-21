@@ -61,7 +61,7 @@ FileSystem::~FileSystem()
 JSObject*
 FileSystem::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return FileSystemBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::FileSystem::Wrap(aCx, this, aGivenProto);
 }
 
 void

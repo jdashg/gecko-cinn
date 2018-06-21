@@ -17,7 +17,7 @@ namespace dom {
 CSSSupportsRule::WrapObject(JSContext* aCx,
                             JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSSupportsRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSSupportsRule::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

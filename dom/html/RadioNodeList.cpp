@@ -18,7 +18,7 @@ namespace dom {
 /* virtual */ JSObject*
 RadioNodeList::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return RadioNodeListBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::RadioNodeList::Wrap(aCx, this, aGivenProto);
 }
 
 HTMLInputElement*

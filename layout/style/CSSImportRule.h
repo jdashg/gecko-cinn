@@ -25,7 +25,7 @@ public:
     const override = 0;
 
   // WebIDL interface
-  uint16_t Type() const final { return CSSRuleBinding::IMPORT_RULE; }
+  uint16_t Type() const final { return bindings::CSSRule::IMPORT_RULE; }
   virtual void GetHref(nsAString& aHref) const = 0;
   virtual dom::MediaList* GetMedia() const = 0;
   virtual StyleSheet* GetStyleSheet() const = 0;

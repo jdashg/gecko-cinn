@@ -119,7 +119,7 @@ SVGPreserveAspectRatio::operator==(const SVGPreserveAspectRatio& aOther) const
 JSObject*
 DOMSVGPreserveAspectRatio::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return mozilla::dom::SVGPreserveAspectRatioBinding::Wrap(aCx, this, aGivenProto);
+  return mozilla::dom::bindings::SVGPreserveAspectRatio::Wrap(aCx, this, aGivenProto);
 }
 
 uint16_t

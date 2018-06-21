@@ -64,7 +64,7 @@ JSObject*
 OffscreenCanvas::WrapObject(JSContext* aCx,
                             JS::Handle<JSObject*> aGivenProto)
 {
-  return OffscreenCanvasBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::OffscreenCanvas::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<OffscreenCanvas>

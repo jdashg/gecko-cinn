@@ -110,8 +110,8 @@ protected:
     , pressure(0)
     , hitCluster(false)
     // Including MouseEventBinding.h here leads to an include loop, so
-    // we have to hardcode MouseEventBinding::MOZ_SOURCE_MOUSE.
-    , inputSource(/* MouseEventBinding::MOZ_SOURCE_MOUSE = */ 1)
+    // we have to hardcode bindings::MouseEvent::MOZ_SOURCE_MOUSE.
+    , inputSource(/* bindings::MouseEvent::MOZ_SOURCE_MOUSE = */ 1)
   {
   }
 
@@ -123,8 +123,8 @@ protected:
     , pressure(0)
     , hitCluster(false)
     // Including MouseEventBinding.h here leads to an include loop, so
-    // we have to hardcode MouseEventBinding::MOZ_SOURCE_MOUSE.
-    , inputSource(/* MouseEventBinding::MOZ_SOURCE_MOUSE = */ 1)
+    // we have to hardcode bindings::MouseEvent::MOZ_SOURCE_MOUSE.
+    , inputSource(/* bindings::MouseEvent::MOZ_SOURCE_MOUSE = */ 1)
  {
  }
 
@@ -492,8 +492,8 @@ private:
     , mOverflowDeltaX(0.0)
     , mOverflowDeltaY(0.0)
     // Including WheelEventBinding.h here leads to an include loop, so
-    // we have to hardcode WheelEventBinding::DOM_DELTA_PIXEL.
-    , mDeltaMode(/* WheelEventBinding::DOM_DELTA_PIXEL = */ 0)
+    // we have to hardcode bindings::WheelEvent::DOM_DELTA_PIXEL.
+    , mDeltaMode(/* bindings::WheelEvent::DOM_DELTA_PIXEL = */ 0)
     , mLineOrPageDeltaX(0)
     , mLineOrPageDeltaY(0)
     , mScrollType(SCROLL_DEFAULT)
@@ -518,8 +518,8 @@ public:
     , mOverflowDeltaX(0.0)
     , mOverflowDeltaY(0.0)
     // Including WheelEventBinding.h here leads to an include loop, so
-    // we have to hardcode WheelEventBinding::DOM_DELTA_PIXEL.
-    , mDeltaMode(/* WheelEventBinding::DOM_DELTA_PIXEL = */ 0)
+    // we have to hardcode bindings::WheelEvent::DOM_DELTA_PIXEL.
+    , mDeltaMode(/* bindings::WheelEvent::DOM_DELTA_PIXEL = */ 0)
     , mLineOrPageDeltaX(0)
     , mLineOrPageDeltaY(0)
     , mScrollType(SCROLL_DEFAULT)
@@ -575,7 +575,7 @@ public:
   double mOverflowDeltaX;
   double mOverflowDeltaY;
 
-  // Should be one of WheelEventBinding::DOM_DELTA_*
+  // Should be one of bindings::WheelEvent::DOM_DELTA_*
   uint32_t mDeltaMode;
 
   // If widget sets mLineOrPageDelta, EventStateManager will dispatch

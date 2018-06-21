@@ -55,7 +55,7 @@ public:
   // nsWrapperCache member
   JSObject* WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return ImageCaptureBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::ImageCapture::Wrap(aCx, this, aGivenProto);
   }
 
   // ImageCapture class members

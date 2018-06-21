@@ -25,15 +25,15 @@ class SVGAnimatedLength;
 JSObject*
 SVGTextPathElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGTextPathElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGTextPathElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGElement::LengthInfo SVGTextPathElement::sLengthInfo[2] =
 {
   // from SVGTextContentElement:
-  { &nsGkAtoms::textLength, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::XY },
+  { &nsGkAtoms::textLength, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::XY },
   // from SVGTextPathElement:
-  { &nsGkAtoms::startOffset, 0, SVGLengthBinding::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X }
+  { &nsGkAtoms::startOffset, 0, bindings::SVGLength::SVG_LENGTHTYPE_NUMBER, SVGContentUtils::X }
 };
 
 nsSVGEnumMapping SVGTextPathElement::sMethodMap[] = {

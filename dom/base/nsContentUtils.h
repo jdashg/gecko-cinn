@@ -2081,7 +2081,7 @@ public:
                                      bool aMeta = false,
                                      // Including MouseEventBinding here leads
                                      // to incude loops, unfortunately.
-                                     uint16_t inputSource = 0 /* MouseEventBinding::MOZ_SOURCE_UNKNOWN */);
+                                     uint16_t inputSource = 0 /* bindings::MouseEvent::MOZ_SOURCE_UNKNOWN */);
 
   static bool CheckMayLoad(nsIPrincipal* aPrincipal, nsIChannel* aChannel, bool aAllowIfInheritsPrincipal);
 

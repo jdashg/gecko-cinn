@@ -180,7 +180,7 @@ CheckerboardReportService::CheckerboardReportService(nsISupports* aParent)
 JSObject*
 CheckerboardReportService::WrapObject(JSContext* aCtx, JS::Handle<JSObject*> aGivenProto)
 {
-  return CheckerboardReportServiceBinding::Wrap(aCtx, this, aGivenProto);
+  return bindings::CheckerboardReportService::Wrap(aCtx, this, aGivenProto);
 }
 
 nsISupports*

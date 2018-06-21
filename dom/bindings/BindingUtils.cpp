@@ -77,12 +77,12 @@ namespace HTML##_interfacename##ElementBinding {                               \
 typedef JSObject* (*constructorGetterCallback)(JSContext*);
 
 // Mapping of html tag and GetConstructorObject methods.
-#define HTML_TAG(_tag, _classname, _interfacename) HTML##_interfacename##ElementBinding::GetConstructorObject,
+#define HTML_TAG(_tag, _classname, _interfacename) HTML##_interfacename##bindings::Element::GetConstructorObject,
 #define HTML_OTHER(_tag) nullptr,
 // We use eHTMLTag_foo (where foo is the tag) which is defined in nsHTMLTags.h
 // to index into this array.
 static const constructorGetterCallback sConstructorGetterCallback[] = {
-  HTMLUnknownElementBinding::GetConstructorObject,
+  bindings::HTMLUnknownElement::GetConstructorObject,
 #include "nsHTMLTagList.h"
 #undef HTML_TAG
 #undef HTML_OTHER
@@ -3800,9 +3800,9 @@ HTMLConstructor(JSContext* aCx, unsigned aArgc, JS::Value* aVp,
 
     JS::Rooted<JSObject*> constructor(aCx);
     if (ns == kNameSpaceID_XUL) {
-      constructor = XULElementBinding::GetConstructorObject(aCx);
+      constructor = bindings::XULElement::GetConstructorObject(aCx);
     } else {
-      constructor = HTMLElementBinding::GetConstructorObject(aCx);
+      constructor = bindings::HTMLElement::GetConstructorObject(aCx);
     }
 
     if (!constructor) {
@@ -3833,9 +3833,9 @@ HTMLConstructor(JSContext* aCx, unsigned aArgc, JS::Value* aVp,
           definition->mLocalName == nsGkAtoms::popup ||
           definition->mLocalName == nsGkAtoms::panel ||
           definition->mLocalName == nsGkAtoms::tooltip) {
-        cb = XULPopupElementBinding::GetConstructorObject;
+        cb = bindings::XULPopupElement::GetConstructorObject;
       } else {
-        cb = XULElementBinding::GetConstructorObject;
+        cb = bindings::XULElement::GetConstructorObject;
       }
     }
 

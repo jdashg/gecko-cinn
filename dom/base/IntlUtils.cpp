@@ -33,7 +33,7 @@ IntlUtils::~IntlUtils()
 JSObject*
 IntlUtils::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return IntlUtilsBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::IntlUtils::Wrap(aCx, this, aGivenProto);
 }
 
 void

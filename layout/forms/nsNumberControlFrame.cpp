@@ -267,11 +267,11 @@ nsNumberControlFrame::AttributeChanged(int32_t  aNameSpaceID,
     if (aAttribute == nsGkAtoms::placeholder ||
         aAttribute == nsGkAtoms::readonly ||
         aAttribute == nsGkAtoms::tabindex) {
-      if (aModType == MutationEventBinding::REMOVAL) {
+      if (aModType == bindings::MutationEvent::REMOVAL) {
         mTextField->UnsetAttr(aNameSpaceID, aAttribute, true);
       } else {
-        MOZ_ASSERT(aModType == MutationEventBinding::ADDITION ||
-                   aModType == MutationEventBinding::MODIFICATION);
+        MOZ_ASSERT(aModType == bindings::MutationEvent::ADDITION ||
+                   aModType == bindings::MutationEvent::MODIFICATION);
         nsAutoString value;
         mContent->AsElement()->GetAttr(aNameSpaceID, aAttribute, value);
         mTextField->SetAttr(aNameSpaceID, aAttribute, value, true);

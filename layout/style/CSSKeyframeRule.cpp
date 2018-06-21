@@ -16,7 +16,7 @@ namespace dom {
 CSSKeyframeRule::WrapObject(JSContext* aCx,
                             JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSKeyframeRuleBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSKeyframeRule::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

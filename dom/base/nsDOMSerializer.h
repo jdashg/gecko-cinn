@@ -39,7 +39,7 @@ public:
   bool WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto,
                   JS::MutableHandle<JSObject*> aReflector)
   {
-    return mozilla::dom::XMLSerializerBinding::Wrap(aCx, this, aGivenProto,
+    return mozilla::dom::bindings::XMLSerializer::Wrap(aCx, this, aGivenProto,
                                                     aReflector);
   }
 };

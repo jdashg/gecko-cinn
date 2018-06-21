@@ -53,7 +53,7 @@ MIDIMessageEvent::~MIDIMessageEvent()
 JSObject*
 MIDIMessageEvent::WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MIDIMessageEventBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MIDIMessageEvent::Wrap(aCx, this, aGivenProto);
 }
 
 MIDIMessageEvent*

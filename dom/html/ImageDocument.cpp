@@ -200,7 +200,7 @@ ImageDocument::Init()
 JSObject*
 ImageDocument::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ImageDocumentBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ImageDocument::Wrap(aCx, this, aGivenProto);
 }
 
 nsresult

@@ -29,7 +29,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return mozilla::dom::SpeechRecognitionErrorBinding::Wrap(aCx, this, aGivenProto);
+    return mozilla::dom::bindings::SpeechRecognitionError::Wrap(aCx, this, aGivenProto);
   }
 
   void

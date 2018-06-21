@@ -577,7 +577,7 @@ FindFrameTargetedByInputEvent(WidgetGUIEvent* aEvent,
   if (aEvent->mClass == eMouseEventClass &&
       prefs->mTouchOnly &&
       aEvent->AsMouseEvent()->inputSource !=
-        MouseEventBinding::MOZ_SOURCE_TOUCH) {
+        bindings::MouseEvent::MOZ_SOURCE_TOUCH) {
     PET_LOG("Mouse input event is not from a touch source\n");
     return target;
   }

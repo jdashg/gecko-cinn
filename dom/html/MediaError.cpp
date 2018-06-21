@@ -87,7 +87,7 @@ MediaError::GetMessage(nsAString& aResult) const
 JSObject*
 MediaError::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MediaErrorBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MediaError::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

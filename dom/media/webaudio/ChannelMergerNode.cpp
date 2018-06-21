@@ -102,7 +102,7 @@ ChannelMergerNode::Create(AudioContext& aAudioContext,
 JSObject*
 ChannelMergerNode::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ChannelMergerNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ChannelMergerNode::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

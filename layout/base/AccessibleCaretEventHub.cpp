@@ -551,7 +551,7 @@ AccessibleCaretEventHub::HandleTouchEvent(WidgetTouchEvent* aEvent)
                                        : mActiveTouchId);
   nsPoint point = GetTouchEventPosition(aEvent, id);
 
-  mManager->SetLastInputSource(MouseEventBinding::MOZ_SOURCE_TOUCH);
+  mManager->SetLastInputSource(bindings::MouseEvent::MOZ_SOURCE_TOUCH);
 
   switch (aEvent->mMessage) {
     case eTouchStart:
@@ -587,7 +587,7 @@ AccessibleCaretEventHub::HandleTouchEvent(WidgetTouchEvent* aEvent)
 nsEventStatus
 AccessibleCaretEventHub::HandleKeyboardEvent(WidgetKeyboardEvent* aEvent)
 {
-  mManager->SetLastInputSource(MouseEventBinding::MOZ_SOURCE_KEYBOARD);
+  mManager->SetLastInputSource(bindings::MouseEvent::MOZ_SOURCE_KEYBOARD);
 
   switch (aEvent->mMessage) {
     case eKeyUp:

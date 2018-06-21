@@ -162,7 +162,7 @@ HTMLSourceElement::BindToTree(nsIDocument *aDocument,
 JSObject*
 HTMLSourceElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLSourceElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLSourceElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

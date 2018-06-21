@@ -77,11 +77,11 @@ public:
 #ifdef DEBUG
     if (aRule) {
       int16_t type = aRule->Type();
-      MOZ_ASSERT(type == dom::CSSRuleBinding::MEDIA_RULE ||
-                 type == dom::CSSRuleBinding::DOCUMENT_RULE ||
-                 type == dom::CSSRuleBinding::SUPPORTS_RULE ||
-                 (type == dom::CSSRuleBinding::KEYFRAMES_RULE &&
-                  Type() == dom::CSSRuleBinding::KEYFRAME_RULE));
+      MOZ_ASSERT(type == dom::bindings::CSSRule::MEDIA_RULE ||
+                 type == dom::bindings::CSSRule::DOCUMENT_RULE ||
+                 type == dom::bindings::CSSRule::SUPPORTS_RULE ||
+                 (type == dom::bindings::CSSRule::KEYFRAMES_RULE &&
+                  Type() == dom::bindings::CSSRule::KEYFRAME_RULE));
     }
 #endif
     mParentRule = aRule;

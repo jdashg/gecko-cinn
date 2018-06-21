@@ -151,7 +151,7 @@ PresentationConnection::DisconnectFromOwner()
 PresentationConnection::WrapObject(JSContext* aCx,
                                    JS::Handle<JSObject*> aGivenProto)
 {
-  return PresentationConnectionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::PresentationConnection::Wrap(aCx, this, aGivenProto);
 }
 
 void

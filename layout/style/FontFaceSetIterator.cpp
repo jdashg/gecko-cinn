@@ -33,7 +33,7 @@ FontFaceSetIterator::WrapObject(JSContext* aCx,
                                 JS::Handle<JSObject*> aGivenProto,
                                 JS::MutableHandle<JSObject*> aReflector)
 {
-  return FontFaceSetIteratorBinding::Wrap(aCx, this, aGivenProto, aReflector);
+  return bindings::FontFaceSetIterator::Wrap(aCx, this, aGivenProto, aReflector);
 }
 
 void

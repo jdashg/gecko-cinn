@@ -124,7 +124,7 @@ NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ChildSHistory,
 JSObject*
 ChildSHistory::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ChildSHistoryBinding::Wrap(cx, this, aGivenProto);
+  return bindings::ChildSHistory::Wrap(cx, this, aGivenProto);
 }
 
 nsISupports*

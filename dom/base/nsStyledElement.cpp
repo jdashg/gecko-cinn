@@ -105,8 +105,8 @@ nsStyledElement::SetInlineStyleDeclaration(DeclarationBlock* aDeclaration,
 
   // XXXbz do we ever end up with ADDITION here?  I doubt it.
   uint8_t modType = modification ?
-    static_cast<uint8_t>(MutationEventBinding::MODIFICATION) :
-    static_cast<uint8_t>(MutationEventBinding::ADDITION);
+    static_cast<uint8_t>(bindings::MutationEvent::MODIFICATION) :
+    static_cast<uint8_t>(bindings::MutationEvent::ADDITION);
 
   nsIDocument* document = GetComposedDoc();
   mozAutoDocUpdate updateBatch(document, aNotify);

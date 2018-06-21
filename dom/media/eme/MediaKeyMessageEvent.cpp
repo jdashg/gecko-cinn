@@ -59,7 +59,7 @@ MediaKeyMessageEvent::AsMediaKeyMessageEvent()
 JSObject*
 MediaKeyMessageEvent::WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MediaKeyMessageEventBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MediaKeyMessageEvent::Wrap(aCx, this, aGivenProto);
 }
 
 already_AddRefed<MediaKeyMessageEvent>

@@ -82,7 +82,7 @@ Connection::GetDhcpGateway(uint32_t* aGW)
 JSObject*
 Connection::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return NetworkInformationBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::NetworkInformation::Wrap(aCx, this, aGivenProto);
 }
 
 void

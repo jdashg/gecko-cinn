@@ -35,7 +35,7 @@ public:
 
     bool WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto, JS::MutableHandle<JSObject*> aReflector)
     {
-        return XPathExpressionBinding::Wrap(aCx, this, aGivenProto, aReflector);
+        return bindings::XPathExpression::Wrap(aCx, this, aGivenProto, aReflector);
     }
 
     already_AddRefed<XPathResult>

@@ -20,7 +20,7 @@ protected:
 
 public:
   // WebIDL interface
-  uint16_t Type() const override { return CSSRuleBinding::MEDIA_RULE; }
+  uint16_t Type() const override { return bindings::CSSRule::MEDIA_RULE; }
   virtual MediaList* Media() = 0;
 
   JSObject* WrapObject(JSContext* aCx,

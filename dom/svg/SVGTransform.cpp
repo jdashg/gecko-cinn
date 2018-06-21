@@ -65,7 +65,7 @@ NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(SVGTransform, Release)
 JSObject*
 SVGTransform::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGTransformBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGTransform::Wrap(aCx, this, aGivenProto);
 }
 
 //----------------------------------------------------------------------

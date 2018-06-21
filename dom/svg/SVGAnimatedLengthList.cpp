@@ -163,9 +163,9 @@ SVGAnimatedLengthList::
     aPreventCachingOfSandwich = false;
     for (uint32_t i = 0; i < llai->Length(); ++i) {
       uint8_t unit = (*llai)[i].GetUnit();
-      if (unit == SVGLengthBinding::SVG_LENGTHTYPE_PERCENTAGE ||
-          unit == SVGLengthBinding::SVG_LENGTHTYPE_EMS ||
-          unit == SVGLengthBinding::SVG_LENGTHTYPE_EXS) {
+      if (unit == bindings::SVGLength::SVG_LENGTHTYPE_PERCENTAGE ||
+          unit == bindings::SVGLength::SVG_LENGTHTYPE_EMS ||
+          unit == bindings::SVGLength::SVG_LENGTHTYPE_EXS) {
         aPreventCachingOfSandwich = true;
         break;
       }

@@ -20,7 +20,7 @@ public:
   virtual bool IsCCLeaf() const override;
 
   // WebIDL interfaces
-  uint16_t Type() const final { return CSSRuleBinding::FONT_FEATURE_VALUES_RULE; }
+  uint16_t Type() const final { return bindings::CSSRule::FONT_FEATURE_VALUES_RULE; }
   virtual void GetCssText(nsAString& aCssText) const override = 0;
   virtual void GetFontFamily(nsAString& aFamily) = 0;
   virtual void SetFontFamily(const nsAString& aFamily, mozilla::ErrorResult& aRv) = 0;

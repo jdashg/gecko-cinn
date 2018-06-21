@@ -299,7 +299,7 @@ nsScreen::IsDeviceSizePageSize()
 JSObject*
 nsScreen::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ScreenBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Screen::Wrap(aCx, this, aGivenProto);
 }
 
 nsresult

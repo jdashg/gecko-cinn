@@ -38,7 +38,7 @@ GridDimension::~GridDimension()
 JSObject*
 GridDimension::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return GridDimensionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::GridDimension::Wrap(aCx, this, aGivenProto);
 }
 
 GridLines*

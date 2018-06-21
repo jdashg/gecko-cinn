@@ -25,7 +25,7 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(CSSRuleList)
 /* virtual */ JSObject*
 CSSRuleList::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return CSSRuleListBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::CSSRuleList::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

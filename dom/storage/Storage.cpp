@@ -67,7 +67,7 @@ Storage::CanUseStorage(nsIPrincipal& aSubjectPrincipal)
 /* virtual */ JSObject*
 Storage::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return StorageBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::Storage::Wrap(aCx, this, aGivenProto);
 }
 
 namespace {

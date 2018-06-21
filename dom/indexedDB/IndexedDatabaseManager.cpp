@@ -628,19 +628,19 @@ IndexedDatabaseManager::ResolveSandboxBinding(JSContext* aCx)
     return false;
   }
 
-  if (!IDBCursorBinding::GetConstructorObject(aCx) ||
-      !IDBCursorWithValueBinding::GetConstructorObject(aCx) ||
-      !IDBDatabaseBinding::GetConstructorObject(aCx) ||
-      !IDBFactoryBinding::GetConstructorObject(aCx) ||
-      !IDBIndexBinding::GetConstructorObject(aCx) ||
-      !IDBKeyRangeBinding::GetConstructorObject(aCx) ||
-      !IDBLocaleAwareKeyRangeBinding::GetConstructorObject(aCx) ||
-      !IDBMutableFileBinding::GetConstructorObject(aCx) ||
-      !IDBObjectStoreBinding::GetConstructorObject(aCx) ||
-      !IDBOpenDBRequestBinding::GetConstructorObject(aCx) ||
-      !IDBRequestBinding::GetConstructorObject(aCx) ||
-      !IDBTransactionBinding::GetConstructorObject(aCx) ||
-      !IDBVersionChangeEventBinding::GetConstructorObject(aCx))
+  if (!bindings::IDBCursor::GetConstructorObject(aCx) ||
+      !bindings::IDBCursorWithValue::GetConstructorObject(aCx) ||
+      !bindings::IDBDatabase::GetConstructorObject(aCx) ||
+      !bindings::IDBFactory::GetConstructorObject(aCx) ||
+      !bindings::IDBIndex::GetConstructorObject(aCx) ||
+      !bindings::IDBKeyRange::GetConstructorObject(aCx) ||
+      !bindings::IDBLocaleAwareKeyRange::GetConstructorObject(aCx) ||
+      !bindings::IDBMutableFile::GetConstructorObject(aCx) ||
+      !bindings::IDBObjectStore::GetConstructorObject(aCx) ||
+      !bindings::IDBOpenDBRequest::GetConstructorObject(aCx) ||
+      !bindings::IDBRequest::GetConstructorObject(aCx) ||
+      !bindings::IDBTransaction::GetConstructorObject(aCx) ||
+      !bindings::IDBVersionChangeEvent::GetConstructorObject(aCx))
   {
     return false;
   }

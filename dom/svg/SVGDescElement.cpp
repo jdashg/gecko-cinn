@@ -15,7 +15,7 @@ namespace dom {
 JSObject*
 SVGDescElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGDescElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGDescElement::Wrap(aCx, this, aGivenProto);
 }
 
 //----------------------------------------------------------------------

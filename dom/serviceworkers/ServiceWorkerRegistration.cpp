@@ -59,7 +59,7 @@ JSObject*
 ServiceWorkerRegistration::WrapObject(JSContext* aCx,
                                       JS::Handle<JSObject*> aGivenProto)
 {
-  return ServiceWorkerRegistrationBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ServiceWorkerRegistration::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<ServiceWorkerRegistration>

@@ -27,7 +27,7 @@ DepthFormatForDepthStencilEmu(gl::GLContext* gl)
 JSObject*
 WebGLRenderbuffer::WrapObject(JSContext* cx, JS::Handle<JSObject*> givenProto)
 {
-    return dom::WebGLRenderbufferBinding::Wrap(cx, this, givenProto);
+    return dom::bindings::WebGLRenderbuffer::Wrap(cx, this, givenProto);
 }
 
 static GLuint

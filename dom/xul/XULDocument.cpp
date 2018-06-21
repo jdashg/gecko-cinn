@@ -4158,7 +4158,7 @@ XULDocument::ThreadSafeGetDocumentLWTheme() const
 JSObject*
 XULDocument::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return XULDocumentBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::XULDocument::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

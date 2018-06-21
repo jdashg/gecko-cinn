@@ -122,7 +122,7 @@ ShadowRoot::SetIsComposedDocParticipant(bool aIsComposedDocParticipant)
 JSObject*
 ShadowRoot::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return mozilla::dom::ShadowRootBinding::Wrap(aCx, this, aGivenProto);
+  return mozilla::dom::bindings::ShadowRoot::Wrap(aCx, this, aGivenProto);
 }
 
 void

@@ -41,7 +41,7 @@ MessageChannel::~MessageChannel()
 JSObject*
 MessageChannel::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return MessageChannelBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::MessageChannel::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<MessageChannel>

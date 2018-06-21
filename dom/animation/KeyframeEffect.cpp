@@ -85,7 +85,7 @@ JSObject*
 KeyframeEffect::WrapObject(JSContext* aCx,
                                    JS::Handle<JSObject*> aGivenProto)
 {
-  return KeyframeEffectBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::KeyframeEffect::Wrap(aCx, this, aGivenProto);
 }
 
 IterationCompositeOperation KeyframeEffect::IterationComposite(

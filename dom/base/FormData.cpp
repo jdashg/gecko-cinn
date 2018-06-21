@@ -328,7 +328,7 @@ FormData::SetNameDirectoryPair(FormDataTuple* aData,
 /* virtual */ JSObject*
 FormData::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return FormDataBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::FormData::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<FormData>

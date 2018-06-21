@@ -24,29 +24,29 @@ using namespace mozilla::dom;
 
 enum DOM4ErrorTypeCodeMap {
   /* DOM4 errors from http://dvcs.w3.org/hg/domcore/raw-file/tip/Overview.html#domexception */
-  IndexSizeError             = DOMExceptionBinding::INDEX_SIZE_ERR,
-  HierarchyRequestError      = DOMExceptionBinding::HIERARCHY_REQUEST_ERR,
-  WrongDocumentError         = DOMExceptionBinding::WRONG_DOCUMENT_ERR,
-  InvalidCharacterError      = DOMExceptionBinding::INVALID_CHARACTER_ERR,
-  NoModificationAllowedError = DOMExceptionBinding::NO_MODIFICATION_ALLOWED_ERR,
-  NotFoundError              = DOMExceptionBinding::NOT_FOUND_ERR,
-  NotSupportedError          = DOMExceptionBinding::NOT_SUPPORTED_ERR,
+  IndexSizeError             = bindings::DOMException::INDEX_SIZE_ERR,
+  HierarchyRequestError      = bindings::DOMException::HIERARCHY_REQUEST_ERR,
+  WrongDocumentError         = bindings::DOMException::WRONG_DOCUMENT_ERR,
+  InvalidCharacterError      = bindings::DOMException::INVALID_CHARACTER_ERR,
+  NoModificationAllowedError = bindings::DOMException::NO_MODIFICATION_ALLOWED_ERR,
+  NotFoundError              = bindings::DOMException::NOT_FOUND_ERR,
+  NotSupportedError          = bindings::DOMException::NOT_SUPPORTED_ERR,
   // Can't remove until setNamedItem is removed
-  InUseAttributeError        = DOMExceptionBinding::INUSE_ATTRIBUTE_ERR,
-  InvalidStateError          = DOMExceptionBinding::INVALID_STATE_ERR,
-  SyntaxError                = DOMExceptionBinding::SYNTAX_ERR,
-  InvalidModificationError   = DOMExceptionBinding::INVALID_MODIFICATION_ERR,
-  NamespaceError             = DOMExceptionBinding::NAMESPACE_ERR,
-  InvalidAccessError         = DOMExceptionBinding::INVALID_ACCESS_ERR,
-  TypeMismatchError          = DOMExceptionBinding::TYPE_MISMATCH_ERR,
-  SecurityError              = DOMExceptionBinding::SECURITY_ERR,
-  NetworkError               = DOMExceptionBinding::NETWORK_ERR,
-  AbortError                 = DOMExceptionBinding::ABORT_ERR,
-  URLMismatchError           = DOMExceptionBinding::URL_MISMATCH_ERR,
-  QuotaExceededError         = DOMExceptionBinding::QUOTA_EXCEEDED_ERR,
-  TimeoutError               = DOMExceptionBinding::TIMEOUT_ERR,
-  InvalidNodeTypeError       = DOMExceptionBinding::INVALID_NODE_TYPE_ERR,
-  DataCloneError             = DOMExceptionBinding::DATA_CLONE_ERR,
+  InUseAttributeError        = bindings::DOMException::INUSE_ATTRIBUTE_ERR,
+  InvalidStateError          = bindings::DOMException::INVALID_STATE_ERR,
+  SyntaxError                = bindings::DOMException::SYNTAX_ERR,
+  InvalidModificationError   = bindings::DOMException::INVALID_MODIFICATION_ERR,
+  NamespaceError             = bindings::DOMException::NAMESPACE_ERR,
+  InvalidAccessError         = bindings::DOMException::INVALID_ACCESS_ERR,
+  TypeMismatchError          = bindings::DOMException::TYPE_MISMATCH_ERR,
+  SecurityError              = bindings::DOMException::SECURITY_ERR,
+  NetworkError               = bindings::DOMException::NETWORK_ERR,
+  AbortError                 = bindings::DOMException::ABORT_ERR,
+  URLMismatchError           = bindings::DOMException::URL_MISMATCH_ERR,
+  QuotaExceededError         = bindings::DOMException::QUOTA_EXCEEDED_ERR,
+  TimeoutError               = bindings::DOMException::TIMEOUT_ERR,
+  InvalidNodeTypeError       = bindings::DOMException::INVALID_NODE_TYPE_ERR,
+  DataCloneError             = bindings::DOMException::DATA_CLONE_ERR,
   InvalidPointerId           = 0,
   EncodingError              = 0,
 
@@ -295,7 +295,7 @@ Exception::ToString(JSContext* aCx, nsACString& _retval)
 JSObject*
 Exception::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ExceptionBinding::Wrap(cx, this, aGivenProto);
+  return bindings::Exception::Wrap(cx, this, aGivenProto);
 }
 
 void
@@ -424,7 +424,7 @@ DOMException::Constructor(GlobalObject& /* unused */,
 JSObject*
 DOMException::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return DOMExceptionBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::DOMException::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */already_AddRefed<DOMException>

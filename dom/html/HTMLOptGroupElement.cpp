@@ -156,7 +156,7 @@ HTMLOptGroupElement::AfterSetAttr(int32_t aNameSpaceID, nsAtom* aName,
 JSObject*
 HTMLOptGroupElement::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return HTMLOptGroupElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::HTMLOptGroupElement::Wrap(aCx, this, aGivenProto);
 }
 
 } // namespace dom

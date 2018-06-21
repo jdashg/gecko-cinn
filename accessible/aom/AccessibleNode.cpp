@@ -62,7 +62,7 @@ AccessibleNode::~AccessibleNode()
 /* virtual */ JSObject*
 AccessibleNode::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return AccessibleNodeBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::AccessibleNode::Wrap(aCx, this, aGivenProto);
 }
 
 /* virtual */ ParentObject

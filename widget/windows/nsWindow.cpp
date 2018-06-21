@@ -4333,7 +4333,7 @@ bool nsWindow::TouchEventShouldStartDrag(EventMessage aEventMessage,
                              WidgetMouseEvent::eReal);
     hittest.mRefPoint = aEventPoint;
     hittest.mIgnoreRootScrollFrame = true;
-    hittest.inputSource = MouseEventBinding::MOZ_SOURCE_TOUCH;
+    hittest.inputSource = bindings::MouseEvent::MOZ_SOURCE_TOUCH;
     DispatchInputEvent(&hittest);
 
     EventTarget* target = hittest.GetDOMEventTarget();
@@ -4437,7 +4437,7 @@ nsWindow::DispatchMouseEvent(EventMessage aEventMessage, WPARAM wParam,
 
   // Since it is unclear whether a user will use the digitizer,
   // Postpone initialization until first PEN message will be found.
-  if (MouseEventBinding::MOZ_SOURCE_PEN == aInputSource
+  if (bindings::MouseEvent::MOZ_SOURCE_PEN == aInputSource
       // Messages should be only at topLevel window.
       && nsWindowType::eWindowType_toplevel == mWindowType
       // Currently this scheme is used only when pointer events is enabled.
@@ -5709,7 +5709,7 @@ nsWindow::ProcessMessage(UINT msg, WPARAM& wParam, LPARAM& lParam,
         pointerInfo.pointerId = pointerId;
         DispatchMouseEvent(eMouseExitFromWidget, wParam, pos, false,
                            WidgetMouseEvent::eLeftButton,
-                           MouseEventBinding::MOZ_SOURCE_PEN, &pointerInfo);
+                           bindings::MouseEvent::MOZ_SOURCE_PEN, &pointerInfo);
         InkCollector::sInkCollector->ClearTarget();
         InkCollector::sInkCollector->ClearPointerId();
       }
@@ -5721,7 +5721,7 @@ nsWindow::ProcessMessage(UINT msg, WPARAM& wParam, LPARAM& lParam,
       // If the context menu is brought up by a touch long-press, then
       // the APZ code is responsible for dealing with this, so we don't
       // need to do anything.
-      if (mTouchWindow && MOUSE_INPUT_SOURCE() == MouseEventBinding::MOZ_SOURCE_TOUCH) {
+      if (mTouchWindow && MOUSE_INPUT_SOURCE() == bindings::MouseEvent::MOZ_SOURCE_TOUCH) {
         MOZ_ASSERT(mAPZC); // since mTouchWindow is true, APZ must be enabled
         result = true;
         break;
@@ -7068,7 +7068,7 @@ bool nsWindow::OnGesture(WPARAM wParam, LPARAM lParam)
     wheelEvent.button      = 0;
     wheelEvent.mTime       = ::GetMessageTime();
     wheelEvent.mTimeStamp  = GetMessageTimeStamp(wheelEvent.mTime);
-    wheelEvent.inputSource = MouseEventBinding::MOZ_SOURCE_TOUCH;
+    wheelEvent.inputSource = bindings::MouseEvent::MOZ_SOURCE_TOUCH;
 
     bool endFeedback = true;
 
@@ -7105,7 +7105,7 @@ bool nsWindow::OnGesture(WPARAM wParam, LPARAM lParam)
   event.button    = 0;
   event.mTime     = ::GetMessageTime();
   event.mTimeStamp = GetMessageTimeStamp(event.mTime);
-  event.inputSource = MouseEventBinding::MOZ_SOURCE_TOUCH;
+  event.inputSource = bindings::MouseEvent::MOZ_SOURCE_TOUCH;
 
   nsEventStatus status;
   DispatchEvent(&event, status);
@@ -7989,7 +7989,7 @@ nsWindow::DealWithPopups(HWND aWnd, UINT aMessage,
     case WM_NCMBUTTONDOWN:
       if (nativeMessage != WM_TOUCH &&
           IsTouchSupportEnabled(aWnd) &&
-          MOUSE_INPUT_SOURCE() == MouseEventBinding::MOZ_SOURCE_TOUCH) {
+          MOUSE_INPUT_SOURCE() == bindings::MouseEvent::MOZ_SOURCE_TOUCH) {
         // If any of these mouse events are really compatibility events that
         // Windows is sending for touch inputs, then don't allow them to dismiss
         // popups when APZ is enabled (instead we do the dismissing as part of
@@ -8538,7 +8538,7 @@ bool nsWindow::OnPointerEvents(UINT msg, WPARAM aWParam, LPARAM aLParam)
   // location
   LPARAM newLParam = lParamToClient(aLParam);
   DispatchMouseEvent(message, aWParam, newLParam, false, button,
-                     MouseEventBinding::MOZ_SOURCE_PEN, &pointerInfo);
+                     bindings::MouseEvent::MOZ_SOURCE_PEN, &pointerInfo);
   // Consume WM_POINTER* to stop Windows fires WM_*BUTTONDOWN / WM_*BUTTONUP
   // WM_MOUSEMOVE.
   return true;

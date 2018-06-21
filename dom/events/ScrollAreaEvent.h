@@ -31,7 +31,7 @@ public:
 
   virtual JSObject* WrapObjectInternal(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return ScrollAreaEventBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::ScrollAreaEvent::Wrap(aCx, this, aGivenProto);
   }
 
   float X() const

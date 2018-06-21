@@ -21,7 +21,7 @@ using namespace SVGUnitTypesBinding;
 JSObject*
 SVGClipPathElement::WrapNode(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return SVGClipPathElementBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::SVGClipPathElement::Wrap(aCx, this, aGivenProto);
 }
 
 nsSVGElement::EnumInfo SVGClipPathElement::sEnumInfo[1] =

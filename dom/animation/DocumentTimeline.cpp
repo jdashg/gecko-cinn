@@ -45,7 +45,7 @@ NS_IMPL_RELEASE_INHERITED(DocumentTimeline, AnimationTimeline)
 JSObject*
 DocumentTimeline::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return DocumentTimelineBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::DocumentTimeline::Wrap(aCx, this, aGivenProto);
 }
 
 /* static */ already_AddRefed<DocumentTimeline>

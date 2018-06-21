@@ -2140,11 +2140,11 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
         int32_t delta = 0;
         if (wheelEvent->mLineOrPageDeltaY) {
           switch (wheelEvent->mDeltaMode) {
-            case WheelEventBinding::DOM_DELTA_PAGE:
+            case bindings::WheelEvent::DOM_DELTA_PAGE:
               pluginEvent.event = WM_MOUSEWHEEL;
               delta = -WHEEL_DELTA * wheelEvent->mLineOrPageDeltaY;
               break;
-            case WheelEventBinding::DOM_DELTA_LINE: {
+            case bindings::WheelEvent::DOM_DELTA_LINE: {
               UINT linesPerWheelDelta = 0;
               if (NS_WARN_IF(!::SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0,
                                                      &linesPerWheelDelta, 0))) {
@@ -2160,7 +2160,7 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
               delta *= wheelEvent->mLineOrPageDeltaY;
               break;
             }
-            case WheelEventBinding::DOM_DELTA_PIXEL:
+            case bindings::WheelEvent::DOM_DELTA_PIXEL:
             default:
               // We don't support WM_GESTURE with this path.
               MOZ_ASSERT(!pluginEvent.event);
@@ -2168,11 +2168,11 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
           }
         } else if (wheelEvent->mLineOrPageDeltaX) {
           switch (wheelEvent->mDeltaMode) {
-            case WheelEventBinding::DOM_DELTA_PAGE:
+            case bindings::WheelEvent::DOM_DELTA_PAGE:
               pluginEvent.event = WM_MOUSEHWHEEL;
               delta = -WHEEL_DELTA * wheelEvent->mLineOrPageDeltaX;
               break;
-            case WheelEventBinding::DOM_DELTA_LINE: {
+            case bindings::WheelEvent::DOM_DELTA_LINE: {
               pluginEvent.event = WM_MOUSEHWHEEL;
               UINT charsPerWheelDelta = 0;
               // FYI: SPI_GETWHEELSCROLLCHARS is available on Vista or later.
@@ -2189,7 +2189,7 @@ nsEventStatus nsPluginInstanceOwner::ProcessEvent(const WidgetGUIEvent& anEvent)
               delta *= wheelEvent->mLineOrPageDeltaX;
               break;
             }
-            case WheelEventBinding::DOM_DELTA_PIXEL:
+            case bindings::WheelEvent::DOM_DELTA_PIXEL:
             default:
               // We don't support WM_GESTURE with this path.
               MOZ_ASSERT(!pluginEvent.event);

@@ -41,7 +41,7 @@ public:
   JSObject*
   WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto) override
   {
-    return ResponseBinding::Wrap(aCx, this, aGivenProto);
+    return bindings::Response::Wrap(aCx, this, aGivenProto);
   }
 
   ResponseType

@@ -209,7 +209,7 @@ DataTransfer::Constructor(const GlobalObject& aGlobal, ErrorResult& aRv)
 JSObject*
 DataTransfer::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return DataTransferBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::DataTransfer::Wrap(aCx, this, aGivenProto);
 }
 
 void
@@ -586,7 +586,7 @@ DataTransfer::PrincipalMaySetData(const nsAString& aType,
 void
 DataTransfer::TypesListMayHaveChanged()
 {
-  DataTransferBinding::ClearCachedTypesValue(this);
+  bindings::DataTransfer::ClearCachedTypesValue(this);
 }
 
 already_AddRefed<DataTransfer>

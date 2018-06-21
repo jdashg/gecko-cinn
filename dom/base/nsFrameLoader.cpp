@@ -3399,6 +3399,6 @@ JSObject*
 nsFrameLoader::WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto)
 {
   JS::RootedObject result(cx);
-  FrameLoaderBinding::Wrap(cx, this, this, aGivenProto, &result);
+  bindings::FrameLoader::Wrap(cx, this, this, aGivenProto, &result);
   return result;
 }

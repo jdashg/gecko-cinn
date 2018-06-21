@@ -584,7 +584,7 @@ ScreenOrientation::DispatchChangeEvent()
 JSObject*
 ScreenOrientation::WrapObject(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
 {
-  return ScreenOrientationBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::ScreenOrientation::Wrap(aCx, this, aGivenProto);
 }
 
 bool

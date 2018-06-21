@@ -37,7 +37,7 @@ JSObject*
 DataTransferItemList::WrapObject(JSContext* aCx,
                                  JS::Handle<JSObject*> aGivenProto)
 {
-  return DataTransferItemListBinding::Wrap(aCx, this, aGivenProto);
+  return bindings::DataTransferItemList::Wrap(aCx, this, aGivenProto);
 }
 
 already_AddRefed<DataTransferItemList>
