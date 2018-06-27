@@ -18,8 +18,13 @@ InstanceProvider::InstanceProvider(nsIGlobalObject* const global)
 InstanceProvider::~InstanceProvider() = default;
 
 already_AddRefed<Instance>
-InstanceProvider::Webgpu() const
+InstanceProvider::GetWebgpu() const
 {
+    bool enabled = false;
+    (void)Preferences::GetBool("dom.webgpu.enable", &enabled);
+    if (!enabled)
+        return nullptr;
+
     if (!mInstance) {
         const auto inst = Instance::Create(mGlobal);
         mInstance = Some(inst);

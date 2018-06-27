@@ -11,13 +11,13 @@ function testEnabled() {
   ok(SpecialPowers.getBoolPref('dom.webgpu.enable'), 'Pref should be enabled.');
 
   ok(window.WebGPU !== undefined, 'window.WebGPU !== undefined');
-  ok(window.webgpu !== undefined, 'window.webgpu !== undefined');
+  ok(!!window.webgpu, '!!window.webgpu');
 
   SimpleTest.finish();
 }
 
 ok(window.WebGPU === undefined, 'window.WebGPU === undefined');
-ok(window.webgpu === undefined, 'window.webgpu === undefined');
+ok(!window.webgpu, '!window.webgpu');
 
 var prefArrArr = [
   ['dom.webgpu.enable', true]

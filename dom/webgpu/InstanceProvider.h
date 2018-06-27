@@ -28,7 +28,7 @@ protected:
     virtual ~InstanceProvider();
 
 public:
-    already_AddRefed<Instance> Webgpu() const;
+    already_AddRefed<Instance> GetWebgpu() const;
 
     nsIGlobalObject* GetParentObject() const { return mGlobal; }
 

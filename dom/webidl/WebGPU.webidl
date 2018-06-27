@@ -634,6 +634,6 @@ interface WebGPU {
 // Add a "webgpu" member to Window that contains the global instance of a "WebGPU"
 [NoInterfaceObject]
 interface WebGPUProvider {
-    [SameObject, Replaceable, Pref="dom.webgpu.enable"] readonly attribute WebGPU webgpu;
+    [Replaceable] readonly attribute WebGPU? webgpu;
 };
 //Window includes WebGPUProvider;
