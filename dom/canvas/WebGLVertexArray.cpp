@@ -14,49 +14,52 @@
 
 namespace mozilla {
 
-JSObject* WebGLVertexArray::WrapObject(JSContext* cx,
-                                       JS::Handle<JSObject*> givenProto) {
-  return dom::WebGLVertexArrayObject_Binding::Wrap(cx, this, givenProto);
+static GLuint CreateVao(ContextGL* const context) {
+  const auto& gl = context->gl;
+  if (!gl->IsSupported(gl::GLFeature::vertex_array_object))
+    return 0;
+
+  GLuint ret = 0;
+  gl->fGenVertexArrays(1, &ret);
+  return ret;
 }
 
-WebGLVertexArray::WebGLVertexArray(WebGLContext* const webgl, const GLuint name)
-    : WebGLRefCountedObject(webgl), mGLName(name) {
-  mAttribs.SetLength(mContext->mGLMaxVertexAttribs);
-  mContext->mVertexArrays.insertBack(this);
+VertexArrayGL::VertexArrayGL(ContextGL* const context)
+    : AVertexArray(context), mGLName(CreateVao(context)),
+      mAttribs(context->mVertexAttribCount) {
 }
 
-WebGLVertexArray::~WebGLVertexArray() { MOZ_ASSERT(IsDeleted()); }
-
-void WebGLVertexArray::AddBufferBindCounts(int8_t addVal) const {
-  const GLenum target = 0;  // Anything non-TF is fine.
-  WebGLBuffer::AddBindCount(target, mElementArrayBuffer.get(), addVal);
-  for (const auto& attrib : mAttribs) {
-    WebGLBuffer::AddBindCount(target, attrib.mBuf.get(), addVal);
+VertexArrayGL::~VertexArrayGL() {
+  if (mGLName) {
+    const auto& gl = mContext->gl;
+    if (gl) {
+      gl->fDeleteVertexArrays(1, &mGLName);
+    }
   }
 }
 
-WebGLVertexArray* WebGLVertexArray::Create(WebGLContext* webgl) {
-  WebGLVertexArray* array;
-  if (webgl->gl->IsSupported(gl::GLFeature::vertex_array_object)) {
-    array = new WebGLVertexArrayGL(webgl);
-  } else {
-    array = new WebGLVertexArrayFake(webgl);
+void
+VertexArrayGL::Bind(VertexArrayGL* const prev) const {
+  const auto& gl = mContext->gl;
+  if (mGLName) {
+    gl->fBindVertexArray(mGLName);
+    return;
   }
-  return array;
+
+  if (!prev) {
+    for (const auto& cur : mAttribs) {
+      MOZ_ASSERT(!cur.mBuffer);
+    }
+    return;
+  }
+
+  const auto& count = mAttribs.size();
+  for (size_t i = 0; i < count; ++i) {
+    if (mAttribs[i].mBuffer || prev->mAttribs[i].mBuffer) {
+      VertexAttribPointer(mAttribs[i]);
+    }
+  }
+  gl->fBindBuffer(LOCAL_GL_ELEMENT_ARRAY_BUFFER, mIndexBuffer ? mIndexBuffer->mGLName : 0);
 }
-
-void WebGLVertexArray::Delete() {
-  DeleteImpl();
-
-  LinkedListElement<WebGLVertexArray>::removeFrom(mContext->mVertexArrays);
-  mElementArrayBuffer = nullptr;
-  mAttribs.Clear();
-}
-
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArray, mAttribs,
-                                      mElementArrayBuffer)
-
-NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLVertexArray, AddRef)
-NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLVertexArray, Release)
 
 }  // namespace mozilla

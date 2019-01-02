@@ -26,11 +26,11 @@ WebGL2Context::CreateTransformFeedback() {
   return ret.forget();
 }
 
-void WebGL2Context::DeleteTransformFeedback(WebGLTransformFeedback* tf) {
+void ContextJS::DeleteTransformFeedback(TransformFeedbackJS* const tf) {
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (!ValidateDeleteObject(tf)) return;
 
-  if (tf->mIsActive) {
+  if (tf->mStatus != TransformFeedbackJS::Status::Inactive) {
     ErrorInvalidOperation("Cannot delete active transform feedbacks.");
     return;
   }

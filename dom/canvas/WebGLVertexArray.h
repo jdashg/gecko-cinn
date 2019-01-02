@@ -17,50 +17,21 @@
 
 namespace mozilla {
 
-class WebGLVertexArrayFake;
-namespace webgl {
-struct LinkedProgramInfo;
-}
+class VertexArrayGL final : public AVertexArray,
+                      public CacheInvalidator {
+  friend class ContextGL;
 
-class WebGLVertexArray : public nsWrapperCache,
-                         public WebGLRefCountedObject<WebGLVertexArray>,
-                         public LinkedListElement<WebGLVertexArray>,
-                         public CacheInvalidator {
- public:
-  static WebGLVertexArray* Create(WebGLContext* webgl);
-
-  void Delete();
-
-  WebGLContext* GetParentObject() const { return mContext; }
-
-  virtual JSObject* WrapObject(JSContext* cx,
-                               JS::Handle<JSObject*> givenProto) override;
-
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLVertexArray)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLVertexArray)
-
-  void AddBufferBindCounts(int8_t addVal) const;
-
- protected:
-  WebGLVertexArray(WebGLContext* webgl, GLuint name);
-  virtual ~WebGLVertexArray();
-
-  virtual void BindVertexArray() = 0;
-  virtual void DeleteImpl() = 0;
-
- public:
+ private:
   const GLuint mGLName;
-  bool mHasBeenBound = false;
 
- protected:
-  nsTArray<WebGLVertexAttribData> mAttribs;
-  WebGLRefPtr<WebGLBuffer> mElementArrayBuffer;
+  std::vector<WebGLVertexAttribData> mAttribs;
+  RefPtr<BufferGL> mIndexBuffer;
 
-  friend class ScopedDrawHelper;
-  friend class WebGLContext;
-  friend class WebGLVertexArrayFake;
-  friend class WebGL2Context;
-  friend struct webgl::LinkedProgramInfo;
+public:
+  explicit VertexArrayGL(ContextGL*);
+  virtual ~VertexArrayGL();
+
+  void Bind(VertexArrayGL* prev) const;
 };
 
 }  // namespace mozilla

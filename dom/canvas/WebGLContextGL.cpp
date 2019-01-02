@@ -393,7 +393,7 @@ void WebGLContext::DeleteShader(WebGLShader* shader) {
   shader->RequestDelete();
 }
 
-void WebGLContext::DetachShader(WebGLProgram& program,
+void ContextJS::DetachShader(WebGLProgram& program,
                                 const WebGLShader& shader) {
   const FuncScope funcScope(*this, "detachShader");
   if (IsContextLost()) return;

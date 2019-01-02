@@ -191,6 +191,19 @@ enum class AttribBaseType : uint8_t {
 };
 const char* ToString(AttribBaseType);
 
+class VRefCounted : public RefCounted<VRefCounted>
+{
+  virtual ~VRefCounted() { }
+  virtual const char* typeName() const = 0;
+  virtual size_t typeSize() const = 0;
+};
+
+class VSupportsWeakPtr : public SupportsWeakPtr<SupportsWeakPtr>
+{
+  virtual ~VSupportsWeakPtr() { }
+  virtual const char* typeName() const = 0;
+};
+
 }  // namespace webgl
 
 }  // namespace mozilla

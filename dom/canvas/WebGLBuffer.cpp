@@ -11,87 +11,60 @@
 
 namespace mozilla {
 
-WebGLBuffer::WebGLBuffer(WebGLContext* webgl, GLuint buf)
-    : WebGLRefCountedObject(webgl),
-      mGLName(buf),
-      mContent(Kind::Undefined),
-      mUsage(LOCAL_GL_STATIC_DRAW),
-      mByteLength(0),
-      mTFBindCount(0),
-      mNonTFBindCount(0) {
-  mContext->mBuffers.insertBack(this);
+BufferGL::BufferGL(ContextGL* const webgl, const bool isIndexBuffer)
+    : ABuffer(webgl, isIndexBuffer),
+      mGLName([&]() {
+        GLuint ret = 0;
+        mContext->gl->fGenBuffers(1, &ret);
+        return ret;
+      }()),
+      mIsIndexBuffer(isIndexBuffer) {
 }
 
-WebGLBuffer::~WebGLBuffer() { DeleteOnce(); }
-
-void WebGLBuffer::SetContentAfterBind(GLenum target) {
-  if (mContent != Kind::Undefined) return;
-
-  switch (target) {
-    case LOCAL_GL_ELEMENT_ARRAY_BUFFER:
-      mContent = Kind::ElementArray;
-      break;
-
-    case LOCAL_GL_ARRAY_BUFFER:
-    case LOCAL_GL_PIXEL_PACK_BUFFER:
-    case LOCAL_GL_PIXEL_UNPACK_BUFFER:
-    case LOCAL_GL_UNIFORM_BUFFER:
-    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
-    case LOCAL_GL_COPY_READ_BUFFER:
-    case LOCAL_GL_COPY_WRITE_BUFFER:
-      mContent = Kind::OtherData;
-      break;
-
-    default:
-      MOZ_CRASH("GFX: invalid target");
-  }
-}
-
-void WebGLBuffer::Delete() {
-  mContext->gl->fDeleteBuffers(1, &mGLName);
-
-  mByteLength = 0;
+BufferGL::~BufferGL() {
   mFetchInvalidator.InvalidateCaches();
-
-  mIndexCache = nullptr;
-  mIndexRanges.clear();
-  LinkedListElement<WebGLBuffer>::remove();  // remove from mContext->mBuffers
+  mContext->gl->fDeleteBuffers(1, &mGLName);
 }
 
 ////////////////////////////////////////
 
-static bool ValidateBufferUsageEnum(WebGLContext* webgl, GLenum usage) {
-  switch (usage) {
-    case LOCAL_GL_STREAM_DRAW:
-    case LOCAL_GL_STATIC_DRAW:
-    case LOCAL_GL_DYNAMIC_DRAW:
-      return true;
-
-    case LOCAL_GL_DYNAMIC_COPY:
-    case LOCAL_GL_DYNAMIC_READ:
-    case LOCAL_GL_STATIC_COPY:
-    case LOCAL_GL_STATIC_READ:
-    case LOCAL_GL_STREAM_COPY:
-    case LOCAL_GL_STREAM_READ:
-      if (MOZ_LIKELY(webgl->IsWebGL2())) return true;
-      break;
-
-    default:
-      break;
+GLenum BufferGL::ImplicitTarget() const {
+  if (mIsIndexBuffer) return LOCAL_GL_ELEMENT_ARRAY_BUFFER;
+  for (const auto& cur : mContext->mBoundTfo->mAttribs) {
+    if (this == cur) return LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER;
   }
-
-  webgl->ErrorInvalidEnumInfo("usage", usage);
-  return false;
+  return LOCAL_GL_ARRAY_BUFFER;
 }
 
-void WebGLBuffer::BufferData(GLenum target, size_t size, const void* data,
-                             GLenum usage) {
+void BufferGL::BufferData(const GLenum usage, const uint64_t srcByteLen, const uint8_t* srcBytes) {
+  const bool usageOk = [&]() {
+    switch (usage) {
+      case LOCAL_GL_STREAM_DRAW:
+      case LOCAL_GL_STATIC_DRAW:
+      case LOCAL_GL_DYNAMIC_DRAW:
+        return true;
+
+      case LOCAL_GL_DYNAMIC_COPY:
+      case LOCAL_GL_DYNAMIC_READ:
+      case LOCAL_GL_STATIC_COPY:
+      case LOCAL_GL_STATIC_READ:
+      case LOCAL_GL_STREAM_COPY:
+      case LOCAL_GL_STREAM_READ:
+        return webgl->IsWebGL2();
+
+      default:
+        return false;
+    }
+  }();
+  if (!usageOk) {
+    webgl->ErrorInvalidEnumInfo("usage", usage);
+    return;
+  }
+
   // Careful: data.Length() could conceivably be any uint32_t, but GLsizeiptr
   // is like intptr_t.
   if (!CheckedInt<GLsizeiptr>(size).isValid())
     return mContext->ErrorOutOfMemory("bad size");
-
-  if (!ValidateBufferUsageEnum(mContext, usage)) return;
 
 #ifdef XP_MACOSX
   // bug 790879
@@ -101,85 +74,81 @@ void WebGLBuffer::BufferData(GLenum target, size_t size, const void* data,
   }
 #endif
 
-  const void* uploadData = data;
+  UniqueBuffer zeros;
+  if (!srcBytes) {
+    zeros = calloc(size, 1);
+    if (!zeros) return mContext->ErrorOutOfMemory("Failed to allocate zeros.");
+    srcBytes = zeros.get();
+  }
 
   UniqueBuffer newIndexCache;
-  if (target == LOCAL_GL_ELEMENT_ARRAY_BUFFER &&
-      mContext->mNeedsIndexValidation) {
+  if (mIsIndexBuffer && mContext->mNeedsIndexValidation) {
     newIndexCache = malloc(size);
-    if (!newIndexCache) {
-      mContext->ErrorOutOfMemory("Failed to alloc index cache.");
-      return;
-    }
-    memcpy(newIndexCache.get(), data, size);
-    uploadData = newIndexCache.get();
+    if (!newIndexCache) return mContext->ErrorOutOfMemory("Failed to alloc index cache.");
+
+    memcpy(newIndexCache.get(), srcBytes, size);
+    srcBytes = newIndexCache.get();
   }
 
   const auto& gl = mContext->gl;
-  const ScopedLazyBind lazyBind(gl, target, this);
 
-  const bool sizeChanges = (size != ByteLength());
-  if (sizeChanges) {
+  {
+    const auto target = ImplicitTarget();
     gl::GLContext::LocalErrorScope errorScope(*gl);
-    gl->fBufferData(target, size, uploadData, usage);
-    const auto error = errorScope.GetError();
 
+    gl->fBufferData(target, srcByteLen, srcBytes, usage);
+
+    const auto error = errorScope.GetError();
     if (error) {
       MOZ_ASSERT(error == LOCAL_GL_OUT_OF_MEMORY);
       mContext->ErrorOutOfMemory("Error from driver: 0x%04x", error);
       return;
     }
-  } else {
-    gl->fBufferData(target, size, uploadData, usage);
   }
 
   mContext->OnDataAllocCall();
 
-  mUsage = usage;
-  mByteLength = size;
+  mByteLength = srcByteLen;
   mFetchInvalidator.InvalidateCaches();
   mIndexCache = std::move(newIndexCache);
 
-  if (mIndexCache) {
-    if (!mIndexRanges.empty()) {
-      mContext->GeneratePerfWarning("[%p] Invalidating %u ranges.", this,
-                                    uint32_t(mIndexRanges.size()));
-      mIndexRanges.clear();
-    }
+  if (!mIndexRanges.empty()) {
+    mContext->GeneratePerfWarning("[%p] Invalidating %u ranges.", this,
+                                  uint32_t(mIndexRanges.size()));
+    mIndexRanges.clear();
   }
 
   ResetLastUpdateFenceId();
 }
 
-void WebGLBuffer::BufferSubData(GLenum target, size_t dstByteOffset,
-                                size_t dataLen, const void* data) const {
-  if (!ValidateRange(dstByteOffset, dataLen)) return;
+void BufferGL::BufferSubData(const uint64_t dstByteOffset,
+                                const uint64_t srcByteLen, const uint8_t* srcBytes) const {
+  if (!ValidateRange(dstByteOffset, srcByteLen)) return;
 
-  if (!CheckedInt<GLintptr>(dataLen).isValid())
+  if (!CheckedInt<GLintptr>(srcByteLen).isValid())
     return mContext->ErrorOutOfMemory("Size too large.");
 
   ////
 
-  const void* uploadData = data;
   if (mIndexCache) {
     const auto cachedDataBegin = (uint8_t*)mIndexCache.get() + dstByteOffset;
-    memcpy(cachedDataBegin, data, dataLen);
-    uploadData = cachedDataBegin;
+    memcpy(cachedDataBegin, srcBytes, srcByteLen);
+    srcBytes = cachedDataBegin;
 
-    InvalidateCacheRange(dstByteOffset, dataLen);
+    InvalidateCacheRange(dstByteOffset, srcByteLen);
   }
 
   ////
 
   const auto& gl = mContext->gl;
-  const ScopedLazyBind lazyBind(gl, target, this);
-
-  gl->fBufferSubData(target, dstByteOffset, dataLen, uploadData);
+  gl->fBindBuffer(target, mGLName);
+  gl->fBufferSubData(target, dstByteOffset, srcByteLen, srcBytes);
+  gl->fBindBuffer(target, 0);
 
   ResetLastUpdateFenceId();
 }
 
-bool WebGLBuffer::ValidateRange(size_t byteOffset, size_t byteLen) const {
+bool BufferGL::ValidateRange(const uint64_t byteOffset, const uint64_t byteLen) const {
   auto availLength = mByteLength;
   if (byteOffset > availLength) {
     mContext->ErrorInvalidValue("Offset passes the end of the buffer.");

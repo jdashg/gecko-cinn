@@ -22,19 +22,16 @@ namespace mozilla {
 
 namespace webgl {
 class ShaderValidator;
-}  // namespace webgl
 
-class WebGLShader final : public nsWrapperCache,
-                          public WebGLRefCountedObject<WebGLShader>,
-                          public LinkedListElement<WebGLShader> {
+class ShaderGL final : public AShader {
   friend class WebGLContext;
   friend class WebGLProgram;
 
  public:
-  WebGLShader(WebGLContext* webgl, GLenum type);
+  ShaderGL(WebGLContext* webgl, GLenum type);
 
  protected:
-  ~WebGLShader();
+  ~ShaderGL();
 
  public:
   // GL funcs
@@ -104,6 +101,7 @@ class WebGLShader final : public nsWrapperCache,
   nsCString mCompilationLog;
 };
 
+}  // namespace webgl
 }  // namespace mozilla
 
 #endif  // WEBGL_SHADER_H_

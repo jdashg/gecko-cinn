@@ -12,7 +12,7 @@
 
 namespace mozilla {
 
-void WebGLContext::BindVertexArray(WebGLVertexArray* array) {
+void ContextGL::BindVertexArray(AVertexArray& obj) {
   const FuncScope funcScope(*this, "bindVertexArray");
   if (IsContextLost()) return;
 

@@ -266,14 +266,319 @@ class AvailabilityRunnable final : public Runnable {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class WebGLContext : public nsICanvasRenderingContextInternal,
-                     public nsSupportsWeakReference,
+////////////////////////////////////////////////////////////////////////////////
+
+namespace webgl {
+
+/**
+ * All-new:
+ * ContextJS/BufferJS/etc
+ *
+ * s/WebGLContext/webgl::ContextGL/
+ * s/WebGLBuffer/webgl::BufferGL/
+ *
+ * class BufferGL : public ABuffer
+ * class BufferDispatch : public ABuffer
+ *
+ * class ContextGL : public AContext {
+ *   rp<ABuffer> CreateBuffer() override;
+ * }
+ *
+ * ContextJS:
+ *   rp<ContextGL> inner
+ *   rp<BufferJS> array_buffer
+ *
+ * BufferJS:
+ *   rp<ABuffer> inner_ref; // nulled on deletion.
+ *   WeakPtr<ABuffer> inner
+ *
+ */
+class ObjectJS : public VRefCounted
+{
+private:
+  const ContextJS* mContext;
+  bool mIsDeleted = false;
+  GLenum mTarget = 0;
+  bool mDtorShouldDelete_Called = false;
+
+  // -
+
+public:
+  const auto& Context() const { mContext; }
+  const auto& Target() const { mTarget; }
+
+  void MarkDeletedOrLost() {
+    if (!mContext)
+      return;
+
+    mIsDeleted = true;
+    ReleaseChildren();
+  }
+
+protected:
+  bool DtorShouldDelete() {
+    mDtorShouldDelete_Called = true;
+    return mContext;
+  }
+
+private:
+  explicit Object(const ContextJS* const context)
+    : mContext(context)
+  { }
+
+  virtual ~Object() {
+    MOZ_RELEASE_ASSERT(mDtorShouldDelete_Called);
+    MOZ_RELEASE_ASSERT(!mContext);
+  }
+
+  virtual void ReleaseChildren() {}
+
+  void OnContextLost() {
+    MarkDeletedOrLost();
+  }
+};
+
+class ABuffer : public VRefCounted, public VSupportsWeakPtr
+{
+  virtual BufferGL* AsGL() const {
+    MOZ_CRASH("Not for gl.");
+  }
+  virtual BufferDispatch* AsDispatch() {
+    MOZ_CRASH("Not for dispatch.");
+  }
+
+  auto AsGL() const {
+    return const_cast<const BufferGL*>(const_cast<ABuffer*>(this)->AsGL());
+  }
+  auto AsDispatch() const {
+    return const_cast<const BufferDispatch*>(const_cast<ABuffer*>(this)->AsDispatch());
+  }
+};
+
+class BufferTfBindCounts final {
+  size_t mTfBindCount = 0;
+  size_t mNonTfBindCount = 0;
+
+public:
+  bool IsBoundForTf() const { return bool(mTfBindCount); }
+  bool IsBoundForNonTf() const { return bool(mNonTfBindCount); }
+
+  enum class For {
+    NonTf,
+    Tf,
+  };
+  enum class On {
+    Bind,
+    Unbind,
+  };
+
+  void Add(const On on, const For forType) {
+      auto* slot = &mNonTfBindCount;
+      if (forType == For::Tf) {
+          slot = &mTfBindCount;
+      }
+      *slot += (on == On::Bind) ? +1 : -1;
+  }
+
+  template<typename T>
+  static void UpdateSlot(const GLenum target, RefPtr<T>* const slot,
+                         T* const next)
+  {
+    const auto forType = (target == LOCAL_GL_TRANSFORM_FEEDBACK) ? For::Tf
+                                                                 : For::NonTf;
+    if (*slot) {
+      (*slot)->OnBindChange(On::Unbind, forType);
+    }
+    *slot = next;
+    if (*slot) {
+      (*slot)->OnBindChange(On::Bind, forType);
+    }
+  }
+}
+
+class BufferJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ABuffer> mInnerRef;
+  WeakPtr<ABuffer> mInner;
+  size_t mNonTfUseCount = 0;
+  size_t mTfUseCount = 0;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(BufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(BufferJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit BufferJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~BufferJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteBuffer(this);
+    }
+  }
+
+  enum class BindingFor {
+    NonTf,
+    Tf,
+  };
+
+  void OnBindChange(const BindingFor bindingFor, const int8_t diff) {
+    auto slot = &mNonTfUseCount;
+    if (bindingFor == BindingFor::Tf) {
+      slot = &mTfUseCount;
+    }
+    *slot += diff;
+  }
+
+  static void UpdateSlot(const BindingFor boundFor, RefPtr<BufferJS>* const slot,
+                         BufferJS* const next)
+  {
+    if (*slot) {
+      (*slot)->OnBindChange(boundFor, -1);
+    }
+    *slot = next;
+    if (*slot) {
+      (*slot)->OnBindChange(boundFor, +1);
+    }
+  }
+};
+
+class TransformFeedbackJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  std::vector<RefPtr<BufferJS>> mAttribs;
+
+  enum class Status {
+    Inactive,
+    Active,
+    Paused,
+  };
+  Status mStatus = Status::Inactive;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(TransformFeedbackJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(TransformFeedbackJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit TransformFeedbackJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~TransformFeedbackJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteTransformFeedback(this);
+    }
+  }
+
+public:
+  void OnBindChange(const int8_t diff) const {
+    const auto fn = [&](BufferJS* const x) {
+      if (!x) return;
+      x->OnBindChange(BufferJS::BindingFor::Tf, diff);
+    };
+    for (const auto& slot : mAttribs) {
+      fn(slot.get());
+    }
+  }
+
+  void ReleaseChildren() override {
+    MOZ_ASSERT(mContext->mBoundTfo != this);
+    for (auto& slot : mAttribs) {
+      slot = nullptr;
+    }
+  }
+};
+
+class VertexArrayJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<BufferJS> mIndexBuffer;
+  std::vector<RefPtr<BufferJS>> mAttribs;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(VertexArrayJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(VertexArrayJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit VertexArrayJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~VertexArrayJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteVertexArray(this);
+    }
+  }
+
+public:
+  void OnBindChange(const int8_t diff) const {
+    const auto fn = [&](BufferJS* const x) {
+      if (!x) return;
+      x->OnBindChange(BufferJS::BindingFor::NonTf, diff);
+    };
+    fn(mIndexBuffer.get());
+    for (const auto& slot : mAttribs) {
+      fn(slot.get());
+    }
+  }
+
+  void ReleaseChildren() override {
+    MOZ_ASSERT(mContext->mBoundVao != this);
+    mIndexBuffer = nullptr;
+    for (auto& slot : mAttribs) {
+      slot = nullptr;
+    }
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+template<typename T>
+struct auto_AddRefed final
+{
+    RefPtr<T> ptr;
+
+    template<typename U>
+    explicit auto_AddRefed(std::nullptr_t)
+    { }
+
+    template<typename U>
+    explicit auto_AddRefed(U* const rhs)
+        : ptr(rhs)
+    { }
+
+    template<typename U>
+    explicit auto_AddRefed(const RefPtr<U>& rhs)
+        : ptr(rhs)
+    { }
+
+    explicit operator already_AddRefed<T>() const {
+        auto ret = ptr;
+        return ret.forget();
+    }
+
+    explicit operator RefPtr<T>() const {
+        return ptr;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+
+class ContextJS : public nsICanvasRenderingContextInternal,
                      public nsWrapperCache {
-  friend class ScopedDrawCallWrapper;
-  friend class ScopedDrawWithTransformFeedback;
-  friend class ScopedFakeVertexAttrib0;
-  friend class ScopedFBRebinder;
-  friend class WebGL2Context;
+  friend class Context2JS;
   friend class WebGLContextUserData;
   friend class WebGLExtensionCompressedTextureASTC;
   friend class WebGLExtensionCompressedTextureBPTC;
@@ -289,78 +594,353 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   friend class WebGLExtensionLoseContext;
   friend class WebGLExtensionMOZDebug;
   friend class WebGLExtensionVertexArray;
-  friend class WebGLMemoryTracker;
   friend class webgl::AvailabilityRunnable;
   friend struct webgl::LinkedProgramInfo;
-  friend class webgl::ScopedPrepForResourceClear;
   friend struct webgl::UniformBlockInfo;
 
-  friend const webgl::CachedDrawFetchLimits* ValidateDraw(WebGLContext*, GLenum,
-                                                          uint32_t);
-
-  enum {
-    UNPACK_FLIP_Y_WEBGL = 0x9240,
-    UNPACK_PREMULTIPLY_ALPHA_WEBGL = 0x9241,
-    // We throw InvalidOperation in TexImage if we fail to use GPU fast-path
-    // for texture copy when it is set to true, only for debug purpose.
-    UNPACK_REQUIRE_FASTPATH = 0x10001,
-    CONTEXT_LOST_WEBGL = 0x9242,
-    UNPACK_COLORSPACE_CONVERSION_WEBGL = 0x9243,
-    BROWSER_DEFAULT_WEBGL = 0x9244,
-    UNMASKED_VENDOR_WEBGL = 0x9245,
-    UNMASKED_RENDERER_WEBGL = 0x9246
-  };
-
  private:
-  // We've had issues in the past with nulling `gl` without actually releasing
-  // all of our resources. This construction ensures that we are aware that we
-  // should only null `gl` in DestroyResourcesAndContext.
-  RefPtr<gl::GLContext> mGL_OnlyClearInDestroyResourcesAndContext;
+  RefPtr<AContext> mInner;
 
  public:
-  // Grab a const reference so we can see changes, but can't make changes.
-  const decltype(mGL_OnlyClearInDestroyResourcesAndContext)& gl;
+  ContextJS();
 
  protected:
-  const uint32_t mMaxPerfWarnings;
-  mutable uint64_t mNumPerfWarnings;
-  const uint32_t mMaxAcceptableFBStatusInvals;
-
-  uint64_t mNextFenceId = 1;
-  uint64_t mCompletedFenceId = 0;
-
- public:
-  class FuncScope;
-
- private:
-  mutable FuncScope* mFuncScope = nullptr;
-
- public:
-  WebGLContext();
-
- protected:
-  virtual ~WebGLContext();
+  virtual ~ContextJS();
 
  public:
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
-
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS_AMBIGUOUS(
-      WebGLContext, nsICanvasRenderingContextInternal)
+      ContextJS, nsICanvasRenderingContextInternal)
+  virtual JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 
-  virtual JSObject* WrapObject(JSContext* cx,
-                               JS::Handle<JSObject*> givenProto) override = 0;
+  // ----------------------------------
 
-  virtual void OnMemoryPressure() override;
+private:
+  std::unordered_map<GLenum, RefPtr<BufferJS>> mBoundBufferByTarget;
+  std::vector<RefPtr<BufferJS>> mBoundUbos;
 
-  // nsICanvasRenderingContextInternal
-  virtual int32_t GetWidth() override { return DrawingBufferWidth(); }
-  virtual int32_t GetHeight() override { return DrawingBufferHeight(); }
+  // -
 
-  NS_IMETHOD SetDimensions(int32_t width, int32_t height) override;
-  NS_IMETHOD InitializeWithDrawTarget(nsIDocShell*,
-                                      NotNull<gfx::DrawTarget*>) override {
-    return NS_ERROR_NOT_IMPLEMENTED;
+  RefPtr<BufferJS>* GetBufferSlot(const GLenum target) {
+    if (target == LOCAL_GL_ELEMENT_ARRAY_BUFFER) return &mBoundVao->mIndexBuffer;
+
+    const auto itr = mBoundBufferByTarget.find(target);
+    if (itr != mBoundBufferByTarget.end()) return &(itr->second);
+
+    ErrorInvalidEnum("Bad target.");
+    return nullptr;
   }
+
+  BufferJS* BufferByTarget(const GLenum target) const {
+    const auto slot = GetBufferSlot(target);
+    if (!slot) return;
+
+    const auto buffer = *slot;
+    if (!buffer) {
+      ErrorInvalidOperation("No buffer bound.");
+      return nullptr;
+    }
+    return buffer;
+  }
+
+  // -
+
+  bool TryBufferTargetAssignment(GLenum* const bufferTarget, const GLenum newTarget) {
+    const bool ok = [&]() {
+      if (!*bufferTarget) return true;
+      const bool isCurIndex = *bufferTarget == LOCAL_GL_ELEMENT_ARRAY_BUFFER;
+      const bool isNewIndex = newTarget == LOCAL_GL_ELEMENT_ARRAY_BUFFER;
+      return isNewIndex == isCurIndex;
+    }();
+    if (!ok) {
+      ErrorInvalidOperation("Buffer can no longer be bound as that target.");
+      return false;
+    }
+    *bufferTarget = newTarget;
+    return true;
+  }
+
+public:
+  void BindBuffer(const GLenum target, BufferJS* const buffer) {
+    const auto context = GetContext();
+    if (!context) return nullptr;
+    if (buffer && !IsBuffer(buffer)) return;
+
+    const auto slot = GetBufferSlot(target);
+    if (!slot) return;
+
+    if (buffer) {
+      if (!TryBufferTargetAssignment(context, &buffer->mTarget, target)) return;
+    }
+
+    *slot = buffer;
+  }
+
+  // -
+
+  private:
+    void BindBufferRangeImpl(GLenum target, GLuint index, BufferJS* buffer,
+                             uint64_t offset, uint64_t size) {
+      const auto context = GetContext();
+      if (!context) return nullptr;
+      if (buffer && !IsBuffer(buffer)) return;
+
+      switch (target) {
+        case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
+        case LOCAL_GL_UNIFORM_BUFFER:
+          break;
+        default:
+          ErrorInvalidEnum("Bad target.");
+          return;
+      }
+      const auto slot = GetBufferSlot(target);
+      MOZ_ASSERT(slot);
+
+      auto bindingFor = BufferJS::BindingFor::NonTf;
+      if (target == LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER) {
+        bindingFor = BufferJS::BindingFor::Tf;
+        if (mBoundTfo->mIsActive) {
+          ErrorInvalidOperation("Active Transform Feedback objects are immutable.");
+          return;
+        }
+      }
+      ABuffer* abuffer = nullptr;
+      if (buffer) {
+        if (!TryBufferTargetAssignment(&buffer->mTarget, target)) return;
+        abuffer = buffer->mInner;
+      }
+
+      context->BindBufferRange(target, index, abuffer, offset, size);
+    }
+
+public:
+    void BindBufferBase(GLenum target, GLuint index, BufferJS* buffer) {
+      BindBufferRangeImpl(target, index, buffer, 0, UINT64_MAX);
+    }
+
+    void BindBufferRange(GLenum target, GLuint index, BufferJS* buffer,
+                         WebGLintptr offset, WebGLsizeiptr size) {
+      if (!ValidateNonNegative("offset", offset) ||
+          !ValidateNonNegative("size", size)) {
+        return;
+      }
+      BindBufferRangeImpl(target, index, buffer, offset, size);
+    }
+
+  // -
+
+private:
+  void BufferDataImpl(GLenum target, uint64_t dataLen, const uint8_t* data, GLenum usage) {
+    const auto buffer = BufferByTarget(target);
+    if (!buffer) return;
+    buffer->mInner->BufferData(usage, dataLen, data);
+  }
+
+public:
+  void BufferData(GLenum target, WebGLsizeiptr size, GLenum usage) {
+    if (size < 0) {
+      ErrorInvalidValue("size");
+      return;
+    }
+    BufferDataImpl(target, uint64_t(size), nullptr, usage);
+  }
+
+  void BufferData(GLenum target, const dom::Nullable<dom::ArrayBuffer>& maybeSrc,
+                  GLenum usage) {
+    const auto src = GetNonNull(maybeSrc);
+    if (!src) return;
+
+    uint64_t srcByteLen;
+    uint8_t* srcBytes;
+    GetLengthAndData(*src, &srcByteLen, &srcBytes);
+    BufferDataImpl(target, srcByteLen, srcBytes, usage);
+  }
+
+  void BufferData(GLenum target, const dom::ArrayBufferView& src, GLenum usage,
+                  GLuint srcElemOffset = 0, GLuint srcElemCountOverride = 0) {
+    uint64_t srcByteLen;
+    uint8_t* srcBytes;
+    if (!ValidateArrayBufferView(src, srcElemOffset, srcElemCountOverride, &srcBytes,
+                                 &srcByteLen)) {
+      return;
+    }
+    BufferDataImpl(target, srcByteLen, srcBytes, usage);
+  }
+
+  // -
+
+private:
+  void BufferSubDataImpl(GLenum target, WebGLsizeiptr dstByteOffset,
+                         uint64_t srcDataLen, const uint8_t* srcData) {
+    if (!ValidateNonNegative("dstByteOffset", dstByteOffset)) return;
+
+    const auto buffer = BufferByTarget(target);
+    if (!buffer) return;
+    buffer->mInner->BufferSubData(uint64_t(dstByteOffset), srcDataLen, srcData);
+  }
+
+public:
+  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
+                     const dom::ArrayBufferView& src, GLuint srcElemOffset = 0,
+                     GLuint srcElemCountOverride = 0) {
+    uint64_t srcByteLen;
+    uint8_t* srcBytes;
+    if (!ValidateArrayBufferView(src, srcElemOffset, srcElemCountOverride, &srcBytes,
+                                 &srcByteLen)) {
+      return;
+    }
+    BufferSubDataImpl(target, dstByteOffset, srcByteLen, srcBytes);
+  }
+
+  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
+                     const dom::ArrayBuffer& src) {
+    uint64_t srcByteLen;
+    uint8_t* srcBytes;
+    GetLengthAndData(src, &srcByteLen, &srcBytes);
+    BufferSubDataImpl(target, dstByteOffset, srcByteLen, srcBytes);
+  }
+
+  // -
+
+  void CopyBufferSubData(const GLenum srcTarget, const GLenum destTarget,
+                         const GLintptr srcOffset, const GLintptr destOffset,
+                         const GLsizeiptr size) {
+    if (!ValidateNonNegative("srcOffset", srcOffset) ||
+        !ValidateNonNegative("destOffset", destOffset) ||
+        !ValidateNonNegative("size", size)) {
+      return;
+    }
+
+    const auto src = BufferByTarget(srcTarget);
+    if (!src) return;
+    const auto dest = BufferByTarget(destTarget);
+    if (!dest) return;
+
+    dest->mInner->CopyBufferSubData(uint64_t(destOffset), *src->mInner,
+                                    uint64_t(srcOffset), uint64_t(size));
+  }
+
+  // -
+
+  void GetBufferSubData(GLenum target, GLintptr srcByteOffset,
+                        const dom::ArrayBufferView& destData,
+                        GLuint destElemOffset, GLuint destElemCountOverride)
+  {
+    if (!ValidateNonNegative("srcByteOffset", srcByteOffset)) return;
+
+    const auto buffer = BufferByTarget(target);
+    if (!buffer) return;
+
+    uint64_t destByteLen;
+    uint8_t* destBytes;
+    if (!ValidateArrayBufferView(dstData, dstElemOffset, dstElemCountOverride, &destBytes,
+                                 &destByteLen)) {
+      return;
+    }
+
+    // -
+
+    if (mContext->mCompletedFenceId < mLastUpdateFenceId) {
+      mContext->GenerateWarning(
+          "Reading from a buffer without checking for previous"
+          " command completion likely causes pipeline stalls."
+          " Please use FenceSync.");
+    }
+
+    // -
+
+    buffer->mInner->GetBufferSubData(srcByteOffset, destBytes, destByteLen);
+  }
+
+  // ----------------------------------
+
+  RefPtr<VertexArrayJS> mDefaultVao;
+  RefPtr<VertexArrayJS> mBoundVao;
+
+  void BindVertexArray(VertexArrayJS* obj) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (!obj) {
+      obj = mDefaultVao.get();
+    }
+
+    if (!ValidateObject(*obj)) {
+      ErrorInvalidOperation("bindVertexArray: Invalid object.");
+      return;
+    }
+
+    mBoundVao->OnBindChange(-1);
+    mBoundVao = obj;
+    mBoundVao->mTarget = LOCAL_GL_VERTEX_ARRAY;
+    mBoundVao->OnBindChange(+1);
+
+    context->BindVertexArray(*mBoundVao->mInner);
+  }
+
+  // ----------------------------------
+
+  RefPtr<TransformFeedbackJS> mDefaultTfo;
+  RefPtr<TransformFeedbackJS> mBoundTfo;
+
+  void BindTransformFeedback(const GLenum target, TransformFeedbackJS* obj) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (target != LOCAL_GL_TRANSFORM_FEEDBACK) {
+      ErrorInvalidEnum("Bad target.");
+      return;
+    }
+
+    if (!obj) {
+      obj = mDefaultTfo.get();
+    }
+
+    if (!ValidateObject(*obj)) {
+      ErrorInvalidOperation("Invalid object.");
+      return;
+    }
+
+    if (mBoundTfo->mStatus == TransformFeedbackJS::Status::Active) {
+      ErrorInvalidOperation("Current bound object is active and unpaused.");
+      return;
+    }
+
+    mBoundTfo->OnBindChange(-1);
+    mBoundTfo = obj;
+    mBoundTfo->mTarget = LOCAL_GL_TRANSFORM_FEEDBACK;
+    mBoundTfo->OnBindChange(+1);
+
+    context->BindTransformFeedback(obj->mInner);
+  }
+
+  void BeginTransformFeedback(const GLenum primMode) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    switch (primMode) {
+      case LOCAL_GL_POINTS:
+      case LOCAL_GL_LINES:
+      case LOCAL_GL_TRIANGLES:
+        break;
+      default:
+        ErrorInvalidEnum("Bad primMode.");
+        return;
+    }
+
+    if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Inactive) {
+      ErrorInvalidOperation("Already active.");
+      return;
+    }
+
+    context->BeginTransformFeedback(mBoundTfo->mInner);
+  }
+
+  void EndTransformFeedback();
+  void PauseTransformFeedback();
+  void ResumeTransformFeedback();
+
+  // ----------------------------------
 
   NS_IMETHOD Reset() override {
     /* (InitializeWithSurface) */
@@ -394,30 +974,6 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   }
 
   // -
-
-  const auto& CurFuncScope() const { return *mFuncScope; }
-  const char* FuncName() const;
-
-  class FuncScope final {
-   public:
-    const WebGLContext& mWebGL;
-    const char* const mFuncName;
-
-   private:
-#ifdef DEBUG
-    mutable bool mStillNeedsToCheckContextLost = true;
-#endif
-
-   public:
-    FuncScope(const WebGLContext& webgl, const char* funcName);
-    ~FuncScope();
-
-    void OnCheckContextLost() const {
-#ifdef DEBUG
-      mStillNeedsToCheckContextLost = false;
-#endif
-    }
-  };
 
   void SynthesizeGLError(GLenum err) const;
   void SynthesizeGLError(GLenum err, const char* fmt, ...) const
@@ -558,60 +1114,339 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   void GetExtension(JSContext* cx, const nsAString& name,
                     JS::MutableHandle<JSObject*> retval,
                     dom::CallerType callerType, ErrorResult& rv);
-  void AttachShader(WebGLProgram& prog, WebGLShader& shader);
+
+  // -
+
+private:
+  bool IsObj(const ObjectJS* const obj) const {
+    return obj && obj->Context() == this;
+  }
+
+public:
+  auto_AddRefed<BufferJS> CreateBuffer() {
+    if (!GetContext()) return nullptr;
+    return new BufferJS(this);
+  }
+
+  auto_AddRefed<FramebufferJS> CreateFramebuffer() {
+    if (!GetContext()) return nullptr;
+    return new FramebufferJS(this);
+  }
+
+  auto_AddRefed<ProgramJS> CreateProgram() {
+    const auto context = GetContext();
+    if (!context) return nullptr;
+
+    const auto aobj = context->CreateProgram();
+    return new ProgramJS(this, aobj);
+  }
+
+  auto_AddRefed<QueryJS> CreateQuery() {
+    const auto inner = GetInner();
+    if (!inner) return nullptr;
+
+    const auto aobj = inner->CreateQuery();
+    return new QueryJS(this, aobj);
+  }
+
+  auto_AddRefed<RenderbufferJS> CreateRenderbuffer() {
+    if (!GetContext()) return nullptr;
+    return new RenderbufferJS(this);
+  }
+
+  auto_AddRefed<ShaderJS> CreateShader(const GLenum type) {
+    const auto context = GetContext();
+    if (!context) return nullptr;
+
+    const auto aobj = context->CreateProgram(type);
+    return new ProgramJS(this, aobj);
+  }
+
+  auto_AddRefed<SamplerJS> CreateSampler() {
+    if (!GetContext()) return nullptr;
+    return new SamplerJS(this);
+  }
+
+  auto_AddRefed<TextureJS> CreateTexture() {
+    if (!GetContext()) return nullptr;
+    return new TextureJS(this);
+  }
+
+  auto_AddRefed<TransformFeedbackJS> CreateTransformFeedback() {
+    if (!GetContext()) return nullptr;
+    return new TransformFeedbackJS(this);
+  }
+
+  auto_AddRefed<VertexArrayJS> CreateVertexArray() {
+    if (!GetContext()) return nullptr;
+    return new VertexArrayJS(this);
+  }
+
+  // -
+
+private:
+  void DeleteObj(ObjectJS* const obj) {
+    if (!IsObj(obj)) return;
+    obj->MarkDeletedOrLost();
+  }
+public:
+  void DeleteBuffer(BufferJS* const obj) { DeleteObj(obj); }
+  void DeleteFramebuffer(FramebufferJS* const obj) { DeleteObj(obj); }
+  void DeleteProgram(ProgramJS* const obj) { DeleteObj(obj); }
+  void DeleteQuery(QueryJS* const obj) { DeleteObj(obj); }
+  void DeleteRenderbuffer(RenderbufferJS* const obj) { DeleteObj(obj); }
+  void DeleteSampler(SamplerJS* const obj) { DeleteObj(obj); }
+  void DeleteShader(ShaderJS* const obj) { DeleteObj(obj); }
+  void DeleteSync(SyncJS* const obj) { DeleteObj(obj); }
+  void DeleteTexture(TextureJS* const obj) { DeleteObj(obj); }
+  void DeleteTransformFeedback(TransformFeedbackJS* const obj) { DeleteObj(obj); }
+  void DeleteVertexArray(VertexArrayJS* const obj) { DeleteObj(obj); }
+
+  // -
+
+  bool IsBuffer(const BufferJS* const obj) const {
+    return IsObj(obj) && obj->Target();
+  }
+  bool IsFramebuffer(const FramebufferJS* const obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+  bool IsProgram(const ProgramJS* const obj) const {
+   return IsObj(obj);
+  }
+  bool IsQuery(const QueryJS* const obj) const {
+   return IsObj(obj);
+  }
+  bool IsRenderbuffer(const RenderbufferJS* const obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+  bool IsSsampler(const SamplerJS* const obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+  bool IsShader(const ShaderJS* const obj) const {
+   return IsObj(obj);
+  }
+  bool IsSync(const SyncJS* const obj) const {
+   return IsObj(obj);
+  }
+  bool IsTexture(const TextureJS* obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+  bool IsTransformFeedback(const TransformFeedbackJS* obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+  bool IsVertexArray(const VertexArrayJS* const obj) const {
+   return IsObj(obj) && obj->Target();
+  }
+
+  // -------------------------------
+  // Narrow the API:
+
+  void BlendEquation(GLenum mode) {
+    BlendEquationSeparate(mode, mode);
+  }
+  void BlendFunc(GLenum sfactor, GLenum dfactor) {
+    BlendFuncSeparate(sfactor, dfactor, sfactor, dfactor);
+  }
+  void StencilFunc(GLenum func, GLint ref, GLuint mask) {
+    StencilFuncSeparate(LOCAL_GL_FRONT_AND_BACK, func, ref, mask);
+  }
+  void StencilMask(GLuint mask) {
+    StencilMaskSeparate(LOCAL_GL_FRONT_AND_BACK, mask);
+  }
+  void StencilOp(GLenum sfail, GLenum dpfail, GLenum dppass) {
+    StencilOpSeparate(LOCAL_GL_FRONT_AND_BACK, sfail, dpfail, dppass);
+  }
+
+  // ----------------------------
+  // Forward directly to mInner:
+
+  void BlendColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a) {
+    mInner->BlendColor(r, g, b, a);
+  }
+  void BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
+    mInner->BlendEquationSeparate(modeRGB, modeAlpha);
+  }
+  void BlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha,
+                         GLenum dstAlpha) {
+    mInner->BlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+  }
+  void Clear(GLbitfield mask) { mInner->Clear(mDrawFramebuffer.get(), mask); }
+  void ClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a) {
+    mInner->ClearColor(r, g, b, a);
+  }
+  void ClearDepth(GLclampf v) { mInner->ClearDepth(v); }
+  void ClearStencil(GLint v) { mInner->ClearStencil(v); }
+  void ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b,
+                 WebGLboolean a) { mInner->ColorMask(r, g, b, a); }
+  void CullFace(GLenum face) { mInner->CullFace(face); }
+  void DepthFunc(GLenum func) { mInner->DepthFunc(func); }
+  void DepthMask(WebGLboolean b) { mInner->DepthMask(b); }
+  void DepthRange(GLclampf zNear, GLclampf zFar) { mInner->DepthRange(zNear, zFar); }
+  void DisableVertexAttribArray(GLuint index) {
+    mInner->SetEnabledVertexAttribArray(index, false);
+  }
+  void EnableVertexAttribArray(GLuint index) {
+    mInner->SetEnabledVertexAttribArray(index, true);
+  }
+  void Flush() { mInner->Flush(); }
+  void Finish() { mInner->Finish(); }
+  void FrontFace(GLenum mode) { mInner->FrontFace(mode); }
+  void Hint(GLenum target, GLenum mode) { mInner->Hint(target, mode); }
+  void LineWidth(GLfloat width) { mInner->LineWidth(width); }
+  void LoseContext() {
+    mInner->LoseContext();
+  }
+  void PolygonOffset(GLfloat factor, GLfloat units) { mInner->PolygonOffset(factor, units); }
+  void RestoreContext() {
+    mInner->RestoreContext();
+  }
+  void SampleCoverage(GLclampf value, WebGLboolean invert) { mInner->SampleCoverage(value, invert); }
+  void Scissor(GLint x, GLint y, GLsizei width, GLsizei height) {
+    mInner->Scissor(x, y, width, height);
+  }
+  void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask) {
+    mInner->StencilFuncSeparate(face, func, ref, mask);
+  }
+  void StencilMaskSeparate(GLenum face, GLuint mask) {
+    mInner->StencilMaskSeparate(face, mask);
+  }
+  void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
+                         GLenum dppass) {
+    mInner->StencilOpSeparate(face, sfail, dpfail, dppass);
+  }
+  void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w) {
+    const float data[4] = {x, y, z, w};
+    mInner->VertexAttrib4v(index, webgl::AttribBaseType::Float, (const uint8_t*)data);
+  }
+  void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w) {
+    const int32_t data[4] = {x, y, z, w};
+    mInner->VertexAttrib4v(index, webgl::AttribBaseType::Int, (const uint8_t*)data);
+  }
+  void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w) {
+    const uint32_t data[4] = {x, y, z, w};
+    mInner->VertexAttrib4v(index, webgl::AttribBaseType::Uint, (const uint8_t*)data);
+  }
+  void Viewport(GLint x, GLint y, GLsizei width, GLsizei height) {
+    mInner->Viewport(x, y, width, height);
+  }
+
+  // ---------------------------------
+  // Nontrivial entrypoints:
+
   void BindAttribLocation(WebGLProgram& prog, GLuint location,
                           const nsAString& name);
-  void BindFramebuffer(GLenum target, WebGLFramebuffer* fb);
-  void BindRenderbuffer(GLenum target, WebGLRenderbuffer* fb);
-  void BindVertexArray(WebGLVertexArray* vao);
-  void BlendColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a);
-  void BlendEquation(GLenum mode);
-  void BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha);
-  void BlendFunc(GLenum sfactor, GLenum dfactor);
-  void BlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha,
-                         GLenum dstAlpha);
-  GLenum CheckFramebufferStatus(GLenum target);
-  void Clear(GLbitfield mask);
-  void ClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a);
-  void ClearDepth(GLclampf v);
-  void ClearStencil(GLint v);
-  void ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b,
-                 WebGLboolean a);
-  void CompileShader(WebGLShader& shader);
-  void CompileShaderANGLE(WebGLShader* shader);
-  void CompileShaderBypass(WebGLShader* shader, const nsCString& shaderSource);
-  already_AddRefed<WebGLFramebuffer> CreateFramebuffer();
-  already_AddRefed<WebGLProgram> CreateProgram();
-  already_AddRefed<WebGLRenderbuffer> CreateRenderbuffer();
-  already_AddRefed<WebGLShader> CreateShader(GLenum type);
-  already_AddRefed<WebGLVertexArray> CreateVertexArray();
-  void CullFace(GLenum face);
-  void DeleteFramebuffer(WebGLFramebuffer* fb);
-  void DeleteProgram(WebGLProgram* prog);
-  void DeleteRenderbuffer(WebGLRenderbuffer* rb);
-  void DeleteShader(WebGLShader* shader);
-  void DeleteVertexArray(WebGLVertexArray* vao);
-  void DepthFunc(GLenum func);
-  void DepthMask(WebGLboolean b);
-  void DepthRange(GLclampf zNear, GLclampf zFar);
-  void DetachShader(WebGLProgram& prog, const WebGLShader& shader);
+
+  void BindFramebuffer(const GLenum target, FramebufferJS* const obj) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (obj && !IsFramebuffer(obj)) {
+      ErrorInvalidOperation("bindFramebuffer: Invalid object.");
+      return;
+    }
+    switch (target) {
+    case LOCAL_GL_FRAMEBUFFER:
+      mBoundDrawFbo = obj;
+      mBoundReadFbo = obj;
+      return;
+    case LOCAL_GL_DRAW_FRAMEBUFFER:
+      if (!IsWebGL2()) break;
+      mBoundDrawFbo = obj;
+      return;
+    case LOCAL_GL_READ_FRAMEBUFFER:
+      if (!IsWebGL2()) break;
+      mBoundReadFbo = obj;
+      return;
+    }
+    ErrorInvalidEnum("bindFramebuffer: Bad target.");
+    return;
+  }
+
+  void BindRenderbuffer(const GLenum target, RenderbufferJS* const obj) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (target != LOCAL_GL_RENDERBUFFER) {
+      ErrorInvalidEnum("bindRenderbuffer: Bad `target`.");
+      return;
+    }
+    if (obj && !IsRenderbuffer(obj)) {
+      ErrorInvalidOperation("bindRenderbuffer: Invalid object.");
+      return;
+    }
+    mBoundRenderbuffer = obj;
+  }
+
+  Maybe<FramebufferJS*> GetFbByTarget(const char* const funcName, const GLenum target) const {
+    switch (target) {
+    case LOCAL_GL_FRAMEBUFFER:
+      return Some(mBoundDrawFbo.get());
+    case LOCAL_GL_DRAW_FRAMEBUFFER:
+      if (!IsWebGL2()) break;
+      return Some(mBoundDrawFbo.get());
+    case LOCAL_GL_READ_FRAMEBUFFER:
+      if (!IsWebGL2()) break;
+      return Some(mBoundReadFbo.get());
+    }
+    ErrorInvalidEnum("%s: Bad target.", funcName);
+    return {};
+  }
+
+  GLenum CheckFramebufferStatus(GLenum target) {
+    const auto context = GetContext();
+    if (!context) return 0;
+    const auto maybeFb = GetFbByTarget("checkFramebufferStatus", target);
+    if (!maybeFb) return 0;
+    const auto& fb = maybeFb.value();
+    if (!fb) return LOCAL_GL_FRAMEBUFFER_COMPLETE;
+
+    return context->CheckFramebufferStatus(*fb);
+  }
+
+  void CompileShader(ShaderJS& shader) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    context->CompileShader(shader->mInner, shader->mSourceText);
+  }
+
+
+  void AttachShader(ProgramJS& prog, ShaderJS& shader) {
+    if (!GetContext()) return;
+    if (!IsProgram(&prog) || !IsShader(&shader)) return;
+    auto& slot = prog.mShaders[shader.mType];
+    if (slot) {
+      ErrorInvalidOperation("attachShader: Shader of that type already attached.");
+      return;
+    }
+    slot = shader;
+  }
+
+  void DetachShader(ProgramJS& prog, const ShaderJS& shader) {
+    if (!GetContext()) return;
+    if (!IsProgram(&prog) || !IsShader(&shader)) return;
+  }
+
+  void GetAttachedShaders(const ProgramJS& prog,
+                          dom::Nullable<nsTArray<RefPtr<ShaderJS>>>& retval);
+
+
+
+
+
   void DrawBuffers(const dom::Sequence<GLenum>& buffers);
-  void Flush();
-  void Finish();
+
   void FramebufferRenderbuffer(GLenum target, GLenum attachment,
                                GLenum rbTarget, WebGLRenderbuffer* rb);
   void FramebufferTexture2D(GLenum target, GLenum attachment,
                             GLenum texImageTarget, WebGLTexture* tex,
                             GLint level);
 
-  void FrontFace(GLenum mode);
   already_AddRefed<WebGLActiveInfo> GetActiveAttrib(const WebGLProgram& prog,
                                                     GLuint index);
   already_AddRefed<WebGLActiveInfo> GetActiveUniform(const WebGLProgram& prog,
                                                      GLuint index);
 
-  void GetAttachedShaders(const WebGLProgram& prog,
-                          dom::Nullable<nsTArray<RefPtr<WebGLShader>>>& retval);
 
   GLint GetAttribLocation(const WebGLProgram& prog, const nsAString& name);
   JS::Value GetBufferParameter(GLenum target, GLenum pname);
@@ -643,7 +1478,6 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
     retval.set(GetProgramParameter(prog, pname));
   }
 
-  void GetProgramInfoLog(const WebGLProgram& prog, nsACString& retval);
   void GetProgramInfoLog(const WebGLProgram& prog, nsAString& retval);
   JS::Value GetRenderbufferParameter(GLenum target, GLenum pname);
 
@@ -678,20 +1512,8 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   already_AddRefed<WebGLUniformLocation> GetUniformLocation(
       const WebGLProgram& prog, const nsAString& name);
 
-  void Hint(GLenum target, GLenum mode);
-
-  bool IsBuffer(const WebGLBuffer* obj);
-  bool IsFramebuffer(const WebGLFramebuffer* obj);
-  bool IsProgram(const WebGLProgram* obj);
-  bool IsRenderbuffer(const WebGLRenderbuffer* obj);
-  bool IsShader(const WebGLShader* obj);
-  bool IsTexture(const WebGLTexture* obj);
-  bool IsVertexArray(const WebGLVertexArray* obj);
-
-  void LineWidth(GLfloat width);
   void LinkProgram(WebGLProgram& prog);
   void PixelStorei(GLenum pname, GLint param);
-  void PolygonOffset(GLfloat factor, GLfloat units);
 
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
   void EnsureVRReady();
@@ -745,16 +1567,8 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
                                 GLsizei height);
 
  public:
-  void SampleCoverage(GLclampf value, WebGLboolean invert);
-  void Scissor(GLint x, GLint y, GLsizei width, GLsizei height);
   void ShaderSource(WebGLShader& shader, const nsAString& source);
-  void StencilFunc(GLenum func, GLint ref, GLuint mask);
-  void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
-  void StencilMask(GLuint mask);
-  void StencilMaskSeparate(GLenum face, GLuint mask);
-  void StencilOp(GLenum sfail, GLenum dpfail, GLenum dppass);
-  void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
-                         GLenum dppass);
+
 
   //////
 
@@ -943,65 +1757,12 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   bool ValidateUniformLocation(const char* info, WebGLUniformLocation* loc);
   bool ValidateSamplerUniformSetter(const char* info, WebGLUniformLocation* loc,
                                     GLint value);
-  void Viewport(GLint x, GLint y, GLsizei width, GLsizei height);
   // -----------------------------------------------------------------------------
   // WEBGL_lose_context
  public:
-  void LoseContext();
-  void RestoreContext();
 
   // -----------------------------------------------------------------------------
   // Buffer Objects (WebGLContextBuffers.cpp)
-  void BindBuffer(GLenum target, WebGLBuffer* buffer);
-  void BindBufferBase(GLenum target, GLuint index, WebGLBuffer* buf);
-  void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buf,
-                       WebGLintptr offset, WebGLsizeiptr size);
-
- private:
-  void BufferDataImpl(GLenum target, size_t dataLen, const uint8_t* data,
-                      GLenum usage);
-
- public:
-  void BufferData(GLenum target, WebGLsizeiptr size, GLenum usage);
-  void BufferData(GLenum target,
-                  const dom::Nullable<dom::ArrayBuffer>& maybeSrc,
-                  GLenum usage);
-  void BufferData(GLenum target, const dom::ArrayBufferView& srcData,
-                  GLenum usage, GLuint srcElemOffset = 0,
-                  GLuint srcElemCountOverride = 0);
-
- private:
-  void BufferSubDataImpl(GLenum target, WebGLsizeiptr dstByteOffset,
-                         size_t srcDataLen, const uint8_t* srcData);
-
- public:
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::ArrayBufferView& src, GLuint srcElemOffset = 0,
-                     GLuint srcElemCountOverride = 0);
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::ArrayBuffer& src);
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::SharedArrayBuffer& src);
-
-  already_AddRefed<WebGLBuffer> CreateBuffer();
-  void DeleteBuffer(WebGLBuffer* buf);
-
- protected:
-  // bound buffer state
-  WebGLRefPtr<WebGLBuffer> mBoundArrayBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundCopyReadBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundCopyWriteBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundPixelPackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundPixelUnpackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundTransformFeedbackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundUniformBuffer;
-
-  std::vector<IndexedBufferBinding> mIndexedUniformBufferBindings;
-
-  WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTarget(GLenum target);
-  WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTargetIndexed(GLenum target,
-                                                         GLuint index);
-
   // -----------------------------------------------------------------------------
   // Queries (WebGL2ContextQueries.cpp)
  protected:
@@ -1344,8 +2105,6 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   void DrawElementsInstanced(GLenum mode, GLsizei vertexCount, GLenum type,
                              WebGLintptr byteOffset, GLsizei instanceCount);
 
-  void EnableVertexAttribArray(GLuint index);
-  void DisableVertexAttribArray(GLuint index);
 
   JS::Value GetVertexAttrib(JSContext* cx, GLuint index, GLenum pname,
                             ErrorResult& rv);
@@ -1356,10 +2115,6 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   }
 
   WebGLsizeiptr GetVertexAttribOffset(GLuint index, GLenum pname);
-
-  ////
-
-  void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
 
   ////
 
@@ -1721,8 +2476,8 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   //////
  public:
   bool ValidateObjectAllowDeleted(const char* const argName,
-                                  const WebGLContextBoundObject& object) {
-    if (!object.IsCompatibleWithContext(this)) {
+                                  const ObjectJS& object) const {
+    if (object->Context() != this) {
       ErrorInvalidOperation(
           "%s: Object from different WebGL context (or older"
           " generation of this one) passed as argument.",
@@ -1734,7 +2489,7 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   }
 
   bool ValidateObject(const char* const argName,
-                      const WebGLDeletableObject& object,
+                      const ObjectJS& object,
                       const bool isShaderOrProgram = false) {
     if (!ValidateObjectAllowDeleted(argName, object)) return false;
 
@@ -1815,7 +2570,6 @@ class WebGLContext : public nsICanvasRenderingContextInternal,
   WebGLRefPtr<WebGLFramebuffer> mBoundDrawFramebuffer;
   WebGLRefPtr<WebGLFramebuffer> mBoundReadFramebuffer;
   WebGLRefPtr<WebGLRenderbuffer> mBoundRenderbuffer;
-  WebGLRefPtr<WebGLTransformFeedback> mBoundTransformFeedback;
   WebGLRefPtr<WebGLVertexArray> mBoundVertexArray;
 
   LinkedList<WebGLBuffer> mBuffers;

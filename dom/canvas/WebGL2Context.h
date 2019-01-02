@@ -35,13 +35,6 @@ class WebGL2Context : public WebGLContext {
   virtual JSObject* WrapObject(JSContext* cx,
                                JS::Handle<JSObject*> givenProto) override;
 
-  // -------------------------------------------------------------------------
-  // Buffer objects - WebGL2ContextBuffers.cpp
-
-  void CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
-                         GLintptr readOffset, GLintptr writeOffset,
-                         GLsizeiptr size);
-
  private:
   template <typename BufferT>
   void GetBufferSubDataT(GLenum target, GLintptr offset, const BufferT& data);
@@ -384,10 +377,6 @@ class WebGL2Context : public WebGLContext {
   // -------------------------------------------------------------------------
   // Transform Feedback - WebGL2ContextTransformFeedback.cpp
 
-  already_AddRefed<WebGLTransformFeedback> CreateTransformFeedback();
-  void DeleteTransformFeedback(WebGLTransformFeedback* tf);
-  bool IsTransformFeedback(const WebGLTransformFeedback* tf);
-  void BindTransformFeedback(GLenum target, WebGLTransformFeedback* tf);
   void BeginTransformFeedback(GLenum primitiveMode);
   void EndTransformFeedback();
   void PauseTransformFeedback();
