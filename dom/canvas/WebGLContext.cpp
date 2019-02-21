@@ -2354,15 +2354,33 @@ nsresult webgl::AvailabilityRunnable::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // XPCOM goop
 
+template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const std::vector<IndexedBufferBinding>& field,
+                                 const std::vector<RefPtr<T>>& field,
                                  const char* name, uint32_t flags) {
   for (const auto& cur : field) {
-    ImplCycleCollectionTraverse(callback, cur.mBufferBinding, name, flags);
+    ImplCycleCollectionTraverse(callback, cur, name, flags);
   }
 }
 
-void ImplCycleCollectionUnlink(std::vector<IndexedBufferBinding>& field) {
+template<typename T>
+void ImplCycleCollectionUnlink(std::vector<RefPtr<T>>& field) {
+  field.clear();
+}
+
+// -
+
+template<typename T>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::unordered_map<GLenum, RefPtr<T>>& field,
+                                 const char* name, uint32_t flags) {
+  for (const auto& pair : field) {
+    ImplCycleCollectionTraverse(callback, cur.second, name, flags);
+  }
+}
+
+template<typename T>
+void ImplCycleCollectionUnlink(std::unordered_map<GLenum, RefPtr<T>>& field) {
   field.clear();
 }
 
@@ -2373,14 +2391,9 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(WebGLContext)
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(
     WebGLContext, mCanvasElement, mOffscreenCanvas, mExtensions,
-    mBound2DTextures, mBoundCubeMapTextures, mBound3DTextures,
-    mBound2DArrayTextures, mBoundSamplers, mBoundArrayBuffer,
-    mBoundCopyReadBuffer, mBoundCopyWriteBuffer, mBoundPixelPackBuffer,
-    mBoundPixelUnpackBuffer, mBoundTransformFeedback,
-    mBoundTransformFeedbackBuffer, mBoundUniformBuffer, mCurrentProgram,
+    mBoundTexturesByTarget, mBoundBufferByTarget, mBoundSamplers, mCurrentProgram,
     mBoundDrawFramebuffer, mBoundReadFramebuffer, mBoundRenderbuffer,
-    mBoundVertexArray, mDefaultVertexArray, mQuerySlot_SamplesPassed,
-    mQuerySlot_TFPrimsWritten, mQuerySlot_TimeElapsed)
+    mBoundVao, mDefaultVao, mQueryByTarget, mBoundUbos, mBoundTfo, mDefaultTfo)
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebGLContext)
   NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
@@ -2391,5 +2404,49 @@ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(WebGLContext)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports,
                                    nsICanvasRenderingContextInternal)
 NS_INTERFACE_MAP_END
+
+// -
+
+#define _(X) \
+    NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(X, AddRef) \
+    NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(X, Release) \
+    \
+    JSObject* X::WrapObject(JSContext* cx, \
+                            JS::Handle<JSObject*> givenProto) { \
+      return dom::X##_Binding::Wrap(cx, this, givenProto); \
+    }
+
+_(webgl::BufferJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::BufferJS)
+
+_(webgl::FramebufferJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(webgl::FramebufferJS, mAttachmentsByEnum)
+
+_(webgl::ProgramJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(webgl::ProgramJS, mShadersByType)
+
+_(webgl::QueryJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::QueryJS)
+
+_(webgl::RenderbufferJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::RenderbufferJS)
+
+_(webgl::SamplerJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::SamplerJS)
+
+_(webgl::ShaderJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::ShaderJS)
+
+_(webgl::SyncJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::SyncJS)
+
+_(webgl::TextureJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(webgl::TextureJS)
+
+_(webgl::TransformFeedbackJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(webgl::TransformFeedbackJS, mAttribs)
+
+_(webgl::VertexArrayJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(webgl::VertexArrayJS, mIndexBuffer, mAttribs)
 
 }  // namespace mozilla

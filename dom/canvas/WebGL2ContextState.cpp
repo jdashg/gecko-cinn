@@ -135,60 +135,6 @@ JS::Value WebGL2Context::GetParameter(JSContext* cx, GLenum pname,
       return JS::DoubleValue(static_cast<double>(val));
     }
 
-    case LOCAL_GL_COPY_READ_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundCopyReadBuffer.get(), rv);
-
-    case LOCAL_GL_COPY_WRITE_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundCopyWriteBuffer.get(), rv);
-
-    case LOCAL_GL_PIXEL_PACK_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundPixelPackBuffer.get(), rv);
-
-    case LOCAL_GL_PIXEL_UNPACK_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundPixelUnpackBuffer.get(), rv);
-
-    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundTransformFeedbackBuffer.get(), rv);
-
-    case LOCAL_GL_UNIFORM_BUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundUniformBuffer.get(), rv);
-
-    // DRAW_FRAMEBUFFER_BINDING is the same as FRAMEBUFFER_BINDING.
-    case LOCAL_GL_READ_FRAMEBUFFER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundReadFramebuffer.get(), rv);
-
-    case LOCAL_GL_SAMPLER_BINDING:
-      return WebGLObjectAsJSValue(cx, mBoundSamplers[mActiveTexture].get(), rv);
-
-    case LOCAL_GL_TEXTURE_BINDING_2D_ARRAY:
-      return WebGLObjectAsJSValue(
-          cx, mBound2DArrayTextures[mActiveTexture].get(), rv);
-
-    case LOCAL_GL_TEXTURE_BINDING_3D:
-      return WebGLObjectAsJSValue(cx, mBound3DTextures[mActiveTexture].get(),
-                                  rv);
-
-    case LOCAL_GL_TRANSFORM_FEEDBACK_BINDING: {
-      const WebGLTransformFeedback* tf = mBoundTransformFeedback;
-      if (tf == mDefaultTransformFeedback) {
-        tf = nullptr;
-      }
-      return WebGLObjectAsJSValue(cx, tf, rv);
-    }
-
-    case LOCAL_GL_VERTEX_ARRAY_BINDING: {
-      WebGLVertexArray* vao = (mBoundVertexArray != mDefaultVertexArray)
-                                  ? mBoundVertexArray.get()
-                                  : nullptr;
-      return WebGLObjectAsJSValue(cx, vao, rv);
-    }
-
-    case LOCAL_GL_VERSION:
-      return StringValue(cx, "WebGL 2.0", rv);
-
-    case LOCAL_GL_SHADING_LANGUAGE_VERSION:
-      return StringValue(cx, "WebGL GLSL ES 3.00", rv);
-
     default:
       return WebGLContext::GetParameter(cx, pname, rv);
   }

@@ -26,6 +26,8 @@ public:
     { }
 };
 
+// -------------------------------------
+
 class ABuffer : public AObject
 {
 public:
@@ -35,20 +37,99 @@ public:
         : AObject(context)
         , mIsIndexBuffer(isIndexBuffer)
     { }
+    /// !usage => BufferSubData, else ignore dstByteOffset.
+    virtual void BufferData(GLenum usage, uint64_t dstByteOffset, uint64_t srcDataLen, const uint8_t* srcData) = 0;
 
-    virtual void BufferData(GLenum usage, uint64_t srcDataLen, const uint8_t* srcData) = 0;
-    virtual void BufferSubData(uint64_t dstByteOffset, uint64_t srcDataLen, const uint8_t* srcData) = 0;
     virtual void CopyBufferSubData(uint64_t destOffset, const ABuffer& asrc, uint64_t srcOffset,
                                     uint64_t size) = 0;
     virtual void GetBufferSubData(uint64_t srcOffset, uint8_t* dest, uint64_t size) const = 0;
 };
 
+class ATransformFeedback : public AObject
+{
+public:
+    explicit ATransformFeedback(const AContext* const context)
+        : AObject(context)
+    { }
+};
+
 class AVertexArray : public AObject
 {
+    RefPtr<ABuffer> mIndexBuffer;
 public:
     explicit AVertexArray(const AContext* const context)
         : AObject(context)
     { }
+};
+
+// -------------------------------------
+
+class AFramebuffer : public AObject
+{
+public:
+    explicit AFramebuffer(const AContext* const context)
+        : AObject(context)
+    { }
+
+    virtual void FramebufferAttachment(GLenum attachment, RenderbufferGL*
+                                       TextureGL*, uint8_t mip, uint32_t z);
+};
+
+class ARenderbuffer : public AObject
+{
+public:
+    explicit ARenderbuffer(const AContext* const context)
+        : AObject(context)
+    { }
+
+    virtual void RenderbufferStorage(uint8_t samples, GLenum internalFormat,
+                                     uint32_t width, uint32_t height) = 0;
+};
+
+struct uvec2 final {
+    uint32_t x = 0;
+    uint32_t y = 0;
+};
+
+struct uvec3 final {
+    uint32_t x = 0;
+    uint32_t y = 0;
+    uint32_t z = 0;
+};
+
+class ATexture : public AObject
+{
+public:
+    explicit ATexture(const AContext* const context)
+        : AObject(context)
+    { }
+
+    virtual void GenerateMipmap(GLenum hint) = 0;
+    virtual void TexStorage(GLenum target, uint32_t levels, GLenum internalFormat,
+                            uvec3 size) = 0;
+
+    /**
+     * !internalFormat => *TexSubImage, offset ignored otherwise.
+     * !unpackType => CompressedTex*Image
+     */
+    virtual void TexImage(GLenum target, uint32_t level, GLenum internalFormat,
+                          uvec3 offset, uvec3 size,
+                          GLenum unpackFormat, GLenum unpackType,
+                          ABuffer*, const void* ptr, uint64_t dstDataLen) = 0;
+
+    /**
+     * !internalFormat => SubImage, destOffset ignored otherwise.
+     */
+    virtual void CopyTexImage(GLenum target, uint32_t level, GLenum internalFormat,
+                          uvec3 destOffset, uvec2 srcOffset, uvec2 size) = 0;
+};
+
+// -------------------------------------
+
+struct ShaderCompileInfo final
+{
+    bool pending = true;
+    bool success = false;
 };
 
 class AShader : public AObject
@@ -60,6 +141,16 @@ public:
         : AObject(context)
         , mType(type)
     { }
+
+    ShaderCompileInfo GetCompileInfo() = 0;
+};
+
+// -
+
+struct ProgramLinkInfo final
+{
+    bool pending = true;
+    bool success = false;
 };
 
 class AProgram : public AObject
@@ -68,48 +159,36 @@ public:
     explicit AProgram(const AContext* const context)
         : AObject(context)
     { }
+
+    virtual void BindAttribLocation(uint32_t index, const uint8_t* name,
+                            uint64_t nameLen) = 0;
+    virtual void LinkProgram(ShaderGL& vert, ShaderGL& frag) = 0;
+    const ProgramLinkInfo& LinkInfo() = 0;
 };
 
 // -
 
 class AContext : public VRefCounted
 {
-    virtual RefPtr<ABuffer> CreateBuffer(GLenum target) = 0;
-    virtual void BufferData(ABuffer&, GLenum target, GLenum usage, uint64_t srcDataLen,
-                                 const uint8_t* srcData) = 0;
-    virtual void BufferSubData(ABuffer&, GLenum target, uint64_t dstByteOffset,
-                               uint64_t srcDataLen, const uint8_t* srcData) = 0;
-
-
-    virtual RefPtr<AVertexArray> CreateVertexArray() = 0;
-    virtual void BindVertexArray(AVertexArray& obj) = 0;
-    virtual void VertexAttribPointer(bool isFuncInt, uint32_t index,
-                             uint8_t channels, GLenum type, bool normalized,
-                             uint8_t stride, uint64_t byteOffset, ABuffer*) = 0;
-
-    virtual void SetEnabledVertexAttribArray(uint32_t index, bool val) = 0;
-    virtual void VertexAttrib4v(GLuint index, webgl::AttribBaseType type,
-                           const uint8_t* data) = 0;
+    // todo
 };
 
-class ContextDispatched final : public VRefCounted
-{
-
-};
-
-// -
+// -------------------------------------
 
 class ContextGL final : public AContext
 {
-    RefPtr<AFramebuffer> mDrawFbo;
+    RefPtr<AFramebuffer> mFbo;
     RefPtr<AVertexArray> mVao;
     RefPtr<AProgram> mProgram;
+
+    typedef uint64_t HandleT;
+
+    std::unordered_map<HandleT, RefPtr<AObject>> mObjByHandle;
 
 public:
     void BlendEquationSeparate(GLenum rgb, GLenum a);
     void BlendFuncSeparate(GLenum srcRgb, GLenum dstRgb, GLenum srcA,
                                    GLenum dstA);
-    void PixelStorei(GLenum pname, uint32_t val);
     void SetEnabled(GLenum cap, bool val);
     void StencilFuncSeparate(GLenum face, GLenum func, GLint ref,
                                      GLuint mask);
@@ -117,6 +196,23 @@ public:
     void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
                                    GLenum dppass);
 
+    struct CLEAR_DESC final {
+        GLbitfield bits;
+        float r;
+        float g;
+        float b;
+        float a;
+        float d;
+        int32_t s;
+    };
+    void Clear(const CLEAR_DESC&);
+
+    struct CLEAR_BUFFER_DESC final {
+        webgl::AttribBaseType type;
+        GLenum attachment;
+        uint8_t data[sizeof(float)*4)];
+    };
+    void ClearBufferTv(const CLEAR_BUFFER_DESC&);
 
     void BindBufferRange(GLenum target, uint32_t index, BufferGL*, uint64_t offset,
                          uint64_t size);
@@ -124,8 +220,24 @@ public:
     void BindVertexArray(AVertexArray&) override;
     void UseProgram(AProgram&);
 
+    void UniformNTv(uint8_t N, webgl::AttribBaseType T, uint32_t index, uint64_t elemCount,
+                     const uint8_t* bytes, uint64_t byteCount);
+    void UniformMatrixAxBfv(uint8_t A, uint8_t B, uint32_t index, bool transpose,
+                               uint64_t elemCount,
+                               const uint8_t* bytes,  uint64_t byteCount);
+
     void SetEnabledVertexAttribArray(uint32_t index, bool val) override;
-    void VertexAttrib4v(uint32_t index, webgl::AttribBaseType type, const uint8_t* data) override;
+
+    struct VERTEX_ATTRIB_DESC final {
+        uint32_t index;
+        webgl::AttribBaseType type;
+        uint8_t data[sizeof(float)*4)];
+    };
+    void VertexAttrib4v(const VERTEX_ATTRIB_DESC&) override;
+
+    virtual void VertexAttribPointer(uint32_t index,
+                             uint8_t channels, GLenum type, bool normalized,
+                             uint8_t stride, uint64_t byteOffset, ABuffer*) = 0;
 
 private:
     RefPtr<ABuffer> CreateBuffer(bool isIndexBuffer) override {
@@ -141,76 +253,59 @@ private:
     // -
 
     RefPtr<FramebufferGL> CreateFramebuffer();
-    void FramebufferAttachment(FramebufferGL&, GLenum attachment, RenderbufferGL*
-                                       TextureGL*, uint8_t mip, uint32_t z);
-    void ReadPixels(AFramebuffer*, uint8_t readBuffer, uint32_t x, uint32_t y,
-                    uint32_t width, uint32_t height, GLenum format, GLenum type, ABuffer*,
-                    uint8_t* dstData, uint64_t dstDataLen);
+    void ReadPixels(uint8_t readBuffer, uvec2 offset, uvec2 size,
+                    GLenum format, GLenum type, ABuffer*,
+                    void* dstData, uint64_t dstDataLen);
 
-
-    void DrawArrays(GLenum mode, uint32_t first, uint32_t vertCount,
-                    uint32_t instanceCount, uint32_t drawBuffers);
+    struct DRAW_ARRAYS_DESC final {
+        GLenum mode;
+        uint32_t first;
+        uint32_t vertCount;
+        uint32_t instanceCount;
+        uint32_t drawBuffersBits;
+    };
+    void DrawArrays(const DRAW_ARRAYS_DESC&);
     void DrawElements(GLenum mode, uint32_t indexCount, GLenum type, uint64_t byteOffset,
-                      uint32_t instanceCount, uint32_t drawBuffers);
+                      uint32_t instanceCount, uint32_t drawBuffersBits);
 
 
     RefPtr<RenderbufferGL> CreateRenderbuffer();
-    void RenderbufferStorageMultisample(RenderbufferGL&, uint8_t samples,
-                                                GLenum internalFormat, uint32_t width,
-                                                uint32_t height);
-
-
-    void UniformNTv(uint8_t N, GLenum T, AUniformLocation&, const uint8_t* data,
-                            uint64_t elemCount);
-    void UniformMatrixAxBfv(uint8_t A, uint8_t B, AUniformLocation&,
-                                    bool transpose, const uint8_t* data,
-                                    uint64_t elemCount);
+    RefPtr<TextureGL> CreateTexture();
 
 
     RefPtr<ATransformFeedback> CreateTransformFeedback();
-    // Condensed Bind/Begin/Pause/Resume/End:
-    // 'Used' always means active and not paused, never bound otherwise.
-    void ResumeTransformFeedback(ATransformFeedback*, GLenum primMode);
-    void PauseTransformFeedback();
-
-
-    RefPtr<TextureGL> CreateTexture();
-    void GenerateMipmap(ATexture&, GLenum hint);
-
 
     RefPtr<ShaderGL> CompileShader(GLenum target, const uint8_t* source,
                                    uint64_t sourceLen);
     RefPtr<ProgramGL> CreateProgram();
-    void BindAttribLocation(ProgramGL&, uint32_t index, const uint8_t* name,
-                            uint64_t nameLen);
-    void LinkProgram(ProgramGL&, ShaderGL& vert, ShaderGL& frag);
 
     // Object getters are client-only, but other pnames are generally all returning some
     // 32-bit type. We could even represent this as a double if we want. It's all Number
     // to JS!
 };
 
-class BufferDispatch : public ABuffer {
-    ContextDispatch& context;
+class CommandBufferView final {
+public:
+    uint8_t* const mBegin;
+    uint8_t* const mEnd;
+private:
+    uint8_t* mItr = nullptr;
 
 public:
-    BufferDispatch(ContextDispatch& context)
-        : context(context)
-    {}
+    CommandBufferView(uint8_t* const begin, uint8_t* const end)
+        : mBegin(begin)
+        , mEnd(end)
+        , mItr(mBegin)
+    { }
 
-    auto AsDispatch() override { return this; }
+
 };
 
-class ContextDispatch : public AContext
-{
-    RefPtr<ABuffer> CreateBuffer() override {
-        return new BufferDispatch(this);
-    }
-
-    //void BufferData(BufferGL&, GLenum target, GLenum usage, uint64_t srcDataLen, const uint8_t* srcData);
-};
-
-
+template<typename T>
+struct Dispatchable {
+    Dispatchable() = 0;
+    static uint64_t Size();
+    static void
 
 } // namespace webgl
 } // namespace mozilla

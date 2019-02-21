@@ -396,32 +396,8 @@ public:
   }
 }
 
-class BufferJS
-    : public ObjectJS
-    , public nsWrapperCache
-{
-  friend class ContextJS;
-
-  RefPtr<ABuffer> mInnerRef;
-  WeakPtr<ABuffer> mInner;
-  size_t mNonTfUseCount = 0;
-  size_t mTfUseCount = 0;
-
-public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(BufferJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(BufferJS)
-  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-
-  explicit BufferJS(ContextJS* const context)
-    : ObjectJS(context)
-  { }
-
-  ~BufferJS() {
-    if (DtorShouldDelete()) {
-      mContext->DeleteBuffer(this);
-    }
-  }
-
+/*
+ *
   enum class BindingFor {
     NonTf,
     Tf,
@@ -444,6 +420,250 @@ public:
     *slot = next;
     if (*slot) {
       (*slot)->OnBindChange(boundFor, +1);
+    }
+  }
+  * */
+
+class BufferJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ABuffer> mInnerRef;
+  WeakPtr<ABuffer> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(BufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(BufferJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit BufferJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~BufferJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteBuffer(this);
+    }
+  }
+};
+
+class FramebufferJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<AFramebuffer> mInnerRef;
+  WeakPtr<AFramebuffer> mInner;
+
+  struct Attachable final {
+    RefPtr<RenderbufferJS> rb;
+    RefPtr<TextureJS> tex;
+  };
+
+  std::unordered_map<GLenum, Attachable> mAttachmentsByEnum;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(FramebufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(FramebufferJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit FramebufferJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~FramebufferJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteFramebuffer(this);
+    }
+  }
+
+  void ReleaseChildren() override {
+    mAttachmentsByEnum.clear();
+  }
+};
+
+class ProgramJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<AProgram> mInnerRef;
+  WeakPtr<AProgram> mInner;
+
+  std::unordered_map<GLenum, RefPtr<ShaderJS>> mShaderByType;
+
+  RefPtr<LinkInfoJS> mLinkInfo;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ProgramJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(ProgramJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit ProgramJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~ProgramJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteProgram(this);
+    }
+  }
+
+  void ReleaseChildren() override {
+    mShaderByType.clear();
+  }
+};
+
+class QueryJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<AQuery> mInnerRef;
+  WeakPtr<AQuery> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(QueryJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(QueryJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit QueryJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~QueryJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteQuery(this);
+    }
+  }
+};
+
+class RenderbufferJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ARenderbuffer> mInnerRef;
+  WeakPtr<ARenderbuffer> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(RenderbufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(RenderbufferJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit RenderbufferJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~RenderbufferJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteRenderbuffer(this);
+    }
+  }
+};
+
+class SamplerJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ASampler> mInnerRef;
+  WeakPtr<ASampler> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(SamplerJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(SamplerJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit SamplerJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~SamplerJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteSampler(this);
+    }
+  }
+};
+
+class ShaderJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<AShader> mInnerRef;
+  WeakPtr<AShader> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ShaderJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(ShaderJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit ShaderJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~ShaderJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteShader(this);
+    }
+  }
+};
+
+class SyncJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ASync> mInnerRef;
+  WeakPtr<ASync> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(SyncJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(SyncJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit SyncJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~SyncJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteSync(this);
+    }
+  }
+};
+
+class TextureJS
+    : public ObjectJS
+    , public nsWrapperCache
+{
+  friend class ContextJS;
+
+  RefPtr<ATexture> mInnerRef;
+  WeakPtr<ATexture> mInner;
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(TextureJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(TextureJS)
+  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+
+  explicit TextureJS(ContextJS* const context)
+    : ObjectJS(context)
+  { }
+
+  ~TextureJS() {
+    if (DtorShouldDelete()) {
+      mContext->DeleteTexture(this);
     }
   }
 };
@@ -479,16 +699,6 @@ public:
   }
 
 public:
-  void OnBindChange(const int8_t diff) const {
-    const auto fn = [&](BufferJS* const x) {
-      if (!x) return;
-      x->OnBindChange(BufferJS::BindingFor::Tf, diff);
-    };
-    for (const auto& slot : mAttribs) {
-      fn(slot.get());
-    }
-  }
-
   void ReleaseChildren() override {
     MOZ_ASSERT(mContext->mBoundTfo != this);
     for (auto& slot : mAttribs) {
@@ -522,17 +732,6 @@ public:
   }
 
 public:
-  void OnBindChange(const int8_t diff) const {
-    const auto fn = [&](BufferJS* const x) {
-      if (!x) return;
-      x->OnBindChange(BufferJS::BindingFor::NonTf, diff);
-    };
-    fn(mIndexBuffer.get());
-    for (const auto& slot : mAttribs) {
-      fn(slot.get());
-    }
-  }
-
   void ReleaseChildren() override {
     MOZ_ASSERT(mContext->mBoundVao != this);
     mIndexBuffer = nullptr;
@@ -621,18 +820,18 @@ private:
 
   // -
 
-  RefPtr<BufferJS>* GetBufferSlot(const GLenum target) {
+  RefPtr<BufferJS>* GetBufferSlot(const char* const argName, const GLenum target) {
     if (target == LOCAL_GL_ELEMENT_ARRAY_BUFFER) return &mBoundVao->mIndexBuffer;
 
     const auto itr = mBoundBufferByTarget.find(target);
     if (itr != mBoundBufferByTarget.end()) return &(itr->second);
 
-    ErrorInvalidEnum("Bad target.");
+    ErrorInvalidEnum("Bad %s.", argName);
     return nullptr;
   }
 
   BufferJS* BufferByTarget(const GLenum target) const {
-    const auto slot = GetBufferSlot(target);
+    const auto slot = GetBufferSlot("target", target);
     if (!slot) return;
 
     const auto buffer = *slot;
@@ -666,7 +865,7 @@ public:
     if (!context) return nullptr;
     if (buffer && !IsBuffer(buffer)) return;
 
-    const auto slot = GetBufferSlot(target);
+    const auto slot = GetBufferSlot("target", target);
     if (!slot) return;
 
     if (buffer) {
@@ -685,32 +884,41 @@ public:
       if (!context) return nullptr;
       if (buffer && !IsBuffer(buffer)) return;
 
+      auto indexedArr = &mUboAttribs;
       switch (target) {
-        case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
         case LOCAL_GL_UNIFORM_BUFFER:
           break;
+
+        case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
+          if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Inactive) {
+            ErrorInvalidOperation("Active Transform Feedback objects are immutable.");
+            return;
+          }
+          indexedArr = &mBoundTfo->mAttribs;
+          break;
+
         default:
           ErrorInvalidEnum("Bad target.");
           return;
       }
-      const auto slot = GetBufferSlot(target);
+      const auto slot = GetBufferSlot("target", target);
       MOZ_ASSERT(slot);
 
-      auto bindingFor = BufferJS::BindingFor::NonTf;
-      if (target == LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER) {
-        bindingFor = BufferJS::BindingFor::Tf;
-        if (mBoundTfo->mIsActive) {
-          ErrorInvalidOperation("Active Transform Feedback objects are immutable.");
-          return;
-        }
+      if (index >= indexArr->size()) {
+        ErrorInvalidValue("Index too large.");
+        return;
       }
+
       ABuffer* abuffer = nullptr;
       if (buffer) {
         if (!TryBufferTargetAssignment(&buffer->mTarget, target)) return;
         abuffer = buffer->mInner;
       }
 
-      context->BindBufferRange(target, index, abuffer, offset, size);
+      context->mInner->BindBufferRange(target, index, abuffer, offset, size);
+
+      *slot = buffer;
+      (*indexArr)[index] = buffer;
     }
 
 public:
@@ -734,6 +942,7 @@ private:
     const auto buffer = BufferByTarget(target);
     if (!buffer) return;
     buffer->mInner->BufferData(usage, dataLen, data);
+    buffer->ResetLastUpdateFenceId();
   }
 
 public:
@@ -777,6 +986,7 @@ private:
     const auto buffer = BufferByTarget(target);
     if (!buffer) return;
     buffer->mInner->BufferSubData(uint64_t(dstByteOffset), srcDataLen, srcData);
+    buffer->ResetLastUpdateFenceId();
   }
 
 public:
@@ -818,6 +1028,7 @@ public:
 
     dest->mInner->CopyBufferSubData(uint64_t(destOffset), *src->mInner,
                                     uint64_t(srcOffset), uint64_t(size));
+    dest->ResetLastUpdateFenceId();
   }
 
   // -
@@ -840,7 +1051,7 @@ public:
 
     // -
 
-    if (mContext->mCompletedFenceId < mLastUpdateFenceId) {
+    if (mCompletedFenceId < buffer->mLastUpdateFenceId) {
       mContext->GenerateWarning(
           "Reading from a buffer without checking for previous"
           " command completion likely causes pipeline stalls."
@@ -850,6 +1061,7 @@ public:
     // -
 
     buffer->mInner->GetBufferSubData(srcByteOffset, destBytes, destByteLen);
+    buffer->mLastUpdateFenceId = mCompletedFenceId;
   }
 
   // ----------------------------------
@@ -870,10 +1082,8 @@ public:
       return;
     }
 
-    mBoundVao->OnBindChange(-1);
     mBoundVao = obj;
     mBoundVao->mTarget = LOCAL_GL_VERTEX_ARRAY;
-    mBoundVao->OnBindChange(+1);
 
     context->BindVertexArray(*mBoundVao->mInner);
   }
@@ -906,17 +1116,41 @@ public:
       return;
     }
 
-    mBoundTfo->OnBindChange(-1);
     mBoundTfo = obj;
     mBoundTfo->mTarget = LOCAL_GL_TRANSFORM_FEEDBACK;
-    mBoundTfo->OnBindChange(+1);
 
-    context->BindTransformFeedback(obj->mInner);
+    context->mInner->BindTransformFeedback(*mBoundTfo->mInner);
   }
 
   void BeginTransformFeedback(const GLenum primMode) {
     const auto context = GetContext();
     if (!context) return;
+
+    if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Inactive) {
+      ErrorInvalidOperation("Must be inactive.");
+      return;
+    }
+
+    const auto& linkInfo = mContext->mActiveLinkInfo;
+    if (!linkInfo ||
+        linkInfo->componentsPerTFVert.empty()) {
+      mContext->ErrorInvalidOperation(
+          "Active program not valid for transform"
+          " feedback.");
+      return;
+    }
+    const auto& componentsPerTFVert = linkInfo->componentsPerTFVert;
+
+    for (size_t i = 0; i < componentsPerTFVert.size(); i++) {
+      const auto& buffer = mBoundTfo->mAttribs[i];
+      if (!buffer) {
+        mContext->ErrorInvalidOperation(
+            "No buffer attached to required transform"
+            " feedback index %u.",
+            (uint32_t)i);
+        return;
+      }
+    }
 
     switch (primMode) {
       case LOCAL_GL_POINTS:
@@ -928,20 +1162,491 @@ public:
         return;
     }
 
-    if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Inactive) {
-      ErrorInvalidOperation("Already active.");
+    context->mInner->BeginTransformFeedback(primMode);
+  }
+
+  void EndTransformFeedback() {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (mBoundTfo->mStatus == TransformFeedbackJS::Status::Inactive) {
+      ErrorInvalidOperation("Already inactive.");
       return;
     }
 
-    context->BeginTransformFeedback(mBoundTfo->mInner);
+    context->mInner->EndTransformFeedback();
   }
 
-  void EndTransformFeedback();
-  void PauseTransformFeedback();
-  void ResumeTransformFeedback();
+  void PauseTransformFeedback() {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Active) {
+      ErrorInvalidOperation("Must be active and not paused.");
+      return;
+    }
+
+    context->mInner->PauseTransformFeedback();
+  }
+
+  void ResumeTransformFeedback() {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (mBoundTfo->mStatus != TransformFeedbackJS::Status::Paused) {
+      ErrorInvalidOperation("Must be paused.");
+      return;
+    }
+
+    if (mCurrentProgram != mBoundTfo->mActiveProgram) {
+      ErrorInvalidOperation("Cannot resume with a different active program.");
+      return;
+    }
+
+    context->mInner->ResumeTransformFeedback();
+  }
 
   // ----------------------------------
 
+  void BindRenderbuffer(const GLenum target, RenderbufferJS* const obj) {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (target != LOCAL_GL_RENDERBUFFER) {
+      ErrorInvalidEnum("bindRenderbuffer: Bad `target`.");
+      return;
+    }
+    if (obj && !IsRenderbuffer(obj)) {
+      ErrorInvalidOperation("bindRenderbuffer: Invalid object.");
+      return;
+    }
+
+    mBoundRenderbuffer = obj;
+    if (mBoundRenderbuffer) {
+      mBoundRenderbuffer->mTarget = LOCAL_GL_RENDERBUFFER;
+    }
+  }
+
+  void RenderbufferStorageImpl(GLenum target, GLsizei samples,
+                                GLenum internalFormat, GLsizei width,
+                                GLsizei height)
+  {
+    const auto context = GetContext();
+    if (!context) return;
+
+    if (target != LOCAL_GL_RENDERBUFFER) {
+      ErrorInvalidEnum("Bad target.");
+      return;
+    }
+    if (!mBoundRenderbuffer) {
+      ErrorInvalidOperation("No renderbuffer bound.");
+      return;
+    }
+
+    if (!ValidateNonNegative("samples", samples) ||
+        !ValidateNonNegative("width", width) ||
+        !ValidateNonNegative("height", height)) {
+      return;
+    }
+
+    mBoundRenderbuffer->mInner->RenderbufferStorage(samples, internalFormat, width, height);
+  }
+
+  // ----------------------------------
+
+private:
+  std::unordered_map<GLenum, std::vector< RefPtr<TextureJS> >> mTexArrByTarget;
+  uint32_t mActiveTexture = 0;
+
+  RefPtr<TextureJS>* GetTextureSlot(const char* const argName, const GLenum target) {
+    const auto itr = mTexArrByTarget.find(target);
+    if (itr == mTexArrByTarget.end()) {
+      ErrorInvalidEnum("Bad %s.", argName);
+      return nullptr;
+    }
+    const auto& texArr = itr->second;
+    return &texArr[mActiveTexture];
+  }
+
+
+  // ----------------------------------
+
+  Maybe<FramebufferJS*> GetFbByTarget(const GLenum target) const {
+    switch (target) {
+      case LOCAL_GL_FRAMEBUFFER:
+        return Some(mBoundDrawFbo.get());
+      case LOCAL_GL_DRAW_FRAMEBUFFER:
+        if (!IsWebGL2()) break;
+        return Some(mBoundDrawFbo.get());
+
+      case LOCAL_GL_READ_FRAMEBUFFER:
+        if (!IsWebGL2()) break;
+        return Some(mBoundReadFbo.get());
+    }
+    ErrorInvalidEnum("Bad target.");
+    return {};
+  }
+
+  void FramebufferRenderbuffer(const GLenum target, const GLenum attachment,
+                               const GLenum rbTarget, WebGLRenderbuffer* const rb) const {
+    if (rbTarget != LOCAL_GL_RENDERBUFFER) { // Even if `!rb`!
+      ErrorInvalidEnum("Bad rbTarget.");
+      return;
+    }
+    FramebufferAttach(target, attachment, rb, nullptr, 0, 0);
+  }
+
+  void FramebufferTexture2D(const GLenum target, const GLenum attachment,
+                            const GLenum texImageTarget, WebGLTexture* const tex,
+                            const GLint level) const {
+    if (!ValidateNonNegative("level", level)) return;
+
+    uint32_t layer = 0;
+    if (tex) {
+      GLenum texTarget;
+      switch (texImageTarget) {
+        case LOCAL_GL_TEXTURE_2D:
+          texTarget = LOCAL_GL_TEXTURE_2D;
+          layer = 0;
+          break;
+        case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
+        case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
+        case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
+        case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
+        case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
+        case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
+          texTarget = LOCAL_GL_TEXTURE_CUBE_MAP;
+          layer = CheckedInt<uint32_t>(target - LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X).value();
+          break;
+        default:
+          ErrorInvalidEnum("Bad target.");
+          return;
+      }
+      if (texTarget != tex->Target()) {
+        ErrorInvalidOperation("Bad texImageTarget for tex.");
+        return;
+      }
+    }
+    FramebufferAttach(target, attachment, nullptr, tex, uint32_t(level), layer);
+  }
+
+
+  void FramebufferTextureLayer(const GLenum target, const GLenum attachment,
+                               WebGLTexture* const texture, const GLint level, const GLint layer) const {
+    if (!ValidateNonNegative("level", level) ||
+        !ValidateNonNegative("layer", layer)) return;
+    FramebufferAttach(target, attachment, nullptr, texture, uint32_t(level), uint32_t(layer));
+  }
+
+private:
+  void FramebufferAttach(const GLenum target, const GLenum attachment, RenderbufferJS* const rb,
+                         TextureJS* const tex, const uint32_t level, const uint32_t layer) const {
+    const auto maybeFb = GetFbByTarget(target);
+    if (!maybeFb) return;
+    const auto& fb = *maybeFb;
+    if (!fb) {
+      ErrorInvalidOperation("No framebuffer attached.");
+      return;
+    }
+
+    const bool isDepthAndStencil = IsWebGL2() && attachment == LOCAL_GL_DEPTH_STENCIL_ATTACHMENT;
+
+    auto probeAttachment = attachment;
+    if (isDepthAndStencil) {
+      probeAttachment = LOCAL_GL_DEPTH_ATTACHMENT;
+    }
+
+    const auto itr = fb->mAttachmentsByEnum.find(probeAttachment);
+    if (itr == fb->mAttachmentsByEnum.end()) {
+      ErrorInvalidEnum("Bad attachment.");
+      return;
+    }
+
+    // Call
+
+    fb->mInner->FramebufferAttach(attachment, rb, tex, level, layer);
+
+    // Record
+
+    const FramebufferJS::Attachable attachable { rb, tex };
+    itr->second = attachable;
+
+    if (isDepthAndStencil) {
+      fb->mAttachmentsByEnum[LOCAL_GL_STENCIL_ATTACHMENT] = attachable;
+    }
+  }
+
+  // -
+
+  template<typename T>
+  JS::Value WebGLObjectAsJSValue(JSContext* cx, T* object,
+                                               ErrorResult& rv) const {
+    if (!object) return JS::NullValue();
+
+    JS::Rooted<JS::Value> v(cx);
+    JS::Rooted<JSObject*> wrapper(cx, GetWrapper());
+    JSAutoRealm ar(cx, wrapper);
+    if (!dom::GetOrCreateDOMReflector(cx, object, &v)) {
+      rv.Throw(NS_ERROR_FAILURE);
+      return JS::NullValue();
+    }
+    return v;
+  }
+
+  // -
+
+  void GetFramebufferAttachmentParameter(JSContext* const cx, const GLenum target,
+                                         const GLenum attachment, const GLenum pname,
+                                         JS::MutableHandle<JS::Value> retval,
+                                         ErrorResult& rv) {
+    retval.set([&]() {
+      const auto maybeFb = GetFbByTarget(target);
+      if (!maybeFb) return JS::NullValue();
+      const auto& fb = *maybeFb;
+
+      // -
+
+      if (pname != LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
+        const auto ret = mInner->GetFramebufferAttachmentParameter(attachment, pname);
+        return JS::NumberValue(ret);
+      }
+
+      // -
+
+      if (!fb) {
+        ErrorInvalidOperation("No framebuffer attached.");
+        return JS::NullValue();
+      }
+
+      const bool isDepthAndStencil = IsWebGL2() && attachment == LOCAL_GL_DEPTH_STENCIL_ATTACHMENT;
+
+      auto probeAttachment = attachment;
+      if (isDepthAndStencil) {
+        probeAttachment = LOCAL_GL_DEPTH_ATTACHMENT;
+      }
+
+      const auto itr = fb->mAttachmentsByEnum.find(probeAttachment);
+      if (itr == fb->mAttachmentsByEnum.end()) {
+        ErrorInvalidEnum("Bad attachment.");
+        return JS::NullValue();
+      }
+      const auto& cur = itr->second;
+
+      if (isDepthAndStencil) {
+        const auto& stencil = fb->mAttachmentsByEnum[LOCAL_GL_STENCIL_ATTACHMENT];
+        if (cur.rb != stencil.rb ||
+            cur.tex != stencil.tex) {
+          ErrorInvalidOperation("DEPTH_STENCIL_ATTACHMENT with differing depth and stencil attachments.");
+          return JS::NullValue();
+        }
+      }
+
+      // -
+
+      if (cur.rb) return WebGLObjectAsJSValue(cx, cur.rb.get(), rv);
+      return WebGLObjectAsJSValue(cx, cur.tex.get(), rv);
+    }());
+  }
+
+  // -
+
+  void GetRenderbufferParameter(JSContext*, const GLenum target, const GLenum pname,
+                                JS::MutableHandle<JS::Value> retval) const {
+    retval.set([&]() {
+      if (target != LOCAL_GL_RENDERBUFFER) {
+        ErrorInvalidEnum("target");
+        return JS::NullValue();
+      }
+      if (!mBoundRenderbuffer) {
+        ErrorInvalidOperation("No renderbuffer is bound.");
+        return JS::NullValue();
+      }
+      const auto ret = mBoundRenderbuffer->mInner->GetRenderbufferParameter(pname);
+      return JS::NumberValue(ret);
+    }());
+  }
+
+  // -
+
+  void GetParameter(JSContext* const cx, const GLenum pname,
+                    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) const {
+    const auto fnGetBuffer = [&](const GLenum target) -> JS::Value {
+      const auto cur = GetBufferSlot("pname", target);
+      if (!cur) return JS::NullValue();
+      return WebGLObjectAsJSValue(cx, cur->get(), rv);
+    };
+
+    const auto fnGetTexture = [&](const GLenum target) -> JS::Value {
+      const auto cur = GetTextureSlot("pname", target);
+      if (!cur) return JS::NullValue();
+      return WebGLObjectAsJSValue(cx, cur->get(), rv);
+    };
+
+    retval.set([&]() {
+      bool ok = true;
+      switch (pname) {
+        // Bindings queries
+
+        case LOCAL_GL_VERTEX_ARRAY_BINDING:
+          if (!IsWebGL2() &&
+              !IsExtensionEnabled(WebGLExtensionID::OES_vertex_array_object)) {
+            ok = false;
+            break;
+          }
+          {
+            auto ret = mBoundVao.get();
+            if (ret == mDefaultVao) {
+              ret = nullptr;
+            }
+            return WebGLObjectAsJSValue(cx, vao, rv);
+          }
+
+        case LOCAL_GL_ARRAY_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_ARRAY_BUFFER);
+        case LOCAL_GL_ELEMENT_ARRAY_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_ELEMENT_ARRAY_BUFFER);
+        case LOCAL_GL_COPY_READ_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_COPY_READ_BUFFER);
+        case LOCAL_GL_COPY_WRITE_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_COPY_WRITE_BUFFER);
+        case LOCAL_GL_PIXEL_PACK_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_PIXEL_PACK_BUFFER);
+        case LOCAL_GL_PIXEL_UNPACK_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_PIXEL_UNPACK_BUFFER);
+        case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER);
+        case LOCAL_GL_UNIFORM_BUFFER_BINDING:
+          return fnGetBuffer(LOCAL_GL_UNIFORM_BUFFER);
+
+        case LOCAL_GL_RENDERBUFFER_BINDING:
+          return WebGLObjectAsJSValue(cx, mBoundRenderbuffer.get(), rv);
+
+
+        // DRAW_FRAMEBUFFER_BINDING is the same as FRAMEBUFFER_BINDING.
+        case LOCAL_GL_FRAMEBUFFER_BINDING:
+          return WebGLObjectAsJSValue(cx, mBoundDrawFbo.get(), rv);
+
+        case LOCAL_GL_READ_FRAMEBUFFER_BINDING:
+          if (!IsWebGL2()) {
+            ok = false;
+            break;
+          }
+          return WebGLObjectAsJSValue(cx, mBoundReadFbo.get(), rv);
+
+        case LOCAL_GL_CURRENT_PROGRAM:
+          return WebGLObjectAsJSValue(cx, mCurrentProgram.get(), rv);
+
+        case LOCAL_GL_TEXTURE_BINDING_2D:
+          return fnGetTexture(LOCAL_GL_TEXTURE_2D);
+        case LOCAL_GL_TEXTURE_BINDING_CUBE_MAP:
+          return fnGetTexture(LOCAL_GL_TEXTURE_CUBE_MAP);
+        case LOCAL_GL_TEXTURE_BINDING_2D_ARRAY:
+          return fnGetTexture(LOCAL_GL_TEXTURE_2D_ARRAY);
+        case LOCAL_GL_TEXTURE_BINDING_3D:
+          return fnGetTexture(LOCAL_GL_TEXTURE_3D);
+
+        case LOCAL_GL_SAMPLER_BINDING:
+          if (!IsWebGL2()) {
+            ok = false;
+            break;
+          }
+          return WebGLObjectAsJSValue(cx, mBoundSamplers[mActiveTexture].get(), rv);
+
+        case LOCAL_GL_TRANSFORM_FEEDBACK_BINDING:
+          if (!IsWebGL2()) {
+            ok = false;
+            break;
+          }
+          {
+            auto ret = mBoundTfo.get();
+            if (ret == mDefaultTfo) {
+              ret = nullptr;
+            }
+            return WebGLObjectAsJSValue(cx, vao, rv);
+          }
+
+        // -
+        // Other shadowed queries
+
+        case LOCAL_GL_VERSION: {
+          const char* text = "WebGL 1.0";
+          if (IsWebGL2()) {
+            text = "WebGL 2.0";
+          }
+          return StringValue(cx, text, rv);
+        }
+
+        case LOCAL_GL_SHADING_LANGUAGE_VERSION: {
+          const char* text = "WebGL GLSL ES 1.00";
+          if (IsWebGL2()) {
+            text = "WebGL GLSL ES 3.00";
+          }
+          return StringValue(cx, text, rv);
+        }
+
+        case LOCAL_GL_VENDOR:
+        case LOCAL_GL_RENDERER:
+          return StringValue(cx, "Mozilla", rv);
+
+#error We probably want AContext::GetString(pname, u8* start, len=1024).
+        case UNMASKED_VENDOR_WEBGL:
+        case UNMASKED_RENDERER_WEBGL:
+          if (!IsExtensionEnabled(WebGLExtensionID::WEBGL_debug_renderer_info)) {
+            ok = false;
+            break;
+          }
+          {
+            nsAString* str = nullptr;
+            const char* overridePref = nullptr;
+            switch (pname) {
+              case UNMASKED_RENDERER_WEBGL:
+                str = &mRenderer;
+                overridePref = "webgl.renderer-string-override";
+                break;
+              case UNMASKED_VENDOR_WEBGL:
+                str = &mVendor;
+                overridePref = "webgl.vendor-string-override";
+                break;
+              default:
+                MOZ_CRASH("GFX: bad `pname`");
+            }
+
+            bool hasRetVal = false;
+
+            nsAutoString ret;
+            if (overridePref) {
+              nsresult res = Preferences::GetString(overridePref, ret);
+              if (NS_SUCCEEDED(res) && ret.Length() > 0) hasRetVal = true;
+            }
+
+            if (!hasRetVal) {
+              const char* chars =
+                  reinterpret_cast<const char*>(gl->fGetString(driverEnum));
+              ret = NS_ConvertASCIItoUTF16(chars);
+              hasRetVal = true;
+            }
+
+            return StringValue(cx, ret, rv);
+          }
+        }
+      }
+      }
+
+      // -
+
+      if (!ok) {
+        ErrorInvalidEnum("Bad pname.");
+        return JS::NullValue();
+      }
+
+      const auto ret = mInner->GetParameter(pname);
+      return JS::NumberValue(ret);
+    }());
+  }
+
+  // ----------------------------------
+
+public:
   NS_IMETHOD Reset() override {
     /* (InitializeWithSurface) */
     return NS_ERROR_NOT_IMPLEMENTED;
@@ -1362,21 +2067,6 @@ public:
     return;
   }
 
-  void BindRenderbuffer(const GLenum target, RenderbufferJS* const obj) {
-    const auto context = GetContext();
-    if (!context) return;
-
-    if (target != LOCAL_GL_RENDERBUFFER) {
-      ErrorInvalidEnum("bindRenderbuffer: Bad `target`.");
-      return;
-    }
-    if (obj && !IsRenderbuffer(obj)) {
-      ErrorInvalidOperation("bindRenderbuffer: Invalid object.");
-      return;
-    }
-    mBoundRenderbuffer = obj;
-  }
-
   Maybe<FramebufferJS*> GetFbByTarget(const char* const funcName, const GLenum target) const {
     switch (target) {
     case LOCAL_GL_FRAMEBUFFER:
@@ -1436,12 +2126,6 @@ public:
 
   void DrawBuffers(const dom::Sequence<GLenum>& buffers);
 
-  void FramebufferRenderbuffer(GLenum target, GLenum attachment,
-                               GLenum rbTarget, WebGLRenderbuffer* rb);
-  void FramebufferTexture2D(GLenum target, GLenum attachment,
-                            GLenum texImageTarget, WebGLTexture* tex,
-                            GLint level);
-
   already_AddRefed<WebGLActiveInfo> GetActiveAttrib(const WebGLProgram& prog,
                                                     GLuint index);
   already_AddRefed<WebGLActiveInfo> GetActiveUniform(const WebGLProgram& prog,
@@ -1457,19 +2141,6 @@ public:
   }
 
   GLenum GetError();
-  virtual JS::Value GetFramebufferAttachmentParameter(JSContext* cx,
-                                                      GLenum target,
-                                                      GLenum attachment,
-                                                      GLenum pname,
-                                                      ErrorResult& rv);
-
-  void GetFramebufferAttachmentParameter(JSContext* cx, GLenum target,
-                                         GLenum attachment, GLenum pname,
-                                         JS::MutableHandle<JS::Value> retval,
-                                         ErrorResult& rv) {
-    retval.set(
-        GetFramebufferAttachmentParameter(cx, target, attachment, pname, rv));
-  }
 
   JS::Value GetProgramParameter(const WebGLProgram& prog, GLenum pname);
 
@@ -1479,12 +2150,6 @@ public:
   }
 
   void GetProgramInfoLog(const WebGLProgram& prog, nsAString& retval);
-  JS::Value GetRenderbufferParameter(GLenum target, GLenum pname);
-
-  void GetRenderbufferParameter(JSContext*, GLenum target, GLenum pname,
-                                JS::MutableHandle<JS::Value> retval) {
-    retval.set(GetRenderbufferParameter(target, pname));
-  }
 
   JS::Value GetShaderParameter(const WebGLShader& shader, GLenum pname);
 
@@ -1561,33 +2226,63 @@ public:
     RenderbufferStorage_base(target, 0, internalFormat, width, height);
   }
 
- protected:
-  void RenderbufferStorage_base(GLenum target, GLsizei samples,
-                                GLenum internalformat, GLsizei width,
-                                GLsizei height);
-
- public:
   void ShaderSource(WebGLShader& shader, const nsAString& source);
 
 
   //////
 
-  void Uniform1f(WebGLUniformLocation* loc, GLfloat x);
-  void Uniform2f(WebGLUniformLocation* loc, GLfloat x, GLfloat y);
-  void Uniform3f(WebGLUniformLocation* loc, GLfloat x, GLfloat y, GLfloat z);
+  void Uniform1f(WebGLUniformLocation* loc, GLfloat x) {
+    const float arr[] = { x };
+    UniformNTv(1, LOCAL_GL_FLOAT, loc, arr, sizeof(arr));
+  }
+  void Uniform2f(WebGLUniformLocation* loc, GLfloat x, GLfloat y) {
+    const float arr[] = { x, y };
+    UniformNTv(2, LOCAL_GL_FLOAT, loc, arr, sizeof(arr));
+  }
+  void Uniform3f(WebGLUniformLocation* loc, GLfloat x, GLfloat y, GLfloat z) {
+    const float arr[] = { x, y, z };
+    UniformNTv(3, LOCAL_GL_FLOAT, loc, arr, sizeof(arr));
+  }
   void Uniform4f(WebGLUniformLocation* loc, GLfloat x, GLfloat y, GLfloat z,
-                 GLfloat w);
+                 GLfloat w) {
+    const float arr[] = { x, y, z, w };
+    UniformNTv(4, LOCAL_GL_FLOAT, loc, arr, sizeof(arr));
+  }
 
-  void Uniform1i(WebGLUniformLocation* loc, GLint x);
-  void Uniform2i(WebGLUniformLocation* loc, GLint x, GLint y);
-  void Uniform3i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z);
-  void Uniform4i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z, GLint w);
+  void Uniform1i(WebGLUniformLocation* loc, GLint x) {
+    const int32_t arr[] = { x };
+    UniformNTv(1, LOCAL_GL_INT, loc, arr, sizeof(arr));
+  }
+  void Uniform2i(WebGLUniformLocation* loc, GLint x, GLint y) {
+    const int32_t arr[] = { x, y };
+    UniformNTv(1, LOCAL_GL_INT, loc, arr, sizeof(arr));
+  }
+  void Uniform3i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z) {
+    const int32_t arr[] = { x, y, z };
+    UniformNTv(1, LOCAL_GL_INT, loc, arr, sizeof(arr));
+  }
+  void Uniform4i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z, GLint w) {
+    const int32_t arr[] = { x, y, z, w };
+    UniformNTv(1, LOCAL_GL_INT, loc, arr, sizeof(arr));
+  }
 
-  void Uniform1ui(WebGLUniformLocation* loc, GLuint v0);
-  void Uniform2ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1);
-  void Uniform3ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2);
+  void Uniform1ui(WebGLUniformLocation* loc, GLuint v0) {
+    const uint32_t arr[] = { x };
+    UniformNTv(1, LOCAL_GL_UNSIGNED_INT, loc, arr, sizeof(arr));
+  }
+  void Uniform2ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1) {
+    const uint32_t arr[] = { x, y };
+    UniformNTv(1, LOCAL_GL_UNSIGNED_INT, loc, arr, sizeof(arr));
+  }
+  void Uniform3ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2) {
+    const uint32_t arr[] = { x, y, z };
+    UniformNTv(1, LOCAL_GL_UNSIGNED_INT, loc, arr, sizeof(arr));
+  }
   void Uniform4ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2,
-                  GLuint v3);
+                  GLuint v3) {
+    const uint32_t arr[] = { x, y, z, w };
+    UniformNTv(1, LOCAL_GL_UNSIGNED_INT, loc, arr, sizeof(arr));
+  }
 
   //////////////////////////
 
@@ -1655,10 +2350,11 @@ public:
                    const Uint32Arr& arr, GLuint elemOffset,
                    GLuint elemCountOverride);
 
-  void UniformMatrixAxBfv(const char* funcName, uint8_t A, uint8_t B,
+  void UniformNTv(uint8_t N, GLenum type, WebGLUniformLocation* loc,
+                  const uint8_t* bytes, uint64_t byteCount) const;
+  void UniformMatrixAxBfv(uint8_t A, uint8_t B,
                           WebGLUniformLocation* loc, bool transpose,
-                          const Float32Arr& arr, GLuint elemOffset,
-                          GLuint elemCountOverride);
+                          const uint8_t* bytes, uint64_t byteCount) const;
 
   ////////////////
 
@@ -1666,7 +2362,8 @@ public:
 #define FOO(N)                                                                \
   void Uniform##N##fv(WebGLUniformLocation* loc, const Float32ListU& list,    \
                       GLuint elemOffset = 0, GLuint elemCountOverride = 0) {  \
-    UniformNfv("uniform" #N "fv", N, loc, Float32Arr::From(list), elemOffset, \
+    const auto& arr = Float32Arr::From(list)
+    UniformNfv(N, LOCAL_GL_FLOAT, loc, Float32Arr::From(list), elemOffset, \
                elemCountOverride);                                            \
   }
 

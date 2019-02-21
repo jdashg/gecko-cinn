@@ -95,16 +95,6 @@ JS::Value WebGLContext::GetParameter(JSContext* cx, GLenum pname,
     }
   }
 
-  if (IsWebGL2() ||
-      IsExtensionEnabled(WebGLExtensionID::OES_vertex_array_object)) {
-    if (pname == LOCAL_GL_VERTEX_ARRAY_BINDING) {
-      WebGLVertexArray* vao = (mBoundVertexArray != mDefaultVertexArray)
-                                  ? mBoundVertexArray.get()
-                                  : nullptr;
-      return WebGLObjectAsJSValue(cx, vao, rv);
-    }
-  }
-
   if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query)) {
     switch (pname) {
       case LOCAL_GL_TIMESTAMP_EXT: {
@@ -129,49 +119,6 @@ JS::Value WebGLContext::GetParameter(JSContext* cx, GLenum pname,
 
       default:
         break;
-    }
-  }
-
-  // Privileged string params exposed by WEBGL_debug_renderer_info.
-  // The privilege check is done in WebGLContext::IsExtensionSupported.
-  // So here we just have to check that the extension is enabled.
-  if (IsExtensionEnabled(WebGLExtensionID::WEBGL_debug_renderer_info)) {
-    switch (pname) {
-      case UNMASKED_VENDOR_WEBGL:
-      case UNMASKED_RENDERER_WEBGL: {
-        const char* overridePref = nullptr;
-        GLenum driverEnum = LOCAL_GL_NONE;
-
-        switch (pname) {
-          case UNMASKED_RENDERER_WEBGL:
-            overridePref = "webgl.renderer-string-override";
-            driverEnum = LOCAL_GL_RENDERER;
-            break;
-          case UNMASKED_VENDOR_WEBGL:
-            overridePref = "webgl.vendor-string-override";
-            driverEnum = LOCAL_GL_VENDOR;
-            break;
-          default:
-            MOZ_CRASH("GFX: bad `pname`");
-        }
-
-        bool hasRetVal = false;
-
-        nsAutoString ret;
-        if (overridePref) {
-          nsresult res = Preferences::GetString(overridePref, ret);
-          if (NS_SUCCEEDED(res) && ret.Length() > 0) hasRetVal = true;
-        }
-
-        if (!hasRetVal) {
-          const char* chars =
-              reinterpret_cast<const char*>(gl->fGetString(driverEnum));
-          ret = NS_ConvertASCIItoUTF16(chars);
-          hasRetVal = true;
-        }
-
-        return StringValue(cx, ret, rv);
-      }
     }
   }
 
