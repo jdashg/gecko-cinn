@@ -17,8 +17,6 @@
 #include "CanvasUtils.h"
 #include "GLContext.h"
 #include "GLScreenBuffer.h"
-#include "WebGL1Context.h"
-#include "WebGL2Context.h"
 
 namespace mozilla {
 namespace dom {
@@ -119,6 +117,7 @@ already_AddRefed<nsISupports> OffscreenCanvas::GetContext(
   if (mCanvasRenderer) {
     if (contextType == CanvasContextType::WebGL1 ||
         contextType == CanvasContextType::WebGL2) {
+#if 0
       WebGLContext* webGL = static_cast<WebGLContext*>(mCurrentContext.get());
       gl::GLContext* gl = webGL->GL();
       mCanvasRenderer->mContext = mCurrentContext;
@@ -143,6 +142,10 @@ already_AddRefed<nsISupports> OffscreenCanvas::GetContext(
 
         if (factory) screen->Morph(std::move(factory));
       }
+#else
+      // DLP: TODO:
+      MOZ_ASSERT_UNREACHABLE("WebGL OffscreenCanvas not yet supported.");
+#endif
     }
   }
 
@@ -177,7 +180,12 @@ void OffscreenCanvas::CommitFrameToCompositor() {
   }
 
   if (mCurrentContext) {
+#if 0
     static_cast<WebGLContext*>(mCurrentContext.get())->PresentScreenBuffer();
+#else
+      // DLP: TODO:
+      MOZ_ASSERT_UNREACHABLE("WebGL OffscreenCanvas not yet supported.");
+#endif
   }
 
   if (mCanvasRenderer && mCanvasRenderer->mGLContext) {
