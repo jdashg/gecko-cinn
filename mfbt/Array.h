@@ -19,11 +19,15 @@
 
 namespace mozilla {
 
-template <typename T, size_t Length>
+template <typename T, size_t _Length>
 class Array {
-  T mArr[Length];
+  T mArr[_Length];
 
  public:
+  using ElementType = T;
+  static constexpr size_t Length = _Length;
+  using CArrayType = T[Length];
+
   Array() {}
 
   template <typename... Args>
@@ -77,6 +81,9 @@ class Array {
     return const_reverse_iterator(begin());
   }
   const_reverse_iterator crend() const { return rend(); }
+
+  operator CArrayType&() { return mArr; }
+  operator const CArrayType&() const { return mArr; }
 };
 
 template <typename T>

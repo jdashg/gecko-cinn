@@ -30,6 +30,9 @@ namespace mozilla {
 namespace ipc {
 template <typename T>
 struct IPDLParamTraits;
+
+template <typename T>
+struct PcqParamTraits;
 }  // namespace ipc
 
 template <typename... Ts>
@@ -189,6 +192,12 @@ struct VariantImplementation<Tag, N, T> {
   static decltype(auto) matchN(ConcreteVariant& aV, Matcher&& aMatcher) {
     return aMatcher(aV.template as<N>());
   }
+
+  template <typename Matcher, typename ConcreteVariant>
+  static auto match(Matcher&& aMatcher, const ConcreteVariant& aV)
+      -> decltype(aMatcher.match(aV.template as<N>())) {
+    return aMatcher.match(aV.template as<N>());
+  }
 };
 
 // VariantImplementation for some variant type T.
@@ -268,6 +277,26 @@ struct VariantImplementation<Tag, N, T, Ts...> {
       // Matcher (with its operator()(T&)) for every variant type T, in the
       // exact same order.
       return Next::matchN(aV, std::forward<Ms>(aMs)...);
+    }
+  }
+
+  template <typename Matcher, typename ConcreteVariant>
+  static auto match(Matcher&& aMatcher, const ConcreteVariant& aV)
+      -> decltype(aMatcher.match(aV.template as<N>())) {
+    if (aV.template is<N>()) {
+      return aMatcher.match(aV.template as<N>());
+    } else {
+      // If you're seeing compilation errors here like "no matching
+      // function for call to 'match'" then that means that the
+      // Matcher doesn't exhaust all variant types. There must exist a
+      // Matcher::match(T&) for every variant type T.
+      //
+      // If you're seeing compilation errors here like "cannot
+      // initialize return object of type <...> with an rvalue of type
+      // <...>" then that means that the Matcher::match(T&) overloads
+      // are returning different types. They must all return the same
+      // Matcher::ReturnType type.
+      return Next::match(aMatcher, aV);
     }
   }
 };
@@ -511,6 +540,7 @@ template <typename... Ts>
 class MOZ_INHERIT_TYPE_ANNOTATIONS_FROM_TEMPLATE_ARGS MOZ_NON_PARAM Variant {
   friend struct IPC::ParamTraits<mozilla::Variant<Ts...>>;
   friend struct mozilla::ipc::IPDLParamTraits<mozilla::Variant<Ts...>>;
+  friend struct mozilla::ipc::PcqParamTraits<mozilla::Variant<Ts...>>;
 
   using Tag = typename detail::VariantTag<Ts...>::Type;
   using Impl = detail::VariantImplementation<Tag, 0, Ts...>;
