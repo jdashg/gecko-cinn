@@ -4847,7 +4847,7 @@ class _GenerateProtocolActorCode(ipdl.ast.Visitor):
 
         callalloc = self.thisCall(
             _allocMethod(md.decl.type.constructedType(), side),
-            args=md.makeCxxArgs(retsems=retsems, retcallsems='out',
+            args=md.makeCxxArgs(paramsems='move', retsems=retsems, retcallsems='out',
                                 implicit=False))
 
         return StmtDecl(Decl(actortype, md.actorDecl().var().name),

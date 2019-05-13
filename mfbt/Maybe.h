@@ -31,6 +31,11 @@ inline void CycleCollectionNoteChild(
 
 namespace mozilla {
 
+namespace ipc {
+template <typename T>
+struct PcqParamTraits;
+}
+
 struct Nothing {};
 
 namespace detail {
@@ -164,6 +169,8 @@ class MOZ_NON_PARAM MOZ_INHERIT_TYPE_ANNOTATIONS_FROM_TEMPLATE_ARGS Maybe {
   const void* data() const { return mStorage; }
 
   void poisonData() { detail::MaybePoisoner<T>::poison(data()); }
+
+  friend mozilla::ipc::PcqParamTraits<Maybe<T>>;
 
  public:
   using ValueType = T;
