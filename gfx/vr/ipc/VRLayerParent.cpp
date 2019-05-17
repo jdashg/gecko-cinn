@@ -44,9 +44,9 @@ void VRLayerParent::Destroy() {
 }
 
 mozilla::ipc::IPCResult VRLayerParent::RecvSubmitFrame(
-    mozilla::dom::PWebGLParent* aPWebGLParent,
-    const uint64_t& aFrameId, const uint64_t& aLastFrameId,
-    const gfx::Rect& aLeftEyeRect, const gfx::Rect& aRightEyeRect) {
+    mozilla::dom::PWebGLParent* aPWebGLParent, const uint64_t& aFrameId,
+    const uint64_t& aLastFrameId, const gfx::Rect& aLeftEyeRect,
+    const gfx::Rect& aRightEyeRect) {
   // Keep the SharedSurfaceTextureClient alive long enough for
   // 1 extra frame, accomodating overlapped asynchronous rendering.
   mLastFrameTexture = mThisFrameTexture;

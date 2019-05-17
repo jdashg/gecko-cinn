@@ -256,10 +256,10 @@ void WebGLFBAttachPoint::DoAttachment(gl::GLContext* const gl) const {
   }
 }
 
-MaybeWebGLVariant
-WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
-                                 GLenum target, GLenum attachment,
-                                 GLenum pname) const {
+MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
+                                                   GLenum target,
+                                                   GLenum attachment,
+                                                   GLenum pname) const {
   if (!HasAttachment()) {
     // Divergent between GLES 3 and 2.
 
@@ -300,7 +300,7 @@ WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
   switch (pname) {
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
       return AsSomeVariant(mTexturePtr ? LOCAL_GL_TEXTURE
-                                        : LOCAL_GL_RENDERBUFFER);
+                                       : LOCAL_GL_RENDERBUFFER);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
       if (mTexturePtr) {
@@ -1167,9 +1167,9 @@ void WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
   InvalidateCaches();
 }
 
-MaybeWebGLVariant
-WebGLFramebuffer::GetAttachmentParameter(
-    GLenum target, GLenum attachEnum, GLenum pname) {
+MaybeWebGLVariant WebGLFramebuffer::GetAttachmentParameter(GLenum target,
+                                                           GLenum attachEnum,
+                                                           GLenum pname) {
   const auto maybeAttach = GetAttachPoint(attachEnum);
   if (!maybeAttach || attachEnum == LOCAL_GL_NONE) {
     mContext->ErrorInvalidEnum(

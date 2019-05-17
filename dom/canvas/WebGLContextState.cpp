@@ -239,8 +239,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
     case LOCAL_GL_IMPLEMENTATION_COLOR_READ_TYPE: {
       const webgl::FormatUsageInfo* usage;
       uint32_t width, height;
-      if (!BindCurFBForColorRead(&usage, &width, &height))
-        return Nothing();
+      if (!BindCurFBForColorRead(&usage, &width, &height)) return Nothing();
 
       const auto implPI = ValidImplementationColorReadPI(usage);
 
@@ -425,7 +424,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
     // them as doubles and javascript doesn't care.
     case LOCAL_GL_STENCIL_BACK_VALUE_MASK:
       return AsSomeVariant((double)mStencilValueMaskBack);
-        // pass as FP value to allow large values such as 2^32-1.
+      // pass as FP value to allow large values such as 2^32-1.
 
     case LOCAL_GL_STENCIL_BACK_WRITEMASK:
       return AsSomeVariant((double)mStencilWriteMaskBack);
@@ -502,7 +501,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
           gl->fGetFloatv(pname, fv);
           break;
       }
-      for(uint32_t i=0; i<2; ++i) {
+      for (uint32_t i = 0; i < 2; ++i) {
         obj[i] = fv[i];
       }
       return AsSomeVariant(obj);
@@ -514,7 +513,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
       Float32Array2 obj;
       GLfloat fv[4] = {0};
       gl->fGetFloatv(pname, fv);
-      for(uint32_t i=0; i<4; ++i) {
+      for (uint32_t i = 0; i < 4; ++i) {
         obj[i] = fv[i];
       }
       return AsSomeVariant(obj);
@@ -525,7 +524,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
       Int32Array2 obj;
       GLint iv[2] = {GLint(mGLMaxViewportDims[0]),
                      GLint(mGLMaxViewportDims[1])};
-      for(uint32_t i=0; i<2; ++i) {
+      for (uint32_t i = 0; i < 2; ++i) {
         obj[i] = iv[i];
       }
       return AsSomeVariant(obj);
@@ -537,7 +536,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
       Int32Array4 obj;
       GLint iv[4] = {0};
       gl->fGetIntegerv(pname, iv);
-      for(uint32_t i=0; i<4; ++i) {
+      for (uint32_t i = 0; i < 4; ++i) {
         obj[i] = iv[i];
       }
       return AsSomeVariant(obj);
@@ -546,9 +545,8 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
     // 4 bools
     case LOCAL_GL_COLOR_WRITEMASK: {
       BoolArray4 obj = {
-        bool(mColorWriteMask & (1 << 0)), bool(mColorWriteMask & (1 << 1)),
-        bool(mColorWriteMask & (1 << 2)), bool(mColorWriteMask & (1 << 3))
-      };
+          bool(mColorWriteMask & (1 << 0)), bool(mColorWriteMask & (1 << 1)),
+          bool(mColorWriteMask & (1 << 2)), bool(mColorWriteMask & (1 << 3))};
       return AsSomeVariant(obj);
     }
 

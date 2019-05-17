@@ -331,9 +331,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   SetDimensionsData SetDimensions(int32_t width, int32_t height) {
     DoSetDimensionsData result = DoSetDimensions(width, height);
-    return { mOptions, mOptionsFrozen, mResetLayer,
-             result.maybeLoseOldContext, result.result,
-             mPixelStore };
+    return {mOptions,      mOptionsFrozen,
+            mResetLayer,   result.maybeLoseOldContext,
+            result.result, mPixelStore};
   }
 
   void SetCompositableHost(RefPtr<layers::CompositableHost>& aCompositableHost);
@@ -551,37 +551,37 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void FrontFace(GLenum mode);
 
-  Maybe<WebGLActiveInfo>
-  GetActiveAttrib(const WebGLProgram& prog, GLuint index);
-  Maybe<WebGLActiveInfo>
-  GetActiveUniform(const WebGLProgram& prog, GLuint index);
+  Maybe<WebGLActiveInfo> GetActiveAttrib(const WebGLProgram& prog,
+                                         GLuint index);
+  Maybe<WebGLActiveInfo> GetActiveUniform(const WebGLProgram& prog,
+                                          GLuint index);
 
-  Maybe<nsTArray<WebGLId<WebGLShader>>>
-  GetAttachedShaders(const WebGLProgram& prog);
+  Maybe<nsTArray<WebGLId<WebGLShader>>> GetAttachedShaders(
+      const WebGLProgram& prog);
 
   GLint GetAttribLocation(const WebGLProgram& prog, const nsAString& name);
   MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
-  virtual MaybeWebGLVariant
-  GetFramebufferAttachmentParameter(GLenum target, GLenum attachment,
-                                    GLenum pname);
+  virtual MaybeWebGLVariant GetFramebufferAttachmentParameter(GLenum target,
+                                                              GLenum attachment,
+                                                              GLenum pname);
 
   MaybeWebGLVariant GetProgramParameter(const WebGLProgram& prog, GLenum pname);
-
 
   nsString GetProgramInfoLog(const WebGLProgram& prog);
   MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
 
   MaybeWebGLVariant GetShaderParameter(const WebGLShader& shader, GLenum pname);
 
-  Maybe<WebGLShaderPrecisionFormat> GetShaderPrecisionFormat(GLenum shadertype, GLenum precisiontype);
+  Maybe<WebGLShaderPrecisionFormat> GetShaderPrecisionFormat(
+      GLenum shadertype, GLenum precisiontype);
 
   nsString GetShaderInfoLog(const WebGLShader& shader);
   nsString GetShaderSource(const WebGLShader& shader);
 
-  MaybeWebGLVariant
-  GetUniform(const WebGLProgram& prog, const WebGLUniformLocation& loc);
+  MaybeWebGLVariant GetUniform(const WebGLProgram& prog,
+                               const WebGLUniformLocation& loc);
 
   already_AddRefed<WebGLUniformLocation> GetUniformLocation(
       const WebGLProgram& prog, const nsAString& name);
@@ -618,14 +618,13 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                               uint32_t dataLen, uint32_t rowStride);
 
  public:
-  void
-  ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-             GLenum format, GLenum type, WebGLsizeiptr offset);
+  void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+                  GLenum format, GLenum type, WebGLsizeiptr offset);
 
-  Maybe<nsTArray<uint8_t>>
-  ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-             GLenum format, GLenum type, size_t byteLen,
-             const Maybe<mozilla::ipc::Shmem>& maybeShmem);
+  Maybe<nsTArray<uint8_t>> ReadPixels(
+      GLint x, GLint y, GLsizei width, GLsizei height, GLenum format,
+      GLenum type, size_t byteLen,
+      const Maybe<mozilla::ipc::Shmem>& maybeShmem);
 
   ////
 
@@ -893,7 +892,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void CompressedTexSubImage(uint8_t funcDims, GLenum target, GLint level,
                              GLint xOffset, GLint yOffset, GLint zOffset,
                              GLsizei width, GLsizei height, GLsizei depth,
-                             GLenum unpackFormat, UniquePtr<webgl::TexUnpackBlob>&& src,
+                             GLenum unpackFormat,
+                             UniquePtr<webgl::TexUnpackBlob>&& src,
                              const Maybe<GLsizei>& expectedImageSize);
 
   ////////////////////////////////////
@@ -905,7 +905,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level,
                        GLint xOffset, GLint yOffset, GLint zOffset, GLint x,
-                       GLint y, uint32_t width, uint32_t height, uint32_t depth);
+                       GLint y, uint32_t width, uint32_t height,
+                       uint32_t depth);
 
   ////////////////////////////////////
   // TexImage
@@ -920,9 +921,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
   void TexSubImage(uint8_t funcDims, GLenum target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, uint32_t width, uint32_t height,
-                   uint32_t depth, GLenum unpackFormat, GLenum unpackType,
-                   UniquePtr<webgl::TexUnpackBlob>&& src);
+                   GLint yOffset, GLint zOffset, uint32_t width,
+                   uint32_t height, uint32_t depth, GLenum unpackFormat,
+                   GLenum unpackType, UniquePtr<webgl::TexUnpackBlob>&& src);
 
   bool ValidateNullPixelUnpackBuffer() {
     if (mBoundPixelUnpackBuffer) {
@@ -932,14 +933,12 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     return true;
   }
 
-  UniquePtr<webgl::TexUnpackBlob>
-  TexUnpackBytesFromTexImageData(const WebGLTexImageData& imageData);
+  UniquePtr<webgl::TexUnpackBlob> TexUnpackBytesFromTexImageData(
+      const WebGLTexImageData& imageData);
 
-  UniquePtr<webgl::TexUnpackBlob>
-  TexUnpackBytesFromTexPboOffset(
-    TexImageTarget target, uint32_t width, uint32_t height,
-    uint32_t depth, WebGLsizeiptr pboOffset,
-    const Maybe<GLsizei>& expectedImageSize);
+  UniquePtr<webgl::TexUnpackBlob> TexUnpackBytesFromTexPboOffset(
+      TexImageTarget target, uint32_t width, uint32_t height, uint32_t depth,
+      WebGLsizeiptr pboOffset, const Maybe<GLsizei>& expectedImageSize);
 
   ////////////////////////////////////
   // WebGLTextureUpload.cpp
@@ -959,8 +958,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                  webgl::ImageInfo** const out_imageInfo);
   bool ValidateUnpackInfo(bool usePBOs, GLenum format, GLenum type,
                           webgl::PackingInfo* const out);
-  UniquePtr<webgl::TexUnpackBytes>
-  AsTexUnpackBytes(UniquePtr<webgl::TexUnpackBlob>&& aBlob);
+  UniquePtr<webgl::TexUnpackBytes> AsTexUnpackBytes(
+      UniquePtr<webgl::TexUnpackBlob>&& aBlob);
 
   // -----------------------------------------------------------------------------
   // Vertices Feature (WebGLContextVertices.cpp)
@@ -1135,11 +1134,12 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
  public:
   // Return an extension if it's supported, optionally enabling it if necessary.
-  template<WebGLExtensionID ext,
-           typename ExtensionClass = typename WebGLExtensionClassMap<ext>::Type>
-  ExtensionClass*
-  GetExtension(bool toEnable = false,
-               dom::CallerType callerType = dom::CallerType::NonSystem) {
+  template <
+      WebGLExtensionID ext,
+      typename ExtensionClass = typename WebGLExtensionClassMap<ext>::Type>
+  ExtensionClass* GetExtension(
+      bool toEnable = false,
+      dom::CallerType callerType = dom::CallerType::NonSystem) {
     if (!IsExtensionEnabled(ext)) {
       if ((!toEnable) || (!IsExtensionSupported(callerType, ext))) {
         return nullptr;
@@ -1151,9 +1151,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     return static_cast<ExtensionClass*>(mExtensions[ext].get());
   }
 
-  void
-  EnableExtension(WebGLExtensionID ext,
-                  dom::CallerType callerType = dom::CallerType::NonSystem);
+  void EnableExtension(WebGLExtensionID ext,
+                       dom::CallerType callerType = dom::CallerType::NonSystem);
 
   // returns true if the extension has been enabled by calling getExtension.
   bool IsExtensionEnabled(const WebGLExtensionID ext) const {
@@ -1311,7 +1310,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   //////
  public:
-  template<typename T>
+  template <typename T>
   bool ValidateObjectAllowDeleted(const char* const argName,
                                   const WebGLContextBoundObject<T>& object) {
     if (!object.IsCompatibleWithContext(this)) {
@@ -1325,7 +1324,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     return true;
   }
 
-  template<typename T>
+  template <typename T>
   bool ValidateObject(const char* const argName,
                       const WebGLRefCountedObject<T>& object,
                       const bool isShaderOrProgram = false) {

@@ -659,8 +659,8 @@ void WebGLContext::FrontFace(GLenum mode) {
   gl->fFrontFace(mode);
 }
 
-Maybe<WebGLActiveInfo> WebGLContext::GetActiveAttrib(
-    const WebGLProgram& prog, GLuint index) {
+Maybe<WebGLActiveInfo> WebGLContext::GetActiveAttrib(const WebGLProgram& prog,
+                                                     GLuint index) {
   const FuncScope funcScope(*this, "getActiveAttrib");
   if (IsContextLost()) return Nothing();
 
@@ -669,8 +669,8 @@ Maybe<WebGLActiveInfo> WebGLContext::GetActiveAttrib(
   return prog.GetActiveAttrib(index);
 }
 
-Maybe<WebGLActiveInfo> WebGLContext::GetActiveUniform(
-    const WebGLProgram& prog, GLuint index) {
+Maybe<WebGLActiveInfo> WebGLContext::GetActiveUniform(const WebGLProgram& prog,
+                                                      GLuint index) {
   const FuncScope funcScope(*this, "getActiveUniform");
   if (IsContextLost()) return Nothing();
 
@@ -699,7 +699,8 @@ GLint WebGLContext::GetAttribLocation(const WebGLProgram& prog,
   return prog.GetAttribLocation(name);
 }
 
-MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target, GLenum pname) {
+MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target,
+                                                   GLenum pname) {
   const FuncScope funcScope(*this, "getBufferParameter");
   if (IsContextLost()) return Nothing();
 
@@ -725,10 +726,8 @@ MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target, GLenum pname) 
   }
 }
 
-MaybeWebGLVariant
-WebGLContext::GetFramebufferAttachmentParameter(GLenum target,
-                                                GLenum attachment,
-                                                GLenum pname) {
+MaybeWebGLVariant WebGLContext::GetFramebufferAttachmentParameter(
+    GLenum target, GLenum attachment, GLenum pname) {
   const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
   if (IsContextLost()) return Nothing();
 
@@ -876,7 +875,8 @@ WebGLContext::GetFramebufferAttachmentParameter(GLenum target,
   return Nothing();
 }
 
-MaybeWebGLVariant WebGLContext::GetRenderbufferParameter(GLenum target, GLenum pname) {
+MaybeWebGLVariant WebGLContext::GetRenderbufferParameter(GLenum target,
+                                                         GLenum pname) {
   const FuncScope funcScope(*this, "getRenderbufferParameter");
   if (IsContextLost()) return Nothing();
 
@@ -967,8 +967,8 @@ GLenum WebGLContext::GetError() {
   return err;
 }
 
-MaybeWebGLVariant
-WebGLContext::GetProgramParameter(const WebGLProgram& prog, GLenum pname) {
+MaybeWebGLVariant WebGLContext::GetProgramParameter(const WebGLProgram& prog,
+                                                    GLenum pname) {
   const FuncScope funcScope(*this, "getProgramParameter");
   if (IsContextLost()) return Nothing();
 
@@ -977,8 +977,7 @@ WebGLContext::GetProgramParameter(const WebGLProgram& prog, GLenum pname) {
   return prog.GetProgramParameter(pname);
 }
 
-nsString
-WebGLContext::GetProgramInfoLog(const WebGLProgram& prog) {
+nsString WebGLContext::GetProgramInfoLog(const WebGLProgram& prog) {
   const FuncScope funcScope(*this, "getProgramInfoLog");
 
   if (IsContextLost()) return EmptyString();
@@ -988,9 +987,8 @@ WebGLContext::GetProgramInfoLog(const WebGLProgram& prog) {
   return prog.GetProgramInfoLog();
 }
 
-MaybeWebGLVariant
-WebGLContext::GetUniform(const WebGLProgram& prog,
-                         const WebGLUniformLocation& loc) {
+MaybeWebGLVariant WebGLContext::GetUniform(const WebGLProgram& prog,
+                                           const WebGLUniformLocation& loc) {
   const FuncScope funcScope(*this, "getUniform");
   if (IsContextLost()) return Nothing();
 
@@ -1133,8 +1131,7 @@ void WebGLContext::LinkProgram(WebGLProgram& prog) {
   }
 }
 
-WebGLPixelStore
-WebGLContext::PixelStorei(GLenum pname, GLint param) {
+WebGLPixelStore WebGLContext::PixelStorei(GLenum pname, GLint param) {
   const FuncScope funcScope(*this, "pixelStorei");
   if (IsContextLost()) return mPixelStore;
 
@@ -1207,7 +1204,7 @@ WebGLContext::PixelStorei(GLenum pname, GLint param) {
     case UNPACK_REQUIRE_FASTPATH:
       if (IsExtensionEnabled(WebGLExtensionID::MOZ_debug)) {
         mPixelStore.mRequireFastPath = bool(param);
-          return mPixelStore;
+        return mPixelStore;
       }
       break;
 
@@ -1321,10 +1318,9 @@ bool WebGLContext::ValidatePackSize(uint32_t width, uint32_t height,
   return true;
 }
 
-Maybe<nsTArray<uint8_t>>
-WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                          GLenum format, GLenum type, size_t byteLen,
-                          const Maybe<mozilla::ipc::Shmem>& maybeShmem) {
+Maybe<nsTArray<uint8_t>> WebGLContext::ReadPixels(
+    GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type,
+    size_t byteLen, const Maybe<mozilla::ipc::Shmem>& maybeShmem) {
   const FuncScope funcScope(*this, "readPixels");
   if (IsContextLost()) return Nothing();
 
@@ -1336,7 +1332,7 @@ WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
   nsTArray<uint8_t> arr;
   uint8_t* bytes;
   if (!maybeShmem) {
-    arr.SetLength(byteLen);     // TODO: Make Fallible
+    arr.SetLength(byteLen);  // TODO: Make Fallible
     bytes = arr.Elements();
   } else {
     bytes = maybeShmem.ref().get<uint8_t>();
@@ -1350,7 +1346,8 @@ WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
 }
 
 void WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                              GLenum format, GLenum type, WebGLsizeiptr offset) {
+                              GLenum format, GLenum type,
+                              WebGLsizeiptr offset) {
   const FuncScope funcScope(*this, "readPixels");
   if (IsContextLost()) return;
 
@@ -1859,8 +1856,9 @@ static bool ValidateArrOffsetAndCount(WebGLContext* webgl, size_t elemsAvail,
 }
 
 void WebGLContext::UniformNiv(const char* funcName, uint8_t N,
-                              WebGLUniformLocation* loc, const nsTArray<GLint>& arr,
-                              GLuint elemOffset, GLuint elemCountOverride) {
+                              WebGLUniformLocation* loc,
+                              const nsTArray<GLint>& arr, GLuint elemOffset,
+                              GLuint elemCountOverride) {
   const FuncScope funcScope(*this, funcName);
 
   size_t elemCount;
@@ -1890,8 +1888,9 @@ void WebGLContext::UniformNiv(const char* funcName, uint8_t N,
 }
 
 void WebGLContext::UniformNuiv(const char* funcName, uint8_t N,
-                               WebGLUniformLocation* loc, const nsTArray<GLuint>& arr,
-                               GLuint elemOffset, GLuint elemCountOverride) {
+                               WebGLUniformLocation* loc,
+                               const nsTArray<GLuint>& arr, GLuint elemOffset,
+                               GLuint elemCountOverride) {
   const FuncScope funcScope(*this, funcName);
 
   size_t elemCount;
@@ -1917,8 +1916,9 @@ void WebGLContext::UniformNuiv(const char* funcName, uint8_t N,
 }
 
 void WebGLContext::UniformNfv(const char* funcName, uint8_t N,
-                              WebGLUniformLocation* loc, const nsTArray<GLfloat>& arr,
-                              GLuint elemOffset, GLuint elemCountOverride) {
+                              WebGLUniformLocation* loc,
+                              const nsTArray<GLfloat>& arr, GLuint elemOffset,
+                              GLuint elemCountOverride) {
   const FuncScope funcScope(*this, funcName);
 
   size_t elemCount;
@@ -1957,7 +1957,8 @@ static inline void MatrixAxBToRowMajor(const uint8_t width,
 void WebGLContext::UniformMatrixAxBfv(const char* funcName, uint8_t A,
                                       uint8_t B, WebGLUniformLocation* loc,
                                       const bool transpose,
-                                      const nsTArray<float>& arr, GLuint elemOffset,
+                                      const nsTArray<float>& arr,
+                                      GLuint elemOffset,
                                       GLuint elemCountOverride) {
   const FuncScope funcScope(*this, funcName);
 
@@ -2101,7 +2102,7 @@ void WebGLContext::CompileShader(WebGLShader& shader) {
 }
 
 MaybeWebGLVariant WebGLContext::GetShaderParameter(const WebGLShader& shader,
-                                           GLenum pname) {
+                                                   GLenum pname) {
   const FuncScope funcScope(*this, "getShaderParameter");
   if (IsContextLost()) return Nothing();
 
@@ -2120,9 +2121,8 @@ nsString WebGLContext::GetShaderInfoLog(const WebGLShader& shader) {
   return shader.GetShaderInfoLog();
 }
 
-Maybe<WebGLShaderPrecisionFormat>
-WebGLContext::GetShaderPrecisionFormat(GLenum shadertype,
-                                       GLenum precisiontype) {
+Maybe<WebGLShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
+    GLenum shadertype, GLenum precisiontype) {
   const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return Nothing();
 

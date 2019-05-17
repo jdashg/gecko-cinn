@@ -182,8 +182,8 @@ bool WebGLContext::ValidateInvalidateFramebuffer(
   return true;
 }
 
-void WebGL2Context::InvalidateFramebuffer(
-    GLenum target, const nsTArray<GLenum>& attachments) {
+void WebGL2Context::InvalidateFramebuffer(GLenum target,
+                                          const nsTArray<GLenum>& attachments) {
   const FuncScope funcScope(*this, "invalidateFramebuffer");
 
   std::vector<GLenum> scopedVector;
