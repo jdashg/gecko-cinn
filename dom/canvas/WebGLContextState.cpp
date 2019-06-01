@@ -416,7 +416,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
       break;
 
     case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS: {
-      return AsSomeVariant(std::move(mCompressedTextureFormats));
+      return AsSomeVariant(mCompressedTextureFormats);
     }
 
     // unsigned int. here we may have to return very large values like 2^32-1
