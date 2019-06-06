@@ -246,6 +246,9 @@ void WebGLContext::BindBufferRangeImpl(GLenum target, GLuint index,
 
 void WebGLContext::BufferDataImpl(GLenum target, uint64_t dataLen,
                                   const uint8_t* data, GLenum usage) {
+  const FuncScope funcScope(*this, "bufferData");
+  if (IsContextLost()) return;
+
   const auto& buffer = ValidateBufferSelection(target);
   if (!buffer) return;
 
@@ -257,6 +260,7 @@ void WebGLContext::BufferDataImpl(GLenum target, uint64_t dataLen,
 void WebGLContext::BufferSubDataImpl(GLenum target, WebGLsizeiptr dstByteOffset,
                                      uint64_t dataLen, const uint8_t* data) {
   const FuncScope funcScope(*this, "bufferSubData");
+  if (IsContextLost()) return;
 
   if (!ValidateNonNegative("byteOffset", dstByteOffset)) return;
 
