@@ -559,6 +559,7 @@ ClientWebGLExtensionBase* ClientWebGLContext::UseExtension(
       return new ClientWebGLExtensionLoseContext(this);
     default:
       MOZ_ASSERT_UNREACHABLE("illegal extension enum");
+      return nullptr;
   }
 }
 
