@@ -1667,6 +1667,7 @@ void WebGLContext::EnqueueUpdateContextLossStatus() {
 // full timer iterations: detection, webglcontextlost, webglcontextrestored.
 void WebGLContext::UpdateContextLossStatus() {
   MOZ_ASSERT(mHost);
+  mContextLossHandler.ClearTimer();
 
   if (mContextStatus == ContextStatus::NotLost) {
     // We don't know that we're lost, but we might be, so we need to
