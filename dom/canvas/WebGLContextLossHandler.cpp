@@ -32,7 +32,12 @@ WebGLContextLossHandler::~WebGLContextLossHandler() {}
 void WebGLContextLossHandler::RunTimer() {
   const uint32_t kDelayMS = 1000;
   MOZ_ASSERT(MessageLoop::current());
-  MessageLoop::current()->PostDelayedTask(do_AddRef(mRunnable), kDelayMS);
+  // Only create a new task if one isn't already queued.
+  if (mTimerIsScheduled.compareExchange(false, true)) {
+    MessageLoop::current()->PostDelayedTask(do_AddRef(mRunnable), kDelayMS);
+  }
 }
+
+void WebGLContextLossHandler::ClearTimer() { mTimerIsScheduled = false; }
 
 }  // namespace mozilla
