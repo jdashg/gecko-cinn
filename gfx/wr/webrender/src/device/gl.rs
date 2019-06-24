@@ -1212,7 +1212,7 @@ impl Device {
                 if supports_khr_debug {
                     Self::log_driver_messages(gl);
                 }
-                panic!("Caught GL error {:x} at {}", code, name);
+                println!("Caught GL error {:x} at {}", code, name);
             });
         }
 
