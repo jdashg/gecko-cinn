@@ -1396,6 +1396,10 @@ class GetFeatureStatusWorkerRunnable final
 nsresult gfxUtils::ThreadSafeGetFeatureStatus(
     const nsCOMPtr<nsIGfxInfo>& gfxInfo, int32_t feature, nsACString& failureId,
     int32_t* status) {
+  if (NS_IsMainThread()) {
+    return gfxInfo->GetFeatureStatus(feature, failureId, status);
+  }
+
   // In a content process, we must call this on the main thread.
   // In a composition process (parent or GPU), this needs to be called on the
   // compositor thread.
@@ -1403,7 +1407,7 @@ nsresult gfxUtils::ThreadSafeGetFeatureStatus(
   MOZ_ASSERT(!assumeIsCompositionProcess || NS_IsInCompositorThread());
 
   // Content-process non-main-thread case:
-  if ((!assumeIsCompositionProcess) && (!NS_IsMainThread())) {
+  if (!assumeIsCompositionProcess) {
     dom::WorkerPrivate* workerPrivate = dom::GetCurrentThreadWorkerPrivate();
 
     RefPtr<GetFeatureStatusWorkerRunnable> runnable =
@@ -1421,25 +1425,20 @@ nsresult gfxUtils::ThreadSafeGetFeatureStatus(
     return runnable->GetNSResult();
   }
 
-  // Compositor-process non-main-thread case
-  if (assumeIsCompositionProcess && (!NS_IsMainThread())) {
-    nsresult rv;
-    // We can't use NS_DISPATCH_SYNC because the compositor thread does not
-    // run a task queue.
-    // TODO: What happened to the non-xp semaphore???
-    CrossProcessSemaphore* sem =
-        CrossProcessSemaphore::Create("GetFeatureStatusSem", 0);
-    NS_DispatchToMainThread(
-        NS_NewRunnableFunction("GetFeatureStatusMain", [&]() {
-          rv = gfxInfo->GetFeatureStatus(feature, failureId, status);
-          sem->Signal();
-        }));
-    sem->Wait();
-    delete sem;
-    return rv;
-  }
-
-  return gfxInfo->GetFeatureStatus(feature, failureId, status);
+  nsresult rv;
+  // We can't use NS_DISPATCH_SYNC because the compositor thread does not
+  // run a task queue.
+  // TODO: What happened to the non-xp semaphore???
+  CrossProcessSemaphore* sem =
+      CrossProcessSemaphore::Create("GetFeatureStatusSem", 0);
+  NS_DispatchToMainThread(
+      NS_NewRunnableFunction("GetFeatureStatusMain", [&]() {
+        rv = gfxInfo->GetFeatureStatus(feature, failureId, status);
+        sem->Signal();
+      }));
+  sem->Wait();
+  delete sem;
+  return rv;
 }
 
 #define GFX_SHADER_CHECK_BUILD_VERSION_PREF "gfx-shader-check.build-version"

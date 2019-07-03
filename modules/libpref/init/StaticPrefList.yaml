@@ -7629,11 +7629,6 @@
   value: false
   mirror: always
 
-- name: webgl.disable-extensions
-  type: RelaxedAtomicBool
-  value: false
-  mirror: always
-
 - name: webgl.dxgl.enabled
   type: RelaxedAtomicBool
   value: false
