@@ -18,7 +18,6 @@
 #  include "mozilla/gfx/DeviceManagerDx.h"  // for DeviceManagerDx
 #endif
 #include "mozilla/dom/WebGLCrossProcessCommandQueue.h"
-#include "mozilla/dom/WebGLErrorQueue.h"
 #include "mozilla/dom/WebGLParent.h"
 #include "mozilla/ipc/Transport.h"           // for Transport
 #include "mozilla/layers/AnimationHelper.h"  // for CompositorAnimationStorage
@@ -696,18 +695,12 @@ void ContentCompositorBridgeParent::ObserveLayersUpdate(
   Unused << state->mParent->SendObserveLayersUpdate(aLayersId, aEpoch, aActive);
 }
 
-dom::PWebGLParent* ContentCompositorBridgeParent::AllocPWebGLParent(
-    const WebGLVersion& aVersion,
-    UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-    UniquePtr<HostWebGLErrorSource>&& aErrorSource) {
-  return dom::WebGLParent::Create(aVersion, std::move(aCommandSink),
-                                  std::move(aErrorSource));
-}
-
-bool ContentCompositorBridgeParent::DeallocPWebGLParent(
-    PWebGLParent* aWebGLParent) {
-  delete aWebGLParent;
-  return true;
+already_AddRefed<dom::PWebGLParent>
+ContentCompositorBridgeParent::AllocPWebGLParent(
+    const webgl::InitContextDesc& aInitDesc,
+    webgl::InitContextResult* const out) {
+  RefPtr<dom::PWebGLParent> ret = dom::WebGLParent::Create(aInitDesc, out);
+  return ret.forget();
 }
 
 }  // namespace layers

@@ -101,8 +101,6 @@ WebGLExtensionTextureHalfFloat::WebGLExtensionTextureHalfFloat(
   fnAdd(webgl::EffectiveFormat::Luminance16FAlpha16F);
 }
 
-WebGLExtensionTextureHalfFloat::~WebGLExtensionTextureHalfFloat() {}
-
 bool WebGLExtensionTextureHalfFloat::IsSupported(const WebGLContext* webgl) {
   if (webgl->IsWebGL2()) return false;
 

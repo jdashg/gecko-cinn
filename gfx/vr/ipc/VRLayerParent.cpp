@@ -11,7 +11,6 @@
 #include "mozilla/Unused.h"
 #include "SharedSurface.h"
 #include "SurfaceTypes.h"
-#include "VRDisplayHost.h"
 
 namespace mozilla {
 using namespace layers;
@@ -94,7 +93,7 @@ mozilla::ipc::IPCResult VRLayerParent::RecvSubmitFrame(
 
   if (mVRDisplayID) {
     VRManager* vm = VRManager::Get();
-    vm->SubmitFrame(this, aTexture, aFrameId, aLeftEyeRect, aRightEyeRect);
+    vm->SubmitFrame(this, desc, aFrameId, aLeftEyeRect, aRightEyeRect);
   }
 
   return IPC_OK();
