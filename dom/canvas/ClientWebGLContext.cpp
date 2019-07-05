@@ -5,19 +5,20 @@
 
 #include "ClientWebGLContext.h"
 
+#include "ClientWebGLExtensions.h"
+#include "HostWebGLContext.h"
+#include "mozilla/dom/WebGLContextEvent.h"
+#include "mozilla/EnumeratedRange.h"
 #include "mozilla/ipc/Shmem.h"
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/ImageBridgeChild.h"
 #include "mozilla/layers/LayerTransactionChild.h"
 #include "mozilla/layers/OOPCanvasRenderer.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
+#include "nsIGfxInfo.h"
 #include "TexUnpackBlob.h"
-#include "WebGLContextEndpoint.h"
-#include "mozilla/dom/WebGLContextEvent.h"
-#include "HostWebGLContext.h"
 #include "WebGLMethodDispatcher.h"
 #include "WebGLChild.h"
-#include "nsIGfxInfo.h"
 
 namespace mozilla {
 
@@ -70,182 +71,27 @@ static bool GetJSScalarFromGLType(GLenum type,
   }
 }
 
-/* static */ RefPtr<ClientWebGLContext>
-ClientWebGLContext::MakeSingleProcessWebGLContext(WebGLVersion aVersion) {
-  UniquePtr<HostWebGLContext> host = HostWebGLContext::Create(aVersion);
-  if (!host) {
-    return nullptr;
-  }
+ClientWebGLContext::ClientWebGLContext(const bool webgl2)
+    : mIsWebGL2(webgl2),
+      mExtLoseContext(new ClientWebGLExtensionLoseContext(this)) {}
 
-  return new ClientWebGLContext(std::move(host));
-}
-
-/* static */ RefPtr<ClientWebGLContext>
-ClientWebGLContext::MakeCrossProcessWebGLContext(WebGLVersion aVersion) {
-  CompositorBridgeChild* cbc = CompositorBridgeChild::Get();
-  MOZ_ASSERT(cbc);
-  if (!cbc) {
-    return nullptr;
-  }
-
-  // Construct the WebGL command queue, used to send commands from the client
-  // process to the host for execution.  It takes a response queue that is used
-  // to return responses to synchronous messages.
-  // TODO: Be smarter in choosing these.
-  static const size_t CommandQueueSize = 256 * 1024;  // 256K
-  static const size_t ResponseQueueSize = 8 * 1024;   // 8K
-
-  UniquePtr<ProducerConsumerQueue> commandPcq =
-      ProducerConsumerQueue::Create(cbc, CommandQueueSize);
-  UniquePtr<ProducerConsumerQueue> responsePcq =
-      ProducerConsumerQueue::Create(cbc, ResponseQueueSize);
-  if ((!commandPcq) || (!responsePcq)) {
-    WEBGL_BRIDGE_LOGE("Failed to create command/response PCQ");
-    return nullptr;
-  }
-
-  UniquePtr<WebGLCrossProcessCommandQueue> commandQueue =
-      WebGLCrossProcessCommandQueue::Create(std::move(commandPcq), responsePcq);
-  if (!commandQueue) {
-    WEBGL_BRIDGE_LOGE("Failed to create WebGLCrossProcessCommandQueue");
-    return nullptr;
-  }
-
-  // Construct the error and warning queue, used to asynchronously send errors
-  // and warnings from the WebGLContext in the host to the DOM in the client.
-  // TODO: Be smarter in choosing this.
-  static const size_t ErrorQueueSize = 4 * 1024;  // 4K
-
-  UniquePtr<ProducerConsumerQueue> errorPcq =
-      ProducerConsumerQueue::Create(cbc, ErrorQueueSize);
-  if (!errorPcq) {
-    WEBGL_BRIDGE_LOGE("Failed to create error and warning PCQ");
-    return nullptr;
-  }
-
-  UniquePtr<WebGLErrorQueue> errorQueue =
-      WebGLErrorQueue::Create(std::move(errorPcq));
-  if (!errorQueue) {
-    WEBGL_BRIDGE_LOGE("Failed to create WebGLErrorQueue");
-    return nullptr;
-  }
-
-  // Use the error/warning and command queues to construct a
-  // ClientWebGLContext in this process and a HostWebGLContext
-  // in the host process.
-  dom::WebGLChild* webGLChild = new dom::WebGLChild();
-  webGLChild = static_cast<dom::WebGLChild*>(cbc->SendPWebGLConstructor(
-      webGLChild, aVersion, std::move(commandQueue->mSink),
-      std::move(errorQueue->mSource)));
-  if (!webGLChild) {
-    WEBGL_BRIDGE_LOGE("SendPWebGLConstructor failed");
-    return nullptr;
-  }
-
-  RefPtr<ClientWebGLContext> client = new ClientWebGLContext(
-      webGLChild, aVersion, std::move(commandQueue->mSource),
-      std::move(errorQueue->mSink));
-
-  // Start the error and warning drain task
-  client->DrainErrorQueue(true);
-  return client;
-}
-
-/* static */ RefPtr<ClientWebGLContext> ClientWebGLContext::Create(
-    WebGLVersion aVersion) {
-  bool shouldRemoteWebGL = gfxPrefs::WebGLIsRemoted();
-  DebugOnly<bool> isHostProcess = XRE_IsGPUProcess() || XRE_IsParentProcess();
-  MOZ_ASSERT(!isHostProcess);
-
-  if (shouldRemoteWebGL) {
-    return MakeCrossProcessWebGLContext(aVersion);
-  }
-  return MakeSingleProcessWebGLContext(aVersion);
-}
-
-ClientWebGLContext::ClientWebGLContext(UniquePtr<HostWebGLContext>&& aHost)
-    : WebGLContextEndpoint(aHost->GetVersion()),
-      mWebGLChild(nullptr),
-      mHostContext(std::move(aHost)) {
-  MOZ_ASSERT(mHostContext);
-  mHostContext->SetClientContext(this);
-}
-
-ClientWebGLContext::~ClientWebGLContext() {
-  RemovePostRefreshObserver();
-  if (mWebGLChild) {
-    Unused << mWebGLChild->Send__delete__(mWebGLChild);
-  }
-}
-
-ClientWebGLContext::ClientWebGLContext(
-    dom::WebGLChild* aWebGLChild, WebGLVersion aVersion,
-    UniquePtr<ClientWebGLCommandSource>&& aCommandSource,
-    UniquePtr<ClientWebGLErrorSink>&& aErrorSink)
-    : WebGLContextEndpoint(aVersion),
-      mCommandSource(std::move(aCommandSource)),
-      mErrorSink(std::move(aErrorSink)),
-      mWebGLChild(aWebGLChild) {
-  MOZ_ASSERT(mCommandSource && mErrorSink && mWebGLChild);
-  aWebGLChild->SetContext(this);
-}
-
-void DrainWebGLError(nsWeakPtr aWeakContext) {
-  nsCOMPtr<nsICanvasRenderingContextInternal> baseContext =
-      do_QueryReferent(aWeakContext);
-  if (!baseContext) {
-    // Do not re-issue the task.
-    WEBGL_BRIDGE_LOGI(
-        "DrainWebGLError: ClientWebGLContext "
-        "has been destroyed.  Stopping.");
-    return;
-  }
-
-  WEBGL_BRIDGE_LOGV("Draining WebGL Error Queue");
-  RefPtr<ClientWebGLContext> context =
-      static_cast<ClientWebGLContext*>(baseContext.get());
-  context->DrainErrorQueue(true);
-}
-
-void ClientWebGLContext::DrainErrorQueue(bool toReissue) {
-  RefPtr<ClientWebGLContext> refThis = this;
-  mErrorSink->SetClientWebGLContext(refThis);
-  bool success = mErrorSink->ProcessAll() == CommandResult::QueueEmpty;
-  refThis = nullptr;
-  mErrorSink->SetClientWebGLContext(refThis);
-
-  if (!toReissue) {
-    return;
-  }
-
-  // Re-issue the task if successful.
-  nsWeakPtr weakThis = do_GetWeakReference(this);
-  auto drainErrorRunnable =
-      NewRunnableFunction("DrainWebGLError", &DrainWebGLError, weakThis);
-  if ((!success) ||
-      NS_FAILED(NS_DelayedDispatchToCurrentThread(
-          drainErrorRunnable.downcast<nsIRunnable>(), 10 /* ms */))) {
-    MOZ_ASSERT_UNREACHABLE(
-        "DrainErrorQueue failed to reissue.  The "
-        "error/warning queue will no longer be drained.");
-  }
-}
+ClientWebGLContext::~ClientWebGLContext() { RemovePostRefreshObserver(); }
 
 bool ClientWebGLContext::UpdateCompositableHandle(
     LayerTransactionChild* aLayerTransaction, CompositableHandle aHandle) {
   // When running OOP WebGL (i.e. when we have a WebGLChild actor), tell the
   // host about the new compositable.  When running in-process, we don't need to
   // care.
-  if (mWebGLChild) {
+  if (mNotLost->outOfProcess) {
     WEBGL_BRIDGE_LOGI("[%p] Setting CompositableHandle to %" PRIx64, this,
                       aHandle.Value());
-    return mWebGLChild->SendUpdateCompositableHandle(aLayerTransaction,
-                                                     aHandle);
+    return mNotLost->outOfProcess->mWebGLChild->SendUpdateCompositableHandle(
+        aLayerTransaction, aHandle);
   }
   return true;
 }
 
-void ClientWebGLContext::PostWarning(const nsCString& aWarning) {
+void ClientWebGLContext::JsWarning(const std::string& utf8) const {
   if (!mCanvasElement) {
     return;
   }
@@ -253,65 +99,114 @@ void ClientWebGLContext::PostWarning(const nsCString& aWarning) {
   if (!api.Init(mCanvasElement->OwnerDoc()->GetScopeObject())) {
     return;
   }
-  JSContext* cx = api.cx();
-  // no need to print to stderr, as JS::WarnASCII takes care of this for us.
-  WEBGL_BRIDGE_LOGD("[%p] Posting message to console: '%s'", this,
-                    aWarning.Data());
-  JS::WarnASCII(cx, aWarning.Data());
+  const auto& cx = api.cx();
+  JS::WarnUTF8(cx, "%s", utf8.c_str());
 }
 
-void ClientWebGLContext::OnLostContext() {
-  const auto kEventName = NS_LITERAL_STRING("webglcontextlost");
+// ---------
+
+bool ClientWebGLContext::DispatchEvent(const nsAString& eventName) const {
   const auto kCanBubble = CanBubble::eYes;
   const auto kIsCancelable = Cancelable::eYes;
   bool useDefaultHandler;
 
-  WEBGL_BRIDGE_LOGD("[%p] Posting webglcontextlost event", this);
   if (mCanvasElement) {
     nsContentUtils::DispatchTrustedEvent(
         mCanvasElement->OwnerDoc(), static_cast<nsIContent*>(mCanvasElement),
-        kEventName, kCanBubble, kIsCancelable, &useDefaultHandler);
+        eventName, kCanBubble, kIsCancelable, &useDefaultHandler);
   } else {
     // OffscreenCanvas case
     RefPtr<Event> event = new Event(mOffscreenCanvas, nullptr, nullptr);
-    event->InitEvent(kEventName, kCanBubble, kIsCancelable);
+    event->InitEvent(eventName, kCanBubble, kIsCancelable);
     event->SetTrusted(true);
     useDefaultHandler = mOffscreenCanvas->DispatchEvent(
         *event, CallerType::System, IgnoreErrors());
   }
-
-  if (!useDefaultHandler) {
-    // If we're told to use the default handler, it means the script
-    // didn't bother to handle the event. In this case, we shouldn't
-    // auto-restore the context.
-    AllowContextRestore();
-  }
+  return useDefaultHandler;
 }
 
-void ClientWebGLContext::OnRestoredContext() {
+// -
+
+void ClientWebGLContext::OnContextLoss(const webgl::ContextLossReason reason) {
+  MOZ_ASSERT(NS_IsMainThread());
+  mNotLost = {};  // Lost now!
+
+  switch (reason) {
+    case webgl::ContextLossReason::Guilty:
+      mLossStatus = webgl::LossStatus::LostForever;
+      break;
+
+    case webgl::ContextLossReason::None:
+      mLossStatus = webgl::LossStatus::Lost;
+      break;
+
+    case webgl::ContextLossReason::Manual:
+      mLossStatus = webgl::LossStatus::LostManually;
+      break;
+  }
+
+  const auto weak = WeakPtr<ClientWebGLContext>(this);
+  const auto fnRun = [weak]() {
+    const auto strong = RefPtr<ClientWebGLContext>(weak);
+    if (!strong) return;
+    strong->Event_webglcontextlost();
+  };
+  already_AddRefed<mozilla::Runnable> runnable =
+      NS_NewRunnableFunction("enqueue Event_webglcontextlost", fnRun);
+  NS_DispatchToCurrentThread(std::move(runnable));
+}
+
+void ClientWebGLContext::Event_webglcontextlost() {
+  WEBGL_BRIDGE_LOGD("[%p] Posting webglcontextlost event", this);
+  const bool useDefaultHandler =
+      DispatchEvent(NS_LITERAL_STRING("webglcontextlost"));
+  if (useDefaultHandler) {
+    mLossStatus = webgl::LossStatus::LostForever;
+  }
+
+  if (mLossStatus != webgl::LossStatus::Lost) return;
+
+  RestoreContext();
+}
+
+void ClientWebGLContext::RestoreContext() {
+  MOZ_RELEASE_ASSERT(mLossStatus == webgl::LossStatus::Lost ||
+                     mLossStatus == webgl::LossStatus::LostManually);
+
+  const auto weak = WeakPtr<ClientWebGLContext>(this);
+  const auto fnRun = [weak]() {
+    const auto strong = RefPtr<ClientWebGLContext>(weak);
+    if (!strong) return;
+    strong->Event_webglcontextrestored();
+  };
+  already_AddRefed<mozilla::Runnable> runnable =
+      NS_NewRunnableFunction("enqueue Event_webglcontextrestored", fnRun);
+  NS_DispatchToCurrentThread(std::move(runnable));
+}
+
+void ClientWebGLContext::Event_webglcontextrestored() {
+  mLossStatus = webgl::LossStatus::Ready;
+  if (!CreateHostContext()) {
+    mLossStatus = webgl::LossStatus::LostForever;
+    return;
+  }
+
   WEBGL_BRIDGE_LOGD("[%p] Posting webglcontextrestored event", this);
-  if (mCanvasElement) {
-    nsContentUtils::DispatchTrustedEvent(
-        mCanvasElement->OwnerDoc(), static_cast<nsIContent*>(mCanvasElement),
-        NS_LITERAL_STRING("webglcontextrestored"), CanBubble::eYes,
-        Cancelable::eYes);
-  } else {
-    RefPtr<Event> event = new Event(mOffscreenCanvas, nullptr, nullptr);
-    event->InitEvent(NS_LITERAL_STRING("webglcontextrestored"), CanBubble::eYes,
-                     Cancelable::eYes);
-    event->SetTrusted(true);
-    mOffscreenCanvas->DispatchEvent(*event);
-  }
+  (void)DispatchEvent(NS_LITERAL_STRING("webglcontextrestored"));
 }
 
-void ClientWebGLContext::PostContextCreationError(const nsCString& text) {
+// ---------
+
+void ClientWebGLContext::ThrowEvent_WebGLContextCreationError(
+    const std::string& text) const {
+  nsCString msg;
+  msg.AppendPrintf("Failed to create WebGL context: %s", text.c_str());
+  JsWarning(msg.BeginReading());
+
   RefPtr<EventTarget> target = mCanvasElement;
   if (!target && mOffscreenCanvas) {
     target = mOffscreenCanvas;
   } else if (!target) {
-    nsCString msg;
-    msg.AppendPrintf("Failed to create WebGL context: %s", text.BeginReading());
-    PostWarning(msg);
     return;
   }
 
@@ -320,19 +215,13 @@ void ClientWebGLContext::PostContextCreationError(const nsCString& text) {
 
   dom::WebGLContextEventInit eventInit;
   // eventInit.mCancelable = true; // The spec says this, but it's silly.
-  eventInit.mStatusMessage = NS_ConvertASCIItoUTF16(text);
+  eventInit.mStatusMessage = NS_ConvertASCIItoUTF16(text.c_str());
 
   const RefPtr<WebGLContextEvent> event =
       WebGLContextEvent::Constructor(target, kEventName, eventInit);
   event->SetTrusted(true);
 
   target->DispatchEvent(*event);
-
-  //////
-
-  nsCString msg;
-  msg.AppendPrintf("Failed to create WebGL context: %s", text.BeginReading());
-  PostWarning(msg);
 }
 
 // ---
@@ -392,6 +281,16 @@ struct WebGLClientDispatcher<void> {
   }
 };
 
+template <typename T>
+inline T DefaultOrVoid() {
+  return {};
+}
+
+template <>
+inline void DefaultOrVoid<void>() {
+  return;
+}
+
 // If we are running WebGL in this process then call the HostWebGLContext
 // method directly.  Otherwise, dispatch over IPC.
 template <
@@ -400,9 +299,10 @@ template <
     size_t Id = WebGLMethodDispatcher::Id<MethodType, method>(),
     typename... Args>
 ReturnType ClientWebGLContext::Run(Args&&... aArgs) const {
-  if (!IsHostOOP()) {
-    MOZ_ASSERT(mHostContext);
-    return ((mHostContext.get())->*method)(std::forward<Args>(aArgs)...);
+  if (!mNotLost) return DefaultOrVoid<ReturnType>();
+  const auto& inProcessContext = mNotLost->inProcess;
+  if (inProcessContext) {
+    return ((inProcessContext.get())->*method)(std::forward<Args>(aArgs)...);
   }
   return WebGLClientDispatcher<ReturnType>::template Run<Id>(*this, method,
                                                              aArgs...);
@@ -467,15 +367,14 @@ void ClientWebGLContext::BeginComposition() {
   // When running cross-process WebGL, Present needs to be called in
   // EndComposition so that it happens _after_ the OOPCanvasRenderer's
   // Update tells it what CompositableHost to use,
-  if (!IsHostOOP()) {
-    MOZ_ASSERT(mHostContext);
+  if (mNotLost->inProcess) {
     WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
-    mHostContext->Present();
+    mNotLost->inProcess->Present();
   }
 }
 
 void ClientWebGLContext::EndComposition() {
-  if (IsHostOOP()) {
+  if (mNotLost->outOfProcess) {
     WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
     Run<RPROC(Present)>();
   }
@@ -539,10 +438,6 @@ bool ClientWebGLContext::UpdateWebRenderCanvasData(
   return true;
 }
 
-mozilla::dom::PWebGLChild* ClientWebGLContext::GetWebGLChild() {
-  return mWebGLChild;
-}
-
 bool ClientWebGLContext::InitializeCanvasRenderer(
     nsDisplayListBuilder* aBuilder, CanvasRenderer* aRenderer) {
   const FuncScope funcScope(this, "<InitializeCanvasRenderer>");
@@ -587,15 +482,13 @@ bool ClientWebGLContext::InitializeCanvasRenderer(
                (data.mOOPRenderer->mContext == this));
     data.mOOPRenderer->mContext = this;
   } else {
-    MOZ_ASSERT(mHostContext);
-    data.mGLContext = mHostContext->GetWebGLContext()->gl;
+    MOZ_ASSERT(mNotLost->inProcess);
+    data.mGLContext = mNotLost->inProcess->GetWebGLContext()->gl;
   }
 
   data.mHasAlpha = mSurfaceInfo.hasAlpha;
   data.mIsGLAlphaPremult = mSurfaceInfo.isPremultAlpha || !data.mHasAlpha;
-
-  // TODO: Do I really need this?  Can't use mSurfaceInfo.size?
-  data.mSize = DrawingBufferSize();
+  data.mSize = mSurfaceInfo.size;
 
   aRenderer->Initialize(data);
   aRenderer->SetDirty();
@@ -651,51 +544,139 @@ void ClientWebGLContext::GetContextAttributes(
 
   dom::WebGLContextAttributes& result = retval.SetValue();
 
-  result.mAlpha.Construct(mOptions.alpha);
-  result.mDepth = mOptions.depth;
-  result.mStencil = mOptions.stencil;
-  result.mAntialias = mOptions.antialias;
-  result.mPremultipliedAlpha = mOptions.premultipliedAlpha;
-  result.mPreserveDrawingBuffer = mOptions.preserveDrawingBuffer;
-  result.mFailIfMajorPerformanceCaveat = mOptions.failIfMajorPerformanceCaveat;
-  result.mPowerPreference = mOptions.powerPreference;
+  const auto& options = mNotLost->info.options;
+
+  result.mAlpha.Construct(options.alpha);
+  result.mDepth = options.depth;
+  result.mStencil = options.stencil;
+  result.mAntialias = options.antialias;
+  result.mPremultipliedAlpha = options.premultipliedAlpha;
+  result.mPreserveDrawingBuffer = options.preserveDrawingBuffer;
+  result.mFailIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
+  result.mPowerPreference = options.powerPreference;
 }
+
+// -----------------------
 
 NS_IMETHODIMP
 ClientWebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight) {
   const FuncScope funcScope(this, "<SetDimensions>");
-
   WEBGL_BRIDGE_LOGI("[%p] SetDimensions: (%d, %d)", this, signedWidth,
                     signedHeight);
 
-  // May have a OffscreenCanvas instead of an HTMLCanvasElement
-  if (GetCanvas()) GetCanvas()->InvalidateCanvas();
+  MOZ_ASSERT(mInitialOptions);
 
-  SetDimensionsData data = Run<RPROC(SetDimensions)>(signedWidth, signedHeight);
+  const auto size = uvec2::From(signedWidth, signedHeight);
+  if (!size) {
+    EnqueueWarning(
+        "Canvas size is too large (seems like a negative value wrapped)");
+    return NS_ERROR_OUT_OF_MEMORY;
+  }
+  if (*size == mRequestedSize) return NS_OK;
+  mRequestedSize = *size;
+  mDrawingBufferSize = {};
 
-  // May have a OffscreenCanvas instead of an HTMLCanvasElement
-  if (GetCanvas()) GetCanvas()->InvalidateCanvas();
-
-  // if we exceeded either the global or the per-principal limit for WebGL
-  // contexts, lose the oldest-used context now to free resources. Note that we
-  // can't do that in the ClientWebGLContext constructor as we don't have a
-  // canvas element yet there. Here is the right place to do so, as we are about
-  // to create the OpenGL context and that is what can fail if we already have
-  // too many.
-  if (data.mMaybeLostOldContext) {
-    LoseOldestWebGLContextIfLimitExceeded();
+  if (mNotLost) {
+    Run<RPROC(Resize)>(*size);
+    MarkCanvasDirty();
+    return NS_OK;
   }
 
-  mOptions = data.mOptions;
-  mOptionsFrozen = data.mOptionsFrozen;
-  mResetLayer = data.mResetLayer;
-  mPixelStore = data.mPixelStore;
-  return data.mResult;
+  if (mLossStatus != webgl::LossStatus::Ready) {
+    MOZ_RELEASE_ASSERT(false);
+    return NS_ERROR_FAILURE;
+  }
+
+  // -
+  // Context (re-)creation
+
+  if (!CreateHostContext()) {
+    return NS_ERROR_FAILURE;
+  }
+  return NS_OK;
 }
 
-gfx::IntSize ClientWebGLContext::DrawingBufferSize() {
-  // TODO: This is absurd.
-  return Run<RPROC(DrawingBufferSize)>();
+bool ClientWebGLContext::CreateHostContext() {
+  ClientWebGLContext::NotLostData notLost;
+
+  const auto res = [&]() -> Result<Ok, std::string> {
+    auto options = *mInitialOptions;
+    if (gfxPrefs::WebGLDisableFailIfMajorPerformanceCaveat()) {
+      options.failIfMajorPerformanceCaveat = false;
+    }
+    const auto initDesc =
+        webgl::InitContextDesc{mIsWebGL2, mRequestedSize, options};
+
+    // -
+
+    if (!gfxPrefs::WebGLIsRemoted()) {
+      auto ownerData = HostWebGLContext::OwnerData{
+          Some(this),
+      };
+      notLost.inProcess = HostWebGLContext::Create(std::move(ownerData),
+                                                   initDesc, &notLost.info);
+      return Ok();
+    }
+
+    // -
+
+    ClientWebGLContext::RemotingData outOfProcess;
+
+    auto* const cbc = CompositorBridgeChild::Get();
+    MOZ_ASSERT(cbc);
+    if (!cbc) {
+      return Err("!CompositorBridgeChild::Get()");
+    }
+
+    // Construct the WebGL command queue, used to send commands from the client
+    // process to the host for execution.  It takes a response queue that is
+    // used to return responses to synchronous messages.
+    // TODO: Be smarter in choosing these.
+    static constexpr size_t CommandQueueSize = 256 * 1024;  // 256K
+    static constexpr size_t ResponseQueueSize = 8 * 1024;   // 8K
+    auto commandPcq = ProducerConsumerQueue::Create(cbc, CommandQueueSize);
+    auto responsePcq = ProducerConsumerQueue::Create(cbc, ResponseQueueSize);
+    if (!commandPcq || !responsePcq) {
+      return Err("Failed to create command/response PCQ");
+    }
+
+    outOfProcess.mCommandSource = MakeUnique<ClientWebGLCommandSource>(
+        std::move(commandPcq->mProducer), std::move(responsePcq->mConsumer));
+    auto sink = MakeUnique<HostWebGLCommandSink>(
+        std::move(commandPcq->mConsumer), std::move(responsePcq->mProducer));
+
+    // Use the error/warning and command queues to construct a
+    // ClientWebGLContext in this process and a HostWebGLContext
+    // in the host process.
+    outOfProcess.mWebGLChild = MakeUnique<dom::WebGLChild>(*this);
+    if (!cbc->SendPWebGLConstructor(outOfProcess.mWebGLChild.get(), initDesc,
+                                    std::move(sink), &notLost.info)) {
+      return Err("SendPWebGLConstructor failed");
+    }
+
+    notLost.outOfProcess = Some(std::move(outOfProcess));
+    return Ok();
+  }();
+  if (!res.isOk()) {
+    notLost.info.error = res.unwrapErr();
+  }
+  if (notLost.info.error.size()) {
+    ThrowEvent_WebGLContextCreationError(notLost.info.error);
+    return false;
+  }
+
+  mNotLost = Some(std::move(notLost));
+  return true;
+}
+
+// -------
+
+const uvec2& ClientWebGLContext::DrawingBufferSize() {
+  if (!mDrawingBufferSize) {
+    mDrawingBufferSize = Some(Run<RPROC(DrawingBufferSize)>());
+  }
+
+  return *mDrawingBufferSize;
 }
 
 void ClientWebGLContext::OnMemoryPressure() {
@@ -703,28 +684,11 @@ void ClientWebGLContext::OnMemoryPressure() {
   return Run<RPROC(OnMemoryPressure)>();
 }
 
-static bool IsFeatureInBlacklist(const nsCOMPtr<nsIGfxInfo>& gfxInfo,
-                                 int32_t feature,
-                                 nsCString* const out_blacklistId) {
-  int32_t status;
-  if (!NS_SUCCEEDED(gfxUtils::ThreadSafeGetFeatureStatus(
-          gfxInfo, feature, *out_blacklistId, &status))) {
-    return false;
-  }
-
-  return status != nsIGfxInfo::FEATURE_STATUS_OK;
-}
-
 NS_IMETHODIMP
 ClientWebGLContext::SetContextOptions(JSContext* cx,
                                       JS::Handle<JS::Value> options,
                                       ErrorResult& aRvForDictionaryInit) {
-  const FuncScope funcScope(this, "getContext");
-  (void)IsContextLost();  // Ignore this.
-
-  if (options.isNullOrUndefined() && mOptionsFrozen) return NS_OK;
-
-  WEBGL_BRIDGE_LOGI("[%p] SetContextOptions", this);
+  MOZ_ASSERT(!mInitialOptions);
 
   WebGLContextAttributes attributes;
   if (!attributes.Init(cx, options)) {
@@ -763,44 +727,8 @@ ClientWebGLContext::SetContextOptions(JSContext* cx,
     newOpts.antialias = false;
   }
 
-  if (!gfxPrefs::WebGLForceMSAA()) {
-    const nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
-
-    nsCString blocklistId;
-    if (IsFeatureInBlacklist(gfxInfo, nsIGfxInfo::FEATURE_WEBGL_MSAA,
-                             &blocklistId)) {
-      EnqueueWarning(nsCString(
-          "Disallowing antialiased backbuffers due to blacklisting."));
-      newOpts.antialias = false;
-    }
-  }
-
-#if 0
-    EnqueueWarning("aaHint: %d stencil: %d depth: %d alpha: %d premult: %d preserve: %d\n",
-               newOpts.antialias ? 1 : 0,
-               newOpts.stencil ? 1 : 0,
-               newOpts.depth ? 1 : 0,
-               newOpts.alpha ? 1 : 0,
-               newOpts.premultipliedAlpha ? 1 : 0,
-               newOpts.preserveDrawingBuffer ? 1 : 0);
-#endif
-
-  if (mOptionsFrozen && !(newOpts == mOptions)) {
-    // Error if the options are already frozen, and the ones that were asked for
-    // aren't the same as what they were originally.
-    return NS_ERROR_FAILURE;
-  }
-
-  mOptions = newOpts;
-
-  // Send new options to the host
-  Run<RPROC(SetContextOptions)>(newOpts);
-
+  mInitialOptions.emplace(newOpts);
   return NS_OK;
-}
-
-void ClientWebGLContext::AllowContextRestore() {
-  Run<RPROC(AllowContextRestore)>();
 }
 
 void ClientWebGLContext::DidRefresh() { Run<RPROC(DidRefresh)>(); }
@@ -821,8 +749,8 @@ UniquePtr<uint8_t[]> ClientWebGLContext::GetImageBuffer(int32_t* out_format) {
 
   RefPtr<DataSourceSurface> dataSurface = snapshot->GetDataSurface();
 
-  return gfxUtils::GetImageBuffer(dataSurface, mOptions.premultipliedAlpha,
-                                  out_format);
+  const auto& premultAlpha = mNotLost->info.options.premultipliedAlpha;
+  return gfxUtils::GetImageBuffer(dataSurface, premultAlpha, out_format);
 }
 
 NS_IMETHODIMP
@@ -835,8 +763,9 @@ ClientWebGLContext::GetInputStream(const char* mimeType,
   if (!snapshot) return NS_ERROR_FAILURE;
 
   RefPtr<DataSourceSurface> dataSurface = snapshot->GetDataSurface();
-  return gfxUtils::GetInputStream(dataSurface, mOptions.premultipliedAlpha,
-                                  mimeType, encoderOptions, out_stream);
+  const auto& premultAlpha = mNotLost->info.options.premultipliedAlpha;
+  return gfxUtils::GetInputStream(dataSurface, premultAlpha, mimeType,
+                                  encoderOptions, out_stream);
 }
 
 // ------------------------- Client WebGL Objects -------------------------
@@ -900,22 +829,14 @@ RefPtr<ClientWebGLObject<WebGLType>> ClientWebGLContext::Make(
     return Make(id).forget().downcast<ClientWebGL##_TYPE>();                 \
   }
 
-#define DEFINE_ASYNC_CREATE_METHOD_EXT(_TYPE)                             \
-  already_AddRefed<ClientWebGL##_TYPE> ClientWebGLContext::Create##_TYPE( \
-      bool aExt) {                                                        \
-    auto id = GenerateId<WebGL##_TYPE>();                                 \
-    Run<RPROC(Create##_TYPE)>(id, aExt);                                  \
-    return Make(id).forget().downcast<ClientWebGL##_TYPE>();              \
-  }
-
 // All but Buffer, Texture and UniformLocation
 DEFINE_ASYNC_CREATE_METHOD(Framebuffer)
 DEFINE_ASYNC_CREATE_METHOD(Program)
 DEFINE_ASYNC_CREATE_METHOD(Renderbuffer)
 DEFINE_ASYNC_CREATE_METHOD(Sampler)
 DEFINE_ASYNC_CREATE_METHOD(TransformFeedback)
-DEFINE_ASYNC_CREATE_METHOD_EXT(Query)
-DEFINE_ASYNC_CREATE_METHOD_EXT(VertexArray)
+DEFINE_ASYNC_CREATE_METHOD(Query)
+DEFINE_ASYNC_CREATE_METHOD(VertexArray)
 
 #undef DEFINE_ASYNC_CREATE_METHOD
 
@@ -992,7 +913,7 @@ struct MaybeWebGLVariantMatcher {
         mCx, mCxt, static_cast<const int32_t(&)[Length]>(x));
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1003,7 +924,7 @@ struct MaybeWebGLVariantMatcher {
         mCx, mCxt, static_cast<const uint32_t(&)[Length]>(x));
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1014,7 +935,7 @@ struct MaybeWebGLVariantMatcher {
         mCx, mCxt, static_cast<const float(&)[Length]>(x));
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1024,7 +945,7 @@ struct MaybeWebGLVariantMatcher {
     JS::Rooted<JS::Value> obj(mCx);
     if (!dom::ToJSValue(mCx, static_cast<const bool(&)[Length]>(x), &obj)) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return obj;
   }
@@ -1033,7 +954,7 @@ struct MaybeWebGLVariantMatcher {
     JSObject* obj = dom::Uint32Array::Create(mCx, mCxt, x.Length(), &x[0]);
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1042,7 +963,7 @@ struct MaybeWebGLVariantMatcher {
     JSObject* obj = dom::Int32Array::Create(mCx, mCxt, x.Length(), &x[0]);
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1051,7 +972,7 @@ struct MaybeWebGLVariantMatcher {
     JSObject* obj = dom::Float32Array::Create(mCx, mCxt, x.Length(), &x[0]);
     if (!obj) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return JS::ObjectOrNullValue(obj);
   }
@@ -1060,7 +981,7 @@ struct MaybeWebGLVariantMatcher {
     JS::Rooted<JS::Value> obj(mCx);
     if (!dom::ToJSValue(mCx, &x[0], x.Length(), &obj)) {
       *mRv = NS_ERROR_OUT_OF_MEMORY;
-      mCxt->EnqueueErrorOutOfMemory("ToJSValue: Out of memory.");
+      mCxt->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "ToJSValue: Out of memory.");
     }
     return obj;
   }
@@ -1110,6 +1031,7 @@ JS::Value ClientWebGLContext::ToJSValue(JSContext* cx,
 
 // ------------------------- GL State -------------------------
 bool ClientWebGLContext::IsContextLost() const {
+  if (!mNotLost) return true;
   return Run<RPROC(IsContextLost)>();
 }
 
@@ -1431,7 +1353,8 @@ void ClientWebGLContext::BufferData(GLenum target, WebGLsizeiptr size,
   if (!ValidateNonNegative("size", size)) return;
 
   UniqueBuffer zeroBuffer(calloc(size, 1));
-  if (!zeroBuffer) return EnqueueErrorOutOfMemory("Failed to allocate zeros.");
+  if (!zeroBuffer)
+    return EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "Failed to allocate zeros.");
 
   Run<RPROC(BufferData)>(
       target, RawBuffer<>(size_t(size), (uint8_t*)zeroBuffer.get()), usage);
@@ -1728,8 +1651,8 @@ bool ClientWebGLContext::ValidateViewType(GLenum unpackType,
 
   const auto& jsType = view.Type();
   if (!DoesJSTypeMatchUnpackType(unpackType, jsType)) {
-    EnqueueErrorInvalidOperation(
-        "ArrayBufferView type not compatible with `type`.");
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                 "ArrayBufferView type not compatible with `type`.");
     return false;
   }
 
@@ -2331,8 +2254,7 @@ void ClientWebGLContext::VertexAttribPointer(GLuint index, GLint size,
 void ClientWebGLContext::DrawArraysInstanced(GLenum mode, GLint first,
                                              GLsizei count, GLsizei primcount,
                                              FuncScopeId aFuncId) {
-  Run<RPROC(DrawArraysInstanced)>(mode, first, count, primcount,
-                                  aFuncId);
+  Run<RPROC(DrawArraysInstanced)>(mode, first, count, primcount, aFuncId);
   // TODO: We need to invalidate if the target was the screen buffer.
   // As of right now we don't know so I'm being conservative.
   Invalidate();
@@ -2348,7 +2270,6 @@ void ClientWebGLContext::DrawElementsInstanced(GLenum mode, GLsizei count,
   // As of right now we don't know so I'm being conservative.
   Invalidate();
 }
-
 
 // ------------------------------ Readback -------------------------------
 void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
@@ -2376,14 +2297,15 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
   if (!GetJSScalarFromGLType(type, &reqScalarType)) {
     nsCString name;
     WebGLContext::EnumName(type, &name);
-    EnqueueErrorInvalidEnumInfo("type: invalid enum value %s",
-                                name.BeginReading());
+    EnqueueError(LOCAL_GL_INVALID_ENUM, "type: invalid enum value %s",
+                 name.BeginReading());
     return;
   }
 
   const auto& viewElemType = dstData.Type();
   if (viewElemType != reqScalarType) {
-    EnqueueErrorInvalidOperation("`pixels` type does not match `type`.");
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                 "`pixels` type does not match `type`.");
     return;
   }
 
@@ -2416,61 +2338,51 @@ bool ClientWebGLContext::ReadPixels_SharedPrecheck(CallerType aCallerType,
 }
 
 // ------------------------------ Vertex Array ------------------------------
-bool ClientWebGLContext::IsVertexArray(const ClientWebGLVertexArray* obj,
-                                       bool aFromExtension) {
-  return obj && obj->IsValidForContext(this) &&
-         (!aFromExtension ||
-          UseExtension(WebGLExtensionID::OES_vertex_array_object));
+bool ClientWebGLContext::IsVertexArray(
+    const ClientWebGLVertexArray* const obj) {
+  return obj && obj->IsValidForContext(this);
 }
 
 void ClientWebGLContext::DeleteVertexArray(
-    const WebGLId<WebGLVertexArray>& array, bool aFromExtension) {
-  Run<RPROC(DeleteVertexArray)>(array, aFromExtension);
+    const WebGLId<WebGLVertexArray>& array) {
+  Run<RPROC(DeleteVertexArray)>(array);
 }
 
-void ClientWebGLContext::BindVertexArray(const WebGLId<WebGLVertexArray>& array,
-                                         bool aFromExtension) {
-  Run<RPROC(BindVertexArray)>(array, aFromExtension);
+void ClientWebGLContext::BindVertexArray(
+    const WebGLId<WebGLVertexArray>& array) {
+  Run<RPROC(BindVertexArray)>(array);
 }
 
-void ClientWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor,
-                                             bool aFromExtension) {
-  Run<RPROC(VertexAttribDivisor)>(index, divisor, aFromExtension);
+void ClientWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor) {
+  Run<RPROC(VertexAttribDivisor)>(index, divisor);
 }
 
 // --------------------------------- GL Query ---------------------------------
 void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
-                                  JS::MutableHandleValue retval,
-                                  bool aFromExtension) const {
+                                  JS::MutableHandleValue retval) const {
   ErrorResult ignored;
-  retval.set(ToJSValue(cx, Run<RPROC(GetQuery)>(target, pname, aFromExtension),
-                       ignored));
+  retval.set(ToJSValue(cx, Run<RPROC(GetQuery)>(target, pname), ignored));
 }
 
-void ClientWebGLContext::GetQueryParameter(JSContext* cx,
-                                           const WebGLId<WebGLQuery>& query,
-                                           GLenum pname,
-                                           JS::MutableHandleValue retval,
-                                           bool aFromExtension) const {
+void ClientWebGLContext::GetQueryParameter(
+    JSContext* cx, const WebGLId<WebGLQuery>& query, GLenum pname,
+    JS::MutableHandleValue retval) const {
   ErrorResult ignored;
   retval.set(
-      ToJSValue(cx, Run<RPROC(GetQueryParameter)>(query, pname, aFromExtension),
-                ignored));
+      ToJSValue(cx, Run<RPROC(GetQueryParameter)>(query, pname), ignored));
 }
 
-void ClientWebGLContext::DeleteQuery(const WebGLId<WebGLQuery>& query,
-                                     bool aFromExtension) const {
-  Run<RPROC(DeleteQuery)>(query, aFromExtension);
+void ClientWebGLContext::DeleteQuery(const WebGLId<WebGLQuery>& query) const {
+  Run<RPROC(DeleteQuery)>(query);
 }
 
 void ClientWebGLContext::BeginQuery(GLenum target,
-                                    const WebGLId<WebGLQuery>& query,
-                                    bool aFromExtension) const {
-  Run<RPROC(BeginQuery)>(target, query, aFromExtension);
+                                    const WebGLId<WebGLQuery>& query) const {
+  Run<RPROC(BeginQuery)>(target, query);
 }
 
-void ClientWebGLContext::EndQuery(GLenum target, bool aFromExtension) const {
-  Run<RPROC(EndQuery)>(target, aFromExtension);
+void ClientWebGLContext::EndQuery(GLenum target) const {
+  Run<RPROC(EndQuery)>(target);
 }
 
 void ClientWebGLContext::QueryCounter(const WebGLId<WebGLQuery>& query,
@@ -2620,56 +2532,9 @@ void ClientWebGLContext::TransformFeedbackVaryings(
                                         bufferMode);
 }
 
-// ------------------------------ Extensions ------------------------------
-
-const Maybe<ExtensionSets>& ClientWebGLContext::GetCachedExtensions() {
-  if (!mExtensions) {
-    mExtensions = Run<RPROC(GetSupportedExtensions)>();
-    if (mExtensions) {
-      mExtensions.ref().mNonSystem.Sort();
-      mExtensions.ref().mSystem.Sort();
-    }
-  }
-  return mExtensions;
-}
-
-ClientWebGLExtensionBase* ClientWebGLContext::GetExtension(
-    dom::CallerType callerType, WebGLExtensionID ext, bool toEnable) {
-  if (toEnable) {
-    EnableExtension(callerType, ext);
-  }
-  return UseExtension(ext);
-}
-
-void ClientWebGLContext::EnableExtension(dom::CallerType callerType,
-                                         WebGLExtensionID ext) {
-  const Maybe<ExtensionSets>& exts = GetCachedExtensions();
-  if (!exts) {
-    return;
-  }
-  if (exts.ref().mNonSystem.ContainsSorted(ext) ||
-      ((callerType == dom::CallerType::System) &&
-       exts.ref().mSystem.ContainsSorted(ext))) {
-    mEnabledExtension[static_cast<uint8_t>(ext)] = true;
-    Run<RPROC(EnableExtension)>(callerType, ext);
-  }
-}
-
 // ---------------------------- Misc Extensions ----------------------------
-void ClientWebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers,
-                                     bool aFromExtension) {
-  Run<RPROC(DrawBuffers)>(nsTArray<uint32_t>(buffers), aFromExtension);
-}
-
-void ClientWebGLContext::GetASTCExtensionSupportedProfiles(
-    dom::Nullable<nsTArray<nsString>>& retval) const {
-  Maybe<nsTArray<nsString>> response =
-      Run<RPROC(GetASTCExtensionSupportedProfiles)>();
-  if (!response) {
-    retval.SetNull();
-    return;
-  }
-  retval.SetValue() = response.ref();
+void ClientWebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers) {
+  Run<RPROC(DrawBuffers)>(nsTArray<uint32_t>(buffers));
 }
 
 void ClientWebGLContext::GetTranslatedShaderSource(
@@ -2677,13 +2542,9 @@ void ClientWebGLContext::GetTranslatedShaderSource(
   retval = Run<RPROC(GetTranslatedShaderSource)>(shader);
 }
 
-void ClientWebGLContext::LoseContext(bool isSimulated) {
-  Run<RPROC(LoseContext)>(isSimulated);
+void ClientWebGLContext::LoseContext(const webgl::ContextLossReason reason) {
+  Run<RPROC(LoseContext)>(reason);
 }
-
-void ClientWebGLContext::RestoreContext() { Run<RPROC(RestoreContext)>(); }
-
-void ClientWebGLContext::ForceLoseContext() { Run<RPROC(LoseContext)>(false); }
 
 void ClientWebGLContext::MOZDebugGetParameter(
     JSContext* cx, GLenum pname, JS::MutableHandle<JS::Value> retval,
@@ -2691,21 +2552,80 @@ void ClientWebGLContext::MOZDebugGetParameter(
   retval.set(ToJSValue(cx, Run<RPROC(MOZDebugGetParameter)>(pname), rv));
 }
 
-void ClientWebGLContext::EnqueueErrorPrintfHelper(GLenum aGLError,
-                                                  const nsCString& msg) {
-  Run<RPROC(EnqueueError)>(aGLError, msg);
+void ClientWebGLContext::EnqueueErrorImpl(const GLenum error,
+                                          const nsACString& text) const {
+  if (!mNotLost) {
+    JsWarning(text.BeginReading());
+    return;
+  }
+  Run<RPROC(GenerateError)>(error, text.BeginReading());
 }
 
-void ClientWebGLContext::EnqueueWarning(const nsCString& msg) {
-  Run<RPROC(EnqueueWarning)>(msg);
+void ClientWebGLContext::RequestExtension(const WebGLExtensionID ext) const {
+  Run<RPROC(RequestExtension)>(ext);
 }
 
 #undef RPROC
 
+// -
+
+static bool IsExtensionForbiddenForCaller(const WebGLExtensionID ext,
+                                          const dom::CallerType callerType) {
+  if (callerType == dom::CallerType::System) return false;
+
+  if (gfxPrefs::WebGLPrivilegedExtensionsEnabled()) return false;
+
+  switch (ext) {
+    case WebGLExtensionID::MOZ_debug:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
+                                     const dom::CallerType callerType) const {
+  if (IsExtensionForbiddenForCaller(ext, callerType)) return false;
+
+  const auto& supportedExts = mNotLost->info.supportedExtensions;
+  return supportedExts[ext];
+}
+
+void ClientWebGLContext::GetSupportedExtensions(
+    dom::Nullable<nsTArray<nsString>>& retval,
+    const dom::CallerType callerType) const {
+  retval.SetNull();
+  if (!mNotLost) return;
+
+  auto& retarr = retval.SetValue();
+  for (const auto i : MakeEnumeratedRange(WebGLExtensionID::Max)) {
+    if (!IsSupported(i, callerType)) continue;
+
+    const auto& extStr = GetExtensionName(i);
+    retarr.AppendElement(NS_ConvertUTF8toUTF16(extStr));
+  }
+}
+
+// -
+
+void ClientWebGLContext::GetSupportedProfilesASTC(
+    dom::Nullable<nsTArray<nsString>>& retval) const {
+  retval.SetNull();
+  if (!mNotLost) return;
+
+  auto& retarr = retval.SetValue();
+  retarr.AppendElement(NS_LITERAL_STRING("ldr"));
+  if (mNotLost->info.astcHdr) {
+    retarr.AppendElement(NS_LITERAL_STRING("hdr"));
+  }
+}
+
+// -
+
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(ClientWebGLContext)
   NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
   NS_INTERFACE_MAP_ENTRY(nsICanvasRenderingContextInternal)
-  NS_INTERFACE_MAP_ENTRY(nsISupportsWeakReference)
   NS_INTERFACE_MAP_ENTRY_AMBIGUOUS(nsISupports,
                                    nsICanvasRenderingContextInternal)
 NS_INTERFACE_MAP_END

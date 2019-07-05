@@ -952,7 +952,7 @@ GLenum WebGLContext::GetError() {
   // UnderlyingGL-side errors, now.
   err = gl->fGetError();
   if (gl->IsContextLost()) {
-    UpdateContextLossStatus();
+    CheckForContextLoss();
     return GetError();
   }
   MOZ_ASSERT(err != LOCAL_GL_CONTEXT_LOST);
@@ -2178,32 +2178,6 @@ void WebGLContext::ShaderSource(WebGLShader& shader, const nsAString& source) {
   if (!ValidateObject("shader", shader)) return;
 
   shader.ShaderSource(source);
-}
-
-void WebGLContext::LoseContext() {
-  const FuncScope funcScope(*this, "loseContext");
-  if (IsContextLost()) return ErrorInvalidOperation("Context is already lost.");
-
-  ForceLoseContext(true);
-}
-
-void WebGLContext::RestoreContext() {
-  const FuncScope funcScope(*this, "restoreContext");
-  if (!IsContextLost()) return ErrorInvalidOperation("Context is not lost.");
-
-  if (!mLastLossWasSimulated) {
-    return ErrorInvalidOperation(
-        "Context loss was not simulated."
-        " Cannot simulate restore.");
-  }
-  // If we're currently lost, and the last loss was simulated, then
-  // we're currently only simulated-lost, allowing us to call
-  // restoreContext().
-
-  if (!mAllowContextRestore)
-    return ErrorInvalidOperation("Context cannot be restored.");
-
-  ForceRestoreContext();
 }
 
 void WebGLContext::BlendColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {

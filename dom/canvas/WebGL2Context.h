@@ -21,12 +21,12 @@ class OwningUnsignedLongOrUint32ArrayOrBoolean;
 class OwningWebGLBufferOrLongLong;
 }  // namespace dom
 
-class WebGL2Context : public WebGLContext {
- public:
-  virtual ~WebGL2Context(){};
+class WebGL2Context final : public WebGLContext {
+  friend class WebGLContext;
 
-  static bool IsSupported();
-  static WebGL2Context* Create() { return new WebGL2Context(); }
+ public:
+  WebGL2Context(HostWebGLContext& host, const webgl::InitContextDesc& desc)
+      : WebGLContext(host, desc) {}
 
   virtual bool IsWebGL2() const override { return true; }
 
@@ -204,12 +204,6 @@ class WebGL2Context : public WebGLContext {
   */
 
  private:
-  WebGL2Context() {
-    MOZ_ASSERT(IsSupported(),
-               "not supposed to create a WebGL2Context"
-               "context when not supported");
-  }
-
   virtual UniquePtr<webgl::FormatUsageAuthority> CreateFormatUsage(
       gl::GLContext* gl) const override;
 

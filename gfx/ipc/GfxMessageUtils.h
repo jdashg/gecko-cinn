@@ -36,7 +36,6 @@
 namespace mozilla {
 
 typedef gfxImageFormat PixelFormat;
-enum WebGLVersion : uint32_t { WEBGL1, WEBGL2 };
 
 }  // namespace mozilla
 
@@ -1189,13 +1188,6 @@ struct ParamTraits<mozilla::gfx::PaintFragment> {
            ReadParam(aMsg, aIter, &aResult->mRecording) &&
            ReadParam(aMsg, aIter, &aResult->mDependencies);
   }
-};
-
-template <>
-struct ParamTraits<mozilla::WebGLVersion>
-    : public ContiguousEnumSerializerInclusive<mozilla::WebGLVersion,
-                                               mozilla::WebGLVersion::WEBGL1,
-                                               mozilla::WebGLVersion::WEBGL2> {
 };
 
 } /* namespace IPC */

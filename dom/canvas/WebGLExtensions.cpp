@@ -25,6 +25,14 @@ void WebGLExtensionBase::MarkLost() {
 
 // -
 
+WebGLExtensionDebugShaders::WebGLExtensionDebugShaders(
+    WebGLContext* const webgl)
+    : WebGLExtensionBase(webgl) {}
+
+WebGLExtensionDebugShaders::~WebGLExtensionDebugShaders() = default;
+
+// -
+
 WebGLExtensionExplicitPresent::WebGLExtensionExplicitPresent(
     WebGLContext* const webgl)
     : WebGLExtensionBase(webgl) {
@@ -83,6 +91,20 @@ bool WebGLExtensionFBORenderMipmap::IsSupported(
 
 // -
 
+WebGLExtensionLoseContext::WebGLExtensionLoseContext(WebGLContext* const webgl)
+    : WebGLExtensionBase(webgl) {}
+
+WebGLExtensionLoseContext::~WebGLExtensionLoseContext() = default;
+
+// -
+
+WebGLExtensionMOZDebug::WebGLExtensionMOZDebug(WebGLContext* const webgl)
+    : WebGLExtensionBase(webgl) {}
+
+WebGLExtensionMOZDebug::~WebGLExtensionMOZDebug() = default;
+
+// -
+
 WebGLExtensionMultiview::WebGLExtensionMultiview(WebGLContext* const webgl)
     : WebGLExtensionBase(webgl) {
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
@@ -101,13 +123,9 @@ void WebGLExtensionMultiview::FramebufferTextureMultiviewOVR(
     const GLenum target, const GLenum attachment, WebGLTexture* const texture,
     const GLint level, const GLint baseViewIndex,
     const GLsizei numViews) const {
+  if (mIsLost || !mContext) return;
   const WebGLContext::FuncScope funcScope(*mContext,
                                           "framebufferTextureMultiviewOVR");
-  if (mIsLost) {
-    mContext->ErrorInvalidOperation("Extension is lost.");
-    return;
-  }
-
   mContext->FramebufferTextureMultiview(target, attachment, texture, level,
                                         baseViewIndex, numViews);
 }

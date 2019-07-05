@@ -18,7 +18,6 @@
 #  include "mozilla/gfx/DeviceManagerDx.h"  // for DeviceManagerDx
 #endif
 #include "mozilla/dom/WebGLCrossProcessCommandQueue.h"
-#include "mozilla/dom/WebGLErrorQueue.h"
 #include "mozilla/dom/WebGLParent.h"
 #include "mozilla/ipc/Transport.h"           // for Transport
 #include "mozilla/layers/AnimationHelper.h"  // for CompositorAnimationStorage
@@ -697,11 +696,10 @@ void ContentCompositorBridgeParent::ObserveLayersUpdate(
 }
 
 dom::PWebGLParent* ContentCompositorBridgeParent::AllocPWebGLParent(
-    const WebGLVersion& aVersion,
+    const webgl::InitContextDesc& aInitDesc,
     UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-    UniquePtr<HostWebGLErrorSource>&& aErrorSource) {
-  return dom::WebGLParent::Create(aVersion, std::move(aCommandSink),
-                                  std::move(aErrorSource));
+    webgl::InitContextResult* const out) {
+  return dom::WebGLParent::Create(aInitDesc, std::move(aCommandSink), out);
 }
 
 bool ContentCompositorBridgeParent::DeallocPWebGLParent(

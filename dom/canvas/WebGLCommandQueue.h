@@ -33,57 +33,6 @@ enum CommandResult { Success, TimeExpired, QueueEmpty, Error };
 
 enum CommandSyncType { ASYNC, SYNC };
 
-/**
- * A CommandQueue is a ProducerConsumerQueue where the contents are commands.
- * Its endpoints are called mSource and mSink and can be sent to other
- * processes via IPDL, the same way ProducerConsumerQueues can.
- * Source and Sink are generic and will work with well with others but
- * CommandSource and CommandSink are designed for use with them.
- * CommandSource offers asynchronous Insert methods that can be used
- * to add commands into the queue.  CommandSink offers ProcessOne, ProcessAll,
- * etc for draining the queue.  See CommandSource and CommandSink for more.
- *
- * NB: When used with IPDL, Sources and Sinks must be labeled "shmemholder"
- * (same as with Producers and Consumers).
- */
-template <typename Source, typename Sink>
-class CommandQueue {
- public:
-  using SelfType = CommandQueue<Source, Sink>;
-  using Source = Source;
-  using Sink = Sink;
-
-  // Technically, we're just mapping the Producer and Consumer in aPcq
-  // by calling the Source and Sink type's constructors on them, respectively,
-  // and passing aArgs as constructor parameters.
-  template <typename... Args>
-  static UniquePtr<SelfType> Create(UniquePtr<ProducerConsumerQueue>&& aPcq,
-                                    Args&... aArgs) {
-    // Prefer WrapUnique to MakeUnique since it allows client code to declare
-    // a private constructor and give this class friend status.
-    UniquePtr<Source> source =
-        WrapUnique(new Source(std::move(aPcq->mProducer), aArgs...));
-    if (!source) {
-      return nullptr;
-    }
-    UniquePtr<Sink> sink =
-        WrapUnique(new Sink(std::move(aPcq->mConsumer), aArgs...));
-    if (!sink) {
-      return nullptr;
-    }
-    return WrapUnique(new CommandQueue(std::move(source), std::move(sink)));
-  }
-
-  UniquePtr<Source> mSource;
-  UniquePtr<Sink> mSink;
-
- protected:
-  CommandQueue(UniquePtr<Source>&& aSource, UniquePtr<Sink>&& aSink)
-      : mSource(std::move(aSource)), mSink(std::move(aSink)) {
-    MOZ_ASSERT(mSource && mSink);
-  }
-};
-
 class BasicSource {
  public:
   BasicSource(UniquePtr<Producer>&& aProducer)
@@ -382,11 +331,9 @@ class SyncCommandSource : public CommandSource<Command> {
  public:
   using BaseType = CommandSource<Command>;
   SyncCommandSource(UniquePtr<Producer>&& aProducer,
-                    UniquePtr<ProducerConsumerQueue>& aResponsePcq)
+                    UniquePtr<Consumer>&& aResponseConsumer)
       : CommandSource<Command>(std::move(aProducer)),
-        mConsumer(std::move(aResponsePcq->mConsumer)) {
-    MOZ_ASSERT(mConsumer);
-  }
+        mConsumer(std::move(aResponseConsumer)) {}
 
   template <typename... Args>
   PcqStatus RunAsyncCommand(Command aCommand, Args&&... aArgs) {
@@ -449,11 +396,9 @@ class SyncCommandSink : public CommandSink<Command> {
 
  public:
   SyncCommandSink(UniquePtr<Consumer>&& aConsumer,
-                  UniquePtr<ProducerConsumerQueue>& aResponsePcq)
+                  UniquePtr<Producer>&& aResponseProducer)
       : CommandSink<Command>(std::move(aConsumer)),
-        mProducer(std::move(aResponsePcq->mProducer)) {
-    MOZ_ASSERT(mProducer);
-  }
+        mProducer(std::move(aResponseProducer)) {}
 
   // for IPDL:
   SyncCommandSink() {}

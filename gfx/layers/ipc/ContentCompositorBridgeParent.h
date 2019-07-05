@@ -157,18 +157,9 @@ class ContentCompositorBridgeParent final : public CompositorBridgeParentBase {
     return IPC_FAIL_NO_REASON(this);
   }
 
-  dom::PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>& aErrorSource) override {
-    MOZ_ASSERT_UNREACHABLE("Unused");
-    return nullptr;
-  }
-
-  dom::PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>&& aErrorSource) override;
+  dom::PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
+                                       UniquePtr<HostWebGLCommandSink>&&,
+                                       webgl::InitContextResult* out) override;
 
   bool DeallocPWebGLParent(PWebGLParent* aWebGLParent) override;
 

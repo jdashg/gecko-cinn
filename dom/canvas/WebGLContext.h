@@ -124,6 +124,25 @@ struct UniformInfo;
 struct UniformBlockInfo;
 }  // namespace webgl
 
+struct WebGLTexImageData {
+  TexImageTarget mTarget;
+  int32_t mRowLength;
+  uint32_t mWidth;
+  uint32_t mHeight;
+  uint32_t mDepth;
+  gfxAlphaType mSrcAlphaType;
+};
+
+struct WebGLTexPboOffset {
+  TexImageTarget mTarget;
+  uint32_t mWidth;
+  uint32_t mHeight;
+  uint32_t mDepth;
+  WebGLsizeiptr mPboOffset;
+  bool mHasExpectedImageSize;
+  GLsizei mExpectedImageSize;
+};
+
 WebGLTexelFormat GetWebGLTexelFormat(TexInternalFormat format);
 
 void AssertUintParamCorrect(gl::GLContext* gl, GLenum pname, GLuint shadow);
@@ -282,8 +301,13 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void CheckForInactivity();
 
  protected:
+  const WeakPtr<HostWebGLContext> mHost;
+  WebGLContextOptions mOptions;
+  webgl::ExtensionBits mSupportedExtensions;
+
+  bool mIsContextLost = false;
   const uint32_t mMaxPerfWarnings;
-  mutable uint64_t mNumPerfWarnings;
+  mutable uint64_t mNumPerfWarnings = 0;
   const uint32_t mMaxAcceptableFBStatusInvals;
 
   uint64_t mNextFenceId = 1;
@@ -298,43 +322,25 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLContext)
 
-  WebGLContext();
+  static RefPtr<WebGLContext> Create(HostWebGLContext&,
+                                     const webgl::InitContextDesc&,
+                                     webgl::InitContextResult* out);
+
+ private:
+  void FinishInit();
 
  protected:
+  WebGLContext(HostWebGLContext&, const webgl::InitContextDesc&);
   virtual ~WebGLContext();
-
- public:
-  void SetHost(HostWebGLContext* aHost) { mHost = aHost; }
-
- protected:
-  // The HostWebGLContext owns us so this should be set for our entire
-  // lifetime
-  HostWebGLContext* mHost = nullptr;
 
   RefPtr<layers::CompositableHost> mCompositableHost;
 
   layers::LayersBackend mBackend = LayersBackend::LAYERS_NONE;
 
-  struct DoSetDimensionsData {
-    nsresult result;
-    bool maybeLoseOldContext;
-  };
-
-  DoSetDimensionsData DoSetDimensions(int32_t width, int32_t height);
-
  public:
   NS_INLINE_DECL_REFCOUNTING(WebGLContext)
 
-  // nsICanvasRenderingContextInternal
-  virtual int32_t GetWidth() { return DrawingBufferWidth(); }
-  virtual int32_t GetHeight() { return DrawingBufferHeight(); }
-
-  SetDimensionsData SetDimensions(int32_t width, int32_t height) {
-    DoSetDimensionsData result = DoSetDimensions(width, height);
-    return {mOptions,      mOptionsFrozen,
-            mResetLayer,   result.maybeLoseOldContext,
-            result.result, mPixelStore};
-  }
+  void Resize(uvec2 size);
 
   void SetCompositableHost(RefPtr<layers::CompositableHost>& aCompositableHost);
 
@@ -360,38 +366,64 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     const WebGLContext& mWebGL;
     const char* const mFuncName;
 
-   private:
-#ifdef DEBUG
-    mutable bool mStillNeedsToCheckContextLost = true;
-#endif
-
    public:
     FuncScope(const WebGLContext& webgl, const char* funcName);
     ~FuncScope();
-
-    void OnCheckContextLost() const {
-#ifdef DEBUG
-      mStillNeedsToCheckContextLost = false;
-#endif
-    }
   };
 
-  void SynthesizeGLError(GLenum err) const;
-  void GenerateError(GLenum err, const char* fmt, ...) const
-      MOZ_FORMAT_PRINTF(3, 4);
+  void GenerateErrorImpl(const GLenum err, const nsACString& text) const;
 
-  void ErrorInvalidEnum(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
-  void ErrorInvalidOperation(const char* fmt = 0, ...) const
-      MOZ_FORMAT_PRINTF(2, 3);
-  void ErrorInvalidValue(const char* fmt = 0, ...) const
-      MOZ_FORMAT_PRINTF(2, 3);
-  void ErrorInvalidFramebufferOperation(const char* fmt = 0, ...) const
-      MOZ_FORMAT_PRINTF(2, 3);
+  template <typename... Args>
+  void GenerateError(const GLenum err, const char* const fmt,
+                     const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
+    MOZ_ASSERT(FuncName());
+    nsCString text;
+    text.AppendPrintf("WebGL warning: %s: ", FuncName());
+    text.AppendPrintf(fmt, args...);
+    GenerateErrorImpl(err, text);
+  }
+
+  template <typename... Args>
+  void ErrorInvalidEnum(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(LOCAL_GL_INVALID_ENUM, fmt, args...);
+  }
+  template <typename... Args>
+  void ErrorInvalidOperation(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(LOCAL_GL_INVALID_OPERATION, fmt, args...);
+  }
+  template <typename... Args>
+  void ErrorInvalidValue(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(LOCAL_GL_INVALID_VALUE, fmt, args...);
+  }
+  template <typename... Args>
+  void ErrorInvalidFramebufferOperation(const char* const fmt,
+                                        const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(LOCAL_GL_INVALID_FRAMEBUFFER_OPERATION, fmt, args...);
+  }
+  template <typename... Args>
+  void ErrorOutOfMemory(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(LOCAL_GL_OUT_OF_MEMORY, fmt, args...);
+  }
+
+  template <typename... Args>
+  void ErrorImplementationBug(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    const nsPrintfCString newFmt(
+        "Implementation bug, please file at %s! %s",
+        "https://bugzilla.mozilla.org/"
+        "enter_bug.cgi?product=Core&component=Canvas%3A+WebGL",
+        fmt);
+    GenerateError(LOCAL_GL_OUT_OF_MEMORY, newFmt.BeginReading(), args...);
+    MOZ_ASSERT(false, "WebGLContext::ErrorImplementationBug");
+    NS_ERROR("WebGLContext::ErrorImplementationBug");
+  }
+
   void ErrorInvalidEnumInfo(const char* info, GLenum enumValue) const;
-  void ErrorOutOfMemory(const char* fmt = 0, ...) const MOZ_FORMAT_PRINTF(2, 3);
-  void ErrorImplementationBug(const char* fmt = 0, ...) const
-      MOZ_FORMAT_PRINTF(2, 3);
-
   void ErrorInvalidEnumArg(const char* argName, GLenum val) const;
 
   static const char* ErrorName(GLenum error);
@@ -457,11 +489,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   // a number that increments every time we have an event that causes
   // all context resources to be lost.
-  uint32_t Generation() const { return mGeneration.value(); }
+  auto Generation() const { return mGeneration; }
 
   void RunContextLossTimer();
-  void UpdateContextLossStatus();
-  void EnqueueUpdateContextLossStatus();
+  void CheckForContextLoss();
 
   bool TryToRestoreContext();
 
@@ -471,25 +502,14 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // WebIDL WebGLRenderingContext API
   void Commit();
 
-  gfx::IntSize DrawingBufferSize();
+  uvec2 DrawingBufferSize();
 
  public:
-  GLsizei DrawingBufferWidth() {
-    const FuncScope funcScope(*this, "drawingBufferWidth");
-    return DrawingBufferSize().width;
-  }
-  GLsizei DrawingBufferHeight() {
-    const FuncScope funcScope(*this, "drawingBufferHeight");
-    return DrawingBufferSize().height;
-  }
-
   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
 
   // This is the entrypoint. Don't test against it directly.
-  bool IsContextLost() const;
+  bool IsContextLost() const { return mIsContextLost; }
 
-  const Maybe<ExtensionSets> GetSupportedExtensions();
-  void GetExtension(const nsAString& name, dom::CallerType callerType);
   void AttachShader(WebGLProgram& prog, WebGLShader& shader);
   void BindAttribLocation(WebGLProgram& prog, GLuint location,
                           const nsAString& name);
@@ -578,6 +598,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   nsString GetShaderInfoLog(const WebGLShader& shader);
   nsString GetShaderSource(const WebGLShader& shader);
+  nsString GetTranslatedShaderSource(const WebGLShader&) const;
 
   MaybeWebGLVariant GetUniform(const WebGLProgram& prog,
                                const WebGLUniformLocation& loc);
@@ -704,11 +725,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool ValidateSamplerUniformSetter(const char* info, WebGLUniformLocation* loc,
                                     GLint value);
   void Viewport(GLint x, GLint y, GLsizei width, GLsizei height);
-  // -----------------------------------------------------------------------------
-  // WEBGL_lose_context
- public:
-  void LoseContext();
-  void RestoreContext();
 
   // -----------------------------------------------------------------------------
   // Buffer Objects (WebGLContextBuffers.cpp)
@@ -820,6 +836,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void EndQuery(GLenum target);
   MaybeWebGLVariant GetQuery(GLenum target, GLenum pname);
   MaybeWebGLVariant GetQueryParameter(const WebGLQuery& query, GLenum pname);
+
+  MaybeWebGLVariant MOZDebugGetParameter(GLenum pname) const;
+
+  void QueryCounter(WebGLQuery&, const GLenum target) const;
 
   // -----------------------------------------------------------------------------
   // State and State Requests (WebGLContextState.cpp)
@@ -1010,11 +1030,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool DoFakeVertexAttrib0(uint64_t vertexCount);
   void UndoFakeVertexAttrib0();
 
-  CheckedUint32 mGeneration;
+  uint64_t mGeneration = 0;
 
   bool mResetLayer = true;
   bool mOptionsFrozen;
-  bool mDisableExtensions;
   bool mIsMesa;
   bool mLoseContextOnMemoryPressure = false;
   bool mCanLoseContextInForeground = true;
@@ -1059,16 +1078,13 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   uint32_t mGLMaxViewportDims[2];
 
-  WebGLContextOptions mOptions;
-
  public:
   GLenum LastColorAttachmentEnum() const {
     return LOCAL_GL_COLOR_ATTACHMENT0 + mGLMaxColorAttachments - 1;
   }
   const auto& GLMaxDrawBuffers() const { return mGLMaxDrawBuffers; }
 
-  const decltype(mOptions)& Options() const { return mOptions; }
-  void SetOptions(const WebGLContextOptions& options) { mOptions = options; }
+  const auto& Options() const { return mOptions; }
 
  protected:
   // Texture sizes are often not actually the GL values. Let's be explicit that
@@ -1091,86 +1107,34 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool IsFormatValidForFB(TexInternalFormat format) const;
 
  protected:
-  // Represents current status of the context with respect to context loss.
-  // That is, whether the context is lost, and what part of the context loss
-  // process we currently are at.
-  // This is used to support the WebGL spec's asyncronous nature in handling
-  // context loss.
-  enum class ContextStatus {
-    // The context is stable; there either are none or we don't know of any.
-    NotLost,
-    // The context has been lost, but we have not yet sent an event to the
-    // script informing it of this.
-    LostAwaitingEvent,
-    // The context has been lost, and we have sent the script an event
-    // informing it of this.
-    Lost,
-    // The context is lost, an event has been sent to the script, and the
-    // script correctly handled the event. We are waiting for the context to
-    // be restored.
-    LostAwaitingRestore
-  };
-
   // -------------------------------------------------------------------------
   // WebGL extensions (implemented in WebGLContextExtensions.cpp)
-  typedef EnumeratedArray<WebGLExtensionID, WebGLExtensionID::Max,
-                          RefPtr<WebGLExtensionBase>>
-      ExtensionsArrayType;
 
-  ExtensionsArrayType mExtensions;
-
-  // enable an extension. the extension should not be enabled before.
-  void EnableExtension(WebGLExtensionID ext);
-
-  // Enable an extension if it's supported. Return the extension on success.
-  WebGLExtensionBase* EnableSupportedExtension(dom::CallerType callerType,
-                                               WebGLExtensionID ext,
-                                               bool explict = true);
+  EnumeratedArray<WebGLExtensionID, WebGLExtensionID::Max,
+                  RefPtr<WebGLExtensionBase>>
+      mExtensions;
 
  public:
-  // Return an extension if it's supported, optionally enabling it if necessary.
-  template <
-      WebGLExtensionID ext,
-      typename ExtensionClass = typename WebGLExtensionClassMap<ext>::Type>
-  ExtensionClass* GetExtension(
-      bool toEnable = false,
-      dom::CallerType callerType = dom::CallerType::NonSystem) {
-    if (!IsExtensionEnabled(ext)) {
-      if ((!toEnable) || (!IsExtensionSupported(callerType, ext))) {
-        return nullptr;
-      }
-
-      CreateExtension(ext);
-    }
-
-    return static_cast<ExtensionClass*>(mExtensions[ext].get());
-  }
-
-  void EnableExtension(WebGLExtensionID ext,
-                       dom::CallerType callerType = dom::CallerType::NonSystem);
+  void RequestExtension(WebGLExtensionID, bool explicit = true);
 
   // returns true if the extension has been enabled by calling getExtension.
   bool IsExtensionEnabled(const WebGLExtensionID ext) const {
     return mExtensions[ext];
   }
 
-  bool IsExtensionExplicit(const WebGLExtensionID ext) const;
+  bool IsExtensionExplicit(WebGLExtensionID) const;
 
-  void WarnIfImplicit(const WebGLExtensionID ext);
+  void WarnIfImplicit(WebGLExtensionID) const;
 
  protected:
-  // returns true if the extension is supported for this caller type (this
-  // decides what getSupportedExtensions exposes)
-  bool IsExtensionSupported(dom::CallerType callerType,
-                            WebGLExtensionID ext) const;
-  bool IsExtensionSupported(WebGLExtensionID ext) const;
+  bool IsExtensionSupported(WebGLExtensionID) const;
 
   nsTArray<GLenum> mCompressedTextureFormats;
 
   // -------------------------------------------------------------------------
   // WebGL 2 specifics (implemented in WebGL2Context.cpp)
  public:
-  virtual bool IsWebGL2() const = 0;
+  virtual bool IsWebGL2() const { return false; }
 
   struct FailureReason {
     nsCString key;  // For reporting.
@@ -1188,8 +1152,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   bool CreateAndInitGL(bool forceEnabled,
                        std::vector<FailureReason>* const out_failReasons);
-
-  void ThrowEvent_WebGLContextCreationError(const nsACString& text);
 
   // -------------------------------------------------------------------------
   // Validation functions (implemented in WebGLContextValidate.cpp)
@@ -1306,8 +1268,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   //////
  public:
   template <typename T>
-  bool ValidateObjectAllowDeleted(const char* const argName,
-                                  const WebGLContextBoundObject<T>& object) {
+  bool ValidateObjectAllowDeleted(
+      const char* const argName,
+      const WebGLContextBoundObject<T>& object) const {
     if (!object.IsCompatibleWithContext(this)) {
       ErrorInvalidOperation(
           "%s: Object from different WebGL context (or older"
@@ -1322,7 +1285,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   template <typename T>
   bool ValidateObject(const char* const argName,
                       const WebGLRefCountedObject<T>& object,
-                      const bool isShaderOrProgram = false) {
+                      const bool isShaderOrProgram = false) const {
     if (!ValidateObjectAllowDeleted(argName, object)) return false;
 
     if (isShaderOrProgram) {
@@ -1392,12 +1355,11 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   virtual WebGLVertexArray* CreateVertexArrayImpl();
 
  public:
-  void ForceLoseContext(bool simulateLoss = false);
+  void LoseContext(
+      webgl::ContextLossReason reason = webgl::ContextLossReason::None);
   const WebGLPixelStore GetPixelStore() const { return mPixelStore; }
 
  protected:
-  void ForceRestoreContext();
-
   nsTArray<WebGLRefPtr<WebGLTexture>> mBound2DTextures;
   nsTArray<WebGLRefPtr<WebGLTexture>> mBoundCubeMapTextures;
   nsTArray<WebGLRefPtr<WebGLTexture>> mBound3DTextures;
@@ -1493,11 +1455,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   GLfloat mLineWidth = 0.0;
 
   WebGLContextLossHandler mContextLossHandler;
-  bool mAllowContextRestore;
-  // true if the context lost event has not yet given permission to restore
-  bool mDisallowContextRestore;
-  bool mLastLossWasSimulated;
-  ContextStatus mContextStatus = ContextStatus::NotLost;
 
   // Used for some hardware (particularly Tegra 2 and 4) that likes to
   // be Flushed while doing hundreds of draw calls.
@@ -1507,7 +1464,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   int mMaxWarnings;
   bool mAlreadyWarnedAboutFakeVertexAttrib0;
 
-  bool ShouldGenerateWarnings() const;
+  bool ShouldGenerateWarnings() const {
+    if (mMaxWarnings == -1) return true;
+    return mAlreadyGeneratedWarnings < mMaxWarnings;
+  }
 
   bool ShouldGeneratePerfWarnings() const {
     return mNumPerfWarnings < mMaxPerfWarnings;
@@ -1534,7 +1494,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // --
 
   const uint8_t mMsaaSamples;
-  mutable gfx::IntSize mRequestedSize;
+  mutable uvec2 mRequestedSize;
   mutable UniquePtr<gl::MozFramebuffer> mDefaultFB;
   mutable bool mDefaultFB_IsInvalid = false;
   mutable UniquePtr<gl::MozFramebuffer> mResolvedDefaultFB;
@@ -1563,26 +1523,41 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
  public:
   // console logging helpers
-  void GenerateWarning(const char* fmt, ...) const MOZ_FORMAT_PRINTF(2, 3);
-  void GenerateWarning(const char* fmt, va_list ap) const
-      MOZ_FORMAT_PRINTF(2, 0);
+  template <typename... Args>
+  void GenerateWarning(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    GenerateError(0, fmt, args...);
+  }
 
-  void GeneratePerfWarning(const char* fmt, ...) const MOZ_FORMAT_PRINTF(2, 3);
+  template <typename... Args>
+  void GeneratePerfWarning(const char* const fmt, const Args&... args) const
+      MOZ_FORMAT_PRINTF(2, 3) {
+    if (!ShouldGeneratePerfWarnings()) return;
+
+    const auto funcName = FuncName();
+    nsCString msg;
+    msg.AppendPrintf("WebGL perf warning: %s: ", funcName);
+    msg.AppendPrintf(fmt, args...);
+    GenerateErrorImpl(0, msg);
+
+    mNumPerfWarnings++;
+    if (!ShouldGeneratePerfWarnings()) {
+      GenerateWarning(
+          "After reporting %u, no further WebGL perf warnings will"
+          " be reported for this WebGL context.",
+          uint32_t(mNumPerfWarnings));
+    }
+  }
 
  public:
   UniquePtr<webgl::FormatUsageAuthority> mFormatUsage;
 
   virtual UniquePtr<webgl::FormatUsageAuthority> CreateFormatUsage(
-      gl::GLContext* gl) const = 0;
+      gl::GLContext* gl) const;
 
   const decltype(mBound2DTextures)* TexListForElemType(GLenum elemType) const;
 
   void UpdateMaxDrawBuffers();
-
-  void AllowContextRestore() {
-    mDisallowContextRestore = false;
-    EnqueueUpdateContextLossStatus();
-  }
 
   // --
  private:

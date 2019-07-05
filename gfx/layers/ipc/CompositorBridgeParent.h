@@ -19,7 +19,6 @@
 #include "Layers.h"              // for Layer
 #include "mozilla/Assertions.h"  // for MOZ_ASSERT_HELPER2
 #include "mozilla/Attributes.h"  // for override
-#include "mozilla/GfxMessageUtils.h"  // for WebGLVersion
 #include "mozilla/Maybe.h"
 #include "mozilla/Monitor.h"    // for Monitor
 #include "mozilla/RefPtr.h"     // for RefPtr
@@ -56,7 +55,6 @@ class CancelableRunnable;
 
 namespace dom {
 class HostWebGLCommandSink;
-class HostWebGLErrorSource;
 class WebGLParent;
 }  // namespace dom
 
@@ -288,16 +286,9 @@ class CompositorBridgeParentBase : public PCompositorBridgeParent,
       Endpoint<PCanvasParent>&& aEndpoint) = 0;
   virtual mozilla::ipc::IPCResult RecvReleasePCanvasParent() = 0;
 
-  virtual PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>& aErrorSource) = 0;
-
-  virtual PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>&& aErrorSource) = 0;
-
+  virtual PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
+                                          UniquePtr<HostWebGLCommandSink>&&,
+                                          webgl::InitContextResult* out) = 0;
   virtual bool DeallocPWebGLParent(PWebGLParent* aWebGLParent) = 0;
 
   bool mCanSend;
@@ -684,25 +675,15 @@ class CompositorBridgeParent final : public CompositorBridgeParentBase,
 
   WebRenderBridgeParent* GetWrBridge() { return mWrBridge; }
 
-  PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>& aErrorSource) override {
+  PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
+                                  UniquePtr<HostWebGLCommandSink>&&,
+                                  webgl::InitContextResult*) override {
     MOZ_ASSERT_UNREACHABLE(
         "This message is CrossProcessCompositorBridgeParent only");
     return nullptr;
   }
 
-  PWebGLParent* AllocPWebGLParent(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>&& aErrorSource) override {
-    MOZ_ASSERT_UNREACHABLE(
-        "This message is CrossProcessCompositorBridgeParent only");
-    return nullptr;
-  }
-
-  bool DeallocPWebGLParent(PWebGLParent* aWebGLParent) override {
+  bool DeallocPWebGLParent(PWebGLParent*) override {
     MOZ_ASSERT_UNREACHABLE(
         "This message is CrossProcessCompositorBridgeParent only");
     return false;

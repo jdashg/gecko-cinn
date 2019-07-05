@@ -7,17 +7,19 @@
 #define WEBGLTYPES_H_
 
 #include <limits>
+#include <type_traits>
 
 // Most WebIDL typedefs are identical to their OpenGL counterparts.
 #include "GLTypes.h"
 #include "mozilla/Casting.h"
+#include "mozilla/CheckedInt.h"
 #include "gfxTypes.h"
 
 #include "nsTArray.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/ipc/SharedMemoryBasic.h"
 #include "WebGLShaderPrecisionFormat.h"
-#include "WebGLStrongTypes.h"
+//#include "WebGLStrongTypes.h"
 
 // Manual reflection of WebIDL typedefs that are different from their
 // OpenGL counterparts.
@@ -117,6 +119,8 @@ class WebGLVertexArray;
 class WebGLVertexArrayObject;
 template <typename T>
 class WebGLRefPtr;
+
+// -
 
 /*
  * Implementing WebGL (or OpenGL ES 2.0) on top of desktop OpenGL requires
@@ -232,6 +236,11 @@ enum class WebGLExtensionID : uint8_t {
   WEBGL_lose_context,
   Max
 };
+
+template <typename T>
+inline constexpr auto EnumValue(const T v) {
+  return static_cast<typename std::underlying_type<T>::type>(v);
+}
 
 class UniqueBuffer {
   // Like UniquePtr<>, but for void* and malloc/calloc/free.
@@ -379,37 +388,12 @@ struct WebGLPixelStore {
   bool mRequireFastPath = false;
 };
 
-struct WebGLTexImageData {
-  TexImageTarget mTarget;
-  int32_t mRowLength;
-  uint32_t mWidth;
-  uint32_t mHeight;
-  uint32_t mDepth;
-  gfxAlphaType mSrcAlphaType;
-};
-
-struct WebGLTexPboOffset {
-  TexImageTarget mTarget;
-  uint32_t mWidth;
-  uint32_t mHeight;
-  uint32_t mDepth;
-  WebGLsizeiptr mPboOffset;
-  bool mHasExpectedImageSize;
-  GLsizei mExpectedImageSize;
-};
-
 using WebGLTexUnpackVariant =
     Variant<UniquePtr<webgl::TexUnpackBytes>,
             UniquePtr<webgl::TexUnpackSurface>,
             UniquePtr<webgl::TexUnpackImage>, WebGLTexPboOffset>;
 
 using MaybeWebGLTexUnpackVariant = Maybe<WebGLTexUnpackVariant>;
-
-// TODO: Make this into a bit-vector instead.
-struct ExtensionSets {
-  nsTArray<WebGLExtensionID> mNonSystem;
-  nsTArray<WebGLExtensionID> mSystem;
-};
 
 struct WebGLContextOptions {
   bool alpha = true;
@@ -425,18 +409,120 @@ struct WebGLContextOptions {
   bool enableDebugRendererInfo = false;
 
   WebGLContextOptions();
+  WebGLContextOptions(const WebGLContextOptions&) = default;
+
   bool operator==(const WebGLContextOptions&) const;
 };
 
-// return value for the SetDimensions message
-struct SetDimensionsData {
-  WebGLContextOptions mOptions;
-  bool mOptionsFrozen;
-  bool mResetLayer;
-  bool mMaybeLostOldContext;
-  nsresult mResult;
-  WebGLPixelStore mPixelStore;
+// -
+
+template <typename T>
+struct avec2 {
+  T x = T();
+  T y = T();
+
+  template <typename U, typename V>
+  static Maybe<avec2> From(const U _x, const V _y) {
+    const auto x = CheckedInt<T>(_x);
+    const auto y = CheckedInt<T>(_y);
+    if (!x.isValid() || !y.isValid()) return {};
+    return Some(avec2(x.value(), y.value()));
+  }
+
+  template <typename U>
+  static auto From(const U& val) {
+    return From(val.x, val.y);
+  }
+  template <>
+  static auto From(const gfx::IntSize& val) {
+    return From(val.width, val.height);
+  }
+
+  avec2() = default;
+  avec2(const T _x, const T _y) : x(_x), y(_y) {}
+
+  bool operator==(const avec2& rhs) const { return x == rhs.x && y == rhs.y; }
+  bool operator!=(const avec2& rhs) const { return !(*this == rhs); }
 };
+
+typedef avec2<int32_t> ivec2;
+typedef avec2<uint32_t> uvec2;
+
+// -
+
+namespace webgl {
+
+class ExtensionBits final {
+  uint64_t mBits = 0;
+
+  struct BitRef final {
+    ExtensionBits& bits;
+    const uint64_t mask;
+
+    operator bool() const { return bits.mBits & mask; }
+
+    auto& operator=(const bool val) {
+      if (val) {
+        bits.mBits |= mask;
+      } else {
+        bits.mBits &= ~mask;
+      }
+      return *this;
+    }
+  };
+
+  uint64_t Mask(const WebGLExtensionID i) const {
+    return uint64_t{1} << static_cast<uint64_t>(i);
+  }
+
+ public:
+  BitRef operator[](const WebGLExtensionID i) { return {*this, Mask(i)}; }
+  bool operator[](const WebGLExtensionID i) const { return mBits & Mask(i); }
+};
+
+// -
+
+enum class ContextLossReason : uint8_t {
+  None,
+  Manual,
+  Guilty,
+};
+
+inline bool ReadContextLossReason(const uint8_t val,
+                                  ContextLossReason* const out) {
+  if (val > static_cast<uint8_t>(ContextLossReason::Guilty)) {
+    return false;
+  }
+  *out = static_cast<ContextLossReason>(val);
+  return true;
+}
+
+// -
+
+struct InitContextDesc final {
+  bool isWebgl2;
+  uvec2 size;
+  WebGLContextOptions options;
+};
+
+struct InitContextResult final {
+  std::string error;
+  WebGLContextOptions options;
+  ExtensionBits supportedExtensions;
+  bool astcHdr = false;
+};
+
+// -
+
+enum class LossStatus {
+  Ready,
+
+  Lost,
+  LostForever,
+  LostManually,
+};
+
+}  // namespace webgl
 
 // return value for the InitializeCanvasRenderer message
 struct ICRData {
@@ -613,6 +699,66 @@ class RawBuffer {
     return *this;
   }
 };
+
+// -
+
+// clang-format off
+
+#define FOREACH_ID(X) \
+  X(FuncScopeIdError) \
+  X(compressedTexImage2D) \
+  X(compressedTexImage3D) \
+  X(compressedTexSubImage2D) \
+  X(compressedTexSubImage3D) \
+  X(copyTexSubImage2D) \
+  X(copyTexSubImage3D) \
+  X(drawArrays) \
+  X(drawArraysInstanced) \
+  X(drawElements) \
+  X(drawElementsInstanced) \
+  X(drawRangeElements) \
+  X(renderbufferStorage) \
+  X(renderbufferStorageMultisample) \
+  X(texImage2D) \
+  X(texImage3D) \
+  X(TexStorage2D) \
+  X(TexStorage3D) \
+  X(texSubImage2D) \
+  X(texSubImage3D) \
+  X(vertexAttrib1f) \
+  X(vertexAttrib1fv) \
+  X(vertexAttrib2f) \
+  X(vertexAttrib2fv) \
+  X(vertexAttrib3f) \
+  X(vertexAttrib3fv) \
+  X(vertexAttrib4f) \
+  X(vertexAttrib4fv) \
+  X(vertexAttribI4i) \
+  X(vertexAttribI4iv) \
+  X(vertexAttribI4ui) \
+  X(vertexAttribI4uiv) \
+  X(vertexAttribIPointer) \
+  X(vertexAttribPointer)
+
+// clang-format on
+
+enum class FuncScopeId {
+#define _(X) X,
+  FOREACH_ID(_)
+#undef _
+};
+
+static constexpr const char* const FUNCSCOPE_NAME_BY_ID[] = {
+#define _(X) #X,
+    FOREACH_ID(_)
+#undef _
+};
+
+#undef FOREACH_ID
+
+inline auto GetFuncScopeName(const FuncScopeId id) {
+  return FUNCSCOPE_NAME_BY_ID[static_cast<size_t>(id)];
+}
 
 }  // namespace mozilla
 

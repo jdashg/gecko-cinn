@@ -33,6 +33,7 @@
 #include "mozilla/dom/WebGLContextEvent.h"
 #include "mozilla/dom/WorkerCommon.h"
 #include "mozilla/EnumeratedArrayCycleCollection.h"
+#include "mozilla/EnumeratedRange.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/ProcessPriorityManager.h"
 #include "mozilla/ScopeExit.h"
@@ -65,7 +66,6 @@
 #include "CanvasUtils.h"
 #include "ClientWebGLContext.h"
 #include "HostWebGLContext.h"
-#include "WebGL1Context.h"
 #include "WebGLActiveInfo.h"
 #include "WebGLBuffer.h"
 #include "WebGLChild.h"
@@ -103,6 +103,18 @@ using namespace mozilla::gfx;
 using namespace mozilla::gl;
 using namespace mozilla::layers;
 
+static bool IsFeatureInBlacklist(const nsCOMPtr<nsIGfxInfo>& gfxInfo,
+                                 int32_t feature,
+                                 nsCString* const out_blacklistId) {
+  int32_t status;
+  if (!NS_SUCCEEDED(gfxUtils::ThreadSafeGetFeatureStatus(
+          gfxInfo, feature, *out_blacklistId, &status))) {
+    return false;
+  }
+
+  return status != nsIGfxInfo::FEATURE_STATUS_OK;
+}
+
 WebGLContextOptions::WebGLContextOptions() {
   // Set default alpha state based on preference.
   alpha = !StaticPrefs::webgl_default_no_alpha();
@@ -122,11 +134,12 @@ bool WebGLContextOptions::operator==(const WebGLContextOptions& r) const {
   return eq;
 }
 
-WebGLContext::WebGLContext()
-    : gl(mGL_OnlyClearInDestroyResourcesAndContext)  // const reference
-      ,
+WebGLContext::WebGLContext(HostWebGLContext& host,
+                           const webgl::InitContextDesc& desc)
+    : gl(mGL_OnlyClearInDestroyResourcesAndContext),  // const reference
+      mHost(&host),
+      mOptions(desc.options),
       mMaxPerfWarnings(StaticPrefs::webgl_perf_max_warnings()),
-      mNumPerfWarnings(0),
       mMaxAcceptableFBStatusInvals(
           StaticPrefs::webgl_perf_max_acceptable_fb_status_invals()),
       mDataAllocGLCallCount(0),
@@ -136,11 +149,11 @@ WebGLContext::WebGLContext()
       mNeedsFakeNoDepth(false),
       mNeedsFakeNoStencil(false),
       mAllowFBInvalidation(StaticPrefs::webgl_allow_fb_invalidation()),
-      mMsaaSamples((uint8_t)StaticPrefs::webgl_msaa_samples()) {
-  mGeneration = 0;
+      mMsaaSamples((uint8_t)StaticPrefs::webgl_msaa_samples()),
+      mRequestedSize(desc.size) {
+  host.mContext = this;
+
   mShouldPresent = true;
-  mOptionsFrozen = false;
-  mDisableExtensions = false;
   mIsMesa = false;
   mWebGLError = 0;
 
@@ -159,10 +172,6 @@ WebGLContext::WebGLContext()
     WebGLMemoryTracker::AddWebGLContext(this);
   }
 
-  mAllowContextRestore = true;
-  mDisallowContextRestore = false;
-  mLastLossWasSimulated = false;
-
   mAlreadyGeneratedWarnings = 0;
   mAlreadyWarnedAboutFakeVertexAttrib0 = false;
   mAlreadyWarnedAboutViewportLargerThanDest = false;
@@ -178,6 +187,20 @@ WebGLContext::WebGLContext()
   mDisableFragHighP = false;
 
   mDrawCallsSinceLastFlush = 0;
+
+  if (mOptions.antialias && !gfxPrefs::WebGLForceMSAA()) {
+    const nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
+
+    nsCString blocklistId;
+    if (IsFeatureInBlacklist(gfxInfo, nsIGfxInfo::FEATURE_WEBGL_MSAA,
+                             &blocklistId)) {
+      GenerateWarning(
+          "getContext: Disallowing antialiased backbuffers due to "
+          "blacklisting. (%s)",
+          blocklistId.BeginReading());
+      mOptions.antialias = false;
+    }
+  }
 }
 
 WebGLContext::~WebGLContext() {
@@ -312,92 +335,12 @@ void WebGLContext::OnMemoryPressure() {
     shouldLoseContext = false;
   }
 
-  if (shouldLoseContext) ForceLoseContext();
+  if (shouldLoseContext) LoseContext();
 }
 
 //
 // nsICanvasRenderingContextInternal
 //
-
-static bool IsFeatureInBlacklist(const nsCOMPtr<nsIGfxInfo>& gfxInfo,
-                                 int32_t feature,
-                                 nsCString* const out_blacklistId) {
-  int32_t status;
-  if (!NS_SUCCEEDED(gfxUtils::ThreadSafeGetFeatureStatus(
-          gfxInfo, feature, *out_blacklistId, &status))) {
-    return false;
-  }
-
-  return status != nsIGfxInfo::FEATURE_STATUS_OK;
-}
-
-NS_IMETHODIMP
-WebGLContext::SetContextOptions(JSContext* cx, JS::Handle<JS::Value> options,
-                                ErrorResult& aRvForDictionaryInit) {
-  const FuncScope funcScope(*this, "getContext");
-  (void)IsContextLost();  // Ignore this.
-
-  if (options.isNullOrUndefined() && mOptionsFrozen) return NS_OK;
-
-  WebGLContextAttributes attributes;
-  if (!attributes.Init(cx, options)) {
-    aRvForDictionaryInit.Throw(NS_ERROR_UNEXPECTED);
-    return NS_ERROR_UNEXPECTED;
-  }
-
-  WebGLContextOptions newOpts;
-
-  newOpts.stencil = attributes.mStencil;
-  newOpts.depth = attributes.mDepth;
-  newOpts.premultipliedAlpha = attributes.mPremultipliedAlpha;
-  newOpts.preserveDrawingBuffer = attributes.mPreserveDrawingBuffer;
-  newOpts.failIfMajorPerformanceCaveat =
-      attributes.mFailIfMajorPerformanceCaveat;
-  newOpts.powerPreference = attributes.mPowerPreference;
-
-  if (attributes.mAlpha.WasPassed()) {
-    newOpts.alpha = attributes.mAlpha.Value();
-  }
-  if (attributes.mAntialias.WasPassed()) {
-    newOpts.antialias = attributes.mAntialias.Value();
-  }
-
-  // Don't do antialiasing if we've disabled MSAA.
-  if (!mMsaaSamples) {
-    newOpts.antialias = false;
-  }
-
-  if (newOpts.antialias && !StaticPrefs::webgl_msaa_force()) {
-    const nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
-
-    nsCString blocklistId;
-    if (IsFeatureInBlacklist(gfxInfo, nsIGfxInfo::FEATURE_WEBGL_MSAA,
-                             &blocklistId)) {
-      GenerateWarning(
-          "Disallowing antialiased backbuffers due to blacklisting.");
-      newOpts.antialias = false;
-    }
-  }
-
-#if 0
-    GenerateWarning("aaHint: %d stencil: %d depth: %d alpha: %d premult: %d preserve: %d\n",
-               newOpts.antialias ? 1 : 0,
-               newOpts.stencil ? 1 : 0,
-               newOpts.depth ? 1 : 0,
-               newOpts.alpha ? 1 : 0,
-               newOpts.premultipliedAlpha ? 1 : 0,
-               newOpts.preserveDrawingBuffer ? 1 : 0);
-#endif
-
-  if (mOptionsFrozen && !(newOpts == mOptions)) {
-    // Error if the options are already frozen, and the ones that were asked for
-    // aren't the same as what they were originally.
-    return NS_ERROR_FAILURE;
-  }
-
-  mOptions = newOpts;
-  return NS_OK;
-}
 
 static bool HasAcceleratedLayers(const nsCOMPtr<nsIGfxInfo>& gfxInfo) {
   int32_t status;
@@ -660,12 +603,12 @@ bool WebGLContext::CreateAndInitGL(
 
 bool WebGLContext::EnsureDefaultFB() {
   if (mDefaultFB) {
-    MOZ_ASSERT(mDefaultFB->mSize == mRequestedSize);
+    MOZ_ASSERT(*uvec2::From(mDefaultFB->mSize) == mRequestedSize);
     return true;
   }
 
   const bool depthStencil = mOptions.depth || mOptions.stencil;
-  auto attemptSize = mRequestedSize;
+  auto attemptSize = gfx::IntSize{mRequestedSize.x, mRequestedSize.y};
 
   while (attemptSize.width || attemptSize.height) {
     attemptSize.width = std::max(attemptSize.width, 1);
@@ -692,212 +635,174 @@ bool WebGLContext::EnsureDefaultFB() {
 
   if (!mDefaultFB) {
     GenerateWarning("Backbuffer resize failed. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
   mDefaultFB_IsInvalid = true;
 
-  if (mDefaultFB->mSize != mRequestedSize) {
+  const auto actualSize = *uvec2::From(mDefaultFB->mSize);
+  if (actualSize != mRequestedSize) {
     GenerateWarning(
-        "Requested size %dx%d was too large, but resize"
-        " to %dx%d succeeded.",
-        mRequestedSize.width, mRequestedSize.height, mDefaultFB->mSize.width,
-        mDefaultFB->mSize.height);
+        "Requested size %ux%u was too large, but resize"
+        " to %ux%u succeeded.",
+        mRequestedSize.x, mRequestedSize.y, actualSize.x, actualSize.y);
   }
-  mRequestedSize = mDefaultFB->mSize;
+  mRequestedSize = actualSize;
   return true;
 }
 
-void WebGLContext::ThrowEvent_WebGLContextCreationError(
-    const nsACString& text) {
-  MOZ_ASSERT(mHost);
-  mHost->PostContextCreationError(nsCString(text));
+void WebGLContext::Resize(uvec2 requestedSize) {
+  // Zero-sized surfaces can cause problems.
+  if (!requestedSize.x) {
+    requestedSize.x = 1;
+  }
+  if (!requestedSize.y) {
+    requestedSize.y = 1;
+  }
+
+  // If we've already drawn, we should commit the current buffer.
+  PresentScreenBuffer();
+
+  if (IsContextLost()) {
+    GenerateWarning("WebGL context was lost due to swap failure.");
+    return;
+  }
+
+  // Kill our current default fb(s), for later lazy allocation.
+  mRequestedSize = requestedSize;
+  mDefaultFB = nullptr;
+  mResetLayer = true;  // New size means new Layer.
 }
 
-WebGLContext::DoSetDimensionsData WebGLContext::DoSetDimensions(
-    int32_t signedWidth, int32_t signedHeight) {
-  const FuncScope funcScope(*this, "<SetDimensions>");
-  (void)IsContextLost();  // We handle this ourselves.
+UniquePtr<webgl::FormatUsageAuthority> WebGLContext::CreateFormatUsage(
+    gl::GLContext* gl) const {
+  return webgl::FormatUsageAuthority::CreateForWebGL1(gl);
+}
 
-  if (signedWidth < 0 || signedHeight < 0) {
-    if (!gl) {
-      Telemetry::Accumulate(Telemetry::CANVAS_WEBGL_FAILURE_ID,
-                            NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_SIZE"));
-    }
-    GenerateWarning(
-        "Canvas size is too large (seems like a negative value wrapped)");
-    return {NS_ERROR_OUT_OF_MEMORY, false};
-  }
-
-  uint32_t width = signedWidth;
-  uint32_t height = signedHeight;
-
-  // Early success return cases
-
-  // Zero-sized surfaces can cause problems.
-  if (width == 0) width = 1;
-
-  if (height == 0) height = 1;
-
-  // If we already have a gl context, then we just need to resize it
-  if (gl) {
-    if (uint32_t(mRequestedSize.width) == width &&
-        uint32_t(mRequestedSize.height) == height) {
-      return {NS_OK, false};
-    }
-
-    if (IsContextLost()) return {NS_OK, false};
-
-    // If we've already drawn, we should commit the current buffer.
-    PresentScreenBuffer();
-
-    if (IsContextLost()) {
-      GenerateWarning("WebGL context was lost due to swap failure.");
-      return {NS_OK, false};
-    }
-
-    // Kill our current default fb(s), for later lazy allocation.
-    mRequestedSize = {width, height};
-    mDefaultFB = nullptr;
-
-    mResetLayer = true;
-    return {NS_OK, false};
-  }
-
+/*static*/
+RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
+                                          const webgl::InitContextDesc& desc,
+                                          webgl::InitContextResult* const out) {
   nsCString failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_UNKOWN");
-  auto autoTelemetry = mozilla::MakeScopeExit([&] {
-    Telemetry::Accumulate(Telemetry::CANVAS_WEBGL_FAILURE_ID, failureId);
-  });
-
-  // End of early return cases.
-  // At this point we know that we're not just resizing an existing context,
-  // we are initializing a new context.
-
-  // We're going to create an entirely new context.  If our
-  // generation is not 0 right now (that is, if this isn't the first
-  // context we're creating), we may have to dispatch a context lost
-  // event.
-
-  // If incrementing the generation would cause overflow,
-  // don't allow it.  Allowing this would allow us to use
-  // resource handles created from older context generations.
-  if (!(mGeneration + 1).isValid()) {
-    // exit without changing the value of mGeneration
-    failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_TOO_MANY");
-    const nsLiteralCString text("Too many WebGL contexts created this run.");
-    ThrowEvent_WebGLContextCreationError(text);
-    return {NS_ERROR_FAILURE, true};
-  }
-
-  // increment the generation number - Do this early because later
-  // in CreateOffscreenGL(), "default" objects are created that will
-  // pick up the old generation.
-  ++mGeneration;
-
-  bool disabled = StaticPrefs::webgl_disabled();
-
-  // TODO: When we have software webgl support we should use that instead.
-  disabled |= gfxPlatform::InSafeMode();
-
-  if (disabled) {
-    if (gfxPlatform::InSafeMode()) {
-      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_SAFEMODE");
-    } else {
-      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_DISABLED");
-    }
-    const nsLiteralCString text("WebGL is currently disabled.");
-    ThrowEvent_WebGLContextCreationError(text);
-    return {NS_ERROR_FAILURE, true};
-  }
-
-  if (StaticPrefs::webgl_disable_fail_if_major_performance_caveat()) {
-    mOptions.failIfMajorPerformanceCaveat = false;
-  }
-
-  if (mOptions.failIfMajorPerformanceCaveat) {
-    nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
-    if (!HasAcceleratedLayers(gfxInfo)) {
-      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_PERF_CAVEAT");
-      const nsLiteralCString text(
-          "failIfMajorPerformanceCaveat: Compositor is not"
-          " hardware-accelerated.");
-      ThrowEvent_WebGLContextCreationError(text);
-      return {NS_ERROR_FAILURE, true};
-    }
-  }
-
-  // Alright, now let's start trying.
-  bool forceEnabled = StaticPrefs::webgl_force_enabled();
+  const bool forceEnabled = gfxPrefs::WebGLForceEnabled();
   ScopedGfxFeatureReporter reporter("WebGL", forceEnabled);
 
-  MOZ_ASSERT(!gl);
-  std::vector<FailureReason> failReasons;
-  if (!CreateAndInitGL(forceEnabled, &failReasons)) {
-    nsCString text("WebGL creation failed: ");
-    for (const auto& cur : failReasons) {
-      // Don't try to accumulate using an empty key if |cur.key| is empty.
-      if (cur.key.IsEmpty()) {
-        Telemetry::Accumulate(
-            Telemetry::CANVAS_WEBGL_FAILURE_ID,
-            NS_LITERAL_CSTRING("FEATURE_FAILURE_REASON_UNKNOWN"));
+  const auto res = [&]() -> Result<RefPtr<WebGLContext>, std::string> {
+    bool disabled = gfxPrefs::WebGLDisabled();
+
+    // TODO: When we have software webgl support we should use that instead.
+    disabled |= gfxPlatform::InSafeMode();
+
+    if (disabled) {
+      if (gfxPlatform::InSafeMode()) {
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_SAFEMODE");
       } else {
-        Telemetry::Accumulate(Telemetry::CANVAS_WEBGL_FAILURE_ID, cur.key);
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_DISABLED");
+      }
+      return Err("WebGL is currently disabled.");
+    }
+
+    if (desc.options.failIfMajorPerformanceCaveat) {
+      nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
+      if (!HasAcceleratedLayers(gfxInfo)) {
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_PERF_CAVEAT");
+        return Err(
+            "failIfMajorPerformanceCaveat: Compositor is not"
+            " hardware-accelerated.");
+      }
+    }
+
+    // Alright, now let's start trying.
+
+    RefPtr<WebGLContext> webgl;
+    if (desc.isWebgl2) {
+      webgl = new WebGL2Context(host, desc);
+    } else {
+      webgl = new WebGLContext(host, desc);
+    }
+
+    MOZ_ASSERT(!webgl->gl);
+    std::vector<FailureReason> failReasons;
+    if (!webgl->CreateAndInitGL(forceEnabled, &failReasons)) {
+      nsCString text("WebGL creation failed: ");
+      for (const auto& cur : failReasons) {
+        // Don't try to accumulate using an empty key if |cur.key| is empty.
+        if (cur.key.IsEmpty()) {
+          Telemetry::Accumulate(
+              Telemetry::CANVAS_WEBGL_FAILURE_ID,
+              NS_LITERAL_CSTRING("FEATURE_FAILURE_REASON_UNKNOWN"));
+        } else {
+          Telemetry::Accumulate(Telemetry::CANVAS_WEBGL_FAILURE_ID, cur.key);
+        }
+
+        text.AppendLiteral("\n* ");
+        text.Append(cur.info);
+      }
+      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_REASON");
+      return Err(text.BeginReading());
+    }
+    MOZ_ASSERT(webgl->gl);
+
+    if (desc.options.failIfMajorPerformanceCaveat) {
+      if (webgl->gl->IsWARP()) {
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_PERF_WARP");
+        return Err(
+            "failIfMajorPerformanceCaveat: Driver is not"
+            " hardware-accelerated.");
       }
 
-      text.AppendLiteral("\n* ");
-      text.Append(cur.info);
-    }
-    failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_REASON");
-    ThrowEvent_WebGLContextCreationError(text);
-    return {NS_ERROR_FAILURE, true};
-  }
-  MOZ_ASSERT(gl);
-
-  if (mOptions.failIfMajorPerformanceCaveat) {
-    if (gl->IsWARP()) {
-      DestroyResourcesAndContext();
-      MOZ_ASSERT(!gl);
-
-      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_PERF_WARP");
-      const nsLiteralCString text(
-          "failIfMajorPerformanceCaveat: Driver is not"
-          " hardware-accelerated.");
-      ThrowEvent_WebGLContextCreationError(text);
-      return {NS_ERROR_FAILURE, true};
-    }
-
 #ifdef XP_WIN
-    if (gl->GetContextType() == gl::GLContextType::WGL &&
-        !gl::sWGLLib.HasDXInterop2()) {
-      DestroyResourcesAndContext();
-      MOZ_ASSERT(!gl);
-
-      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_DXGL_INTEROP2");
-      const nsLiteralCString text("Caveat: WGL without DXGLInterop2.");
-      ThrowEvent_WebGLContextCreationError(text);
-      return {NS_ERROR_FAILURE, true};
-    }
+      if (webgl->gl->GetContextType() == gl::GLContextType::WGL &&
+          !gl::sWGLLib.HasDXInterop2()) {
+        failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_DXGL_INTEROP2");
+        return Err("Caveat: WGL without DXGLInterop2.");
+      }
 #endif
-  }
+    }
 
-  MOZ_ASSERT(!mDefaultFB);
-  mRequestedSize = {width, height};
-  if (!EnsureDefaultFB()) {
-    MOZ_ASSERT(!gl);
+    MOZ_ASSERT(!webgl->mDefaultFB);
+    if (!webgl->EnsureDefaultFB()) {
+      MOZ_ASSERT(!webgl->gl);
 
-    failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_BACKBUFFER");
-    const nsLiteralCString text("Initializing WebGL backbuffer failed.");
-    ThrowEvent_WebGLContextCreationError(text);
-    return {NS_ERROR_FAILURE, true};
-  }
+      failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_BACKBUFFER");
+      return Err("Initializing WebGL backbuffer failed.");
+    }
 
-  if (GLContext::ShouldSpew()) {
-    printf_stderr("--- WebGL context created: %p\n", gl.get());
+    return webgl;
+  }();
+  if (res.isOk()) {
+    failureId = NS_LITERAL_CSTRING("SUCCESS");
   }
+  Telemetry::Accumulate(Telemetry::CANVAS_WEBGL_FAILURE_ID, failureId);
+
+  if (!res.isOk()) {
+    out->error = res.unwrapErr();
+    return nullptr;
+  }
+  const auto webgl = res.unwrap();
 
   // Update our internal stuff:
+  webgl->FinishInit();
 
+  reporter.SetSuccessful();
+  if (GLContext::ShouldSpew()) {
+    printf_stderr("--- WebGL context created: %p\n", webgl.get());
+  }
+
+  out->supportedExtensions = webgl->mSupportedExtensions;
+  out->options = webgl->mOptions;
+
+  if (out->supportedExtensions
+          [WebGLExtensionID::WEBGL_compressed_texture_astc]) {
+    out->astcHdr = webgl->gl->IsExtensionSupported(
+        gl::GLContext::KHR_texture_compression_astc_hdr);
+  }
+
+  return webgl;
+}
+
+void WebGLContext::FinishInit() {
   mOptions.antialias &= bool(mDefaultFB->mSamples);
 
   if (!mOptions.alpha) {
@@ -951,12 +856,13 @@ WebGLContext::DoSetDimensionsData WebGLContext::DoSetDimensions(
 
   //////
 
-  reporter.SetSuccessful();
-
-  failureId = NS_LITERAL_CSTRING("SUCCESS");
-
   gl->ResetSyncCallCount("WebGLContext Initialization");
-  return {NS_OK, true};
+
+  for (const auto i : MakeEnumeratedRange(WebGLExtensionID::Max)) {
+    if (IsExtensionSupported(i)) {
+      mSupportedExtensions[i] = true;
+    }
+  }
 }
 
 void WebGLContext::SetCompositableHost(
@@ -1004,8 +910,7 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
   size_t numContextsThisPrincipal = 0;
 
   for (size_t i = 0; i < childArray.Length(); ++i) {
-    ClientWebGLContext* context =
-        static_cast<WebGLChild*>(childArray[i])->GetContext();
+    const auto context = &(static_cast<WebGLChild*>(childArray[i])->mContext);
     MOZ_ASSERT(context);
     if (!context) {
       continue;
@@ -1018,7 +923,7 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
       // Zombie context: the canvas is already destroyed, but something else
       // (typically the compositor) is still holding on to the context.
       // Killing zombies is a no-brainer.
-      context->LoseContext();
+      context->LoseContext(webgl::ContextLossReason::None);
       continue;
     }
 
@@ -1042,20 +947,22 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
   }
 
   if (numContextsThisPrincipal > maxWebGLContextsPerPrincipal) {
-    PostWarning(nsPrintfCString(
+    const auto text = nsPrintfCString(
         "Exceeded %u live WebGL contexts for this principal, losing the "
         "least recently used one.",
-        maxWebGLContextsPerPrincipal));
+        maxWebGLContextsPerPrincipal);
+    JsWarning(text.BeginReading());
     MOZ_ASSERT(oldestContextThisPrincipal);  // if we reach this point, this
                                              // can't be null
-    oldestContextThisPrincipal->LoseContext();
+    oldestContextThisPrincipal->LoseContext(webgl::ContextLossReason::None);
   } else if (numContexts > maxWebGLContexts) {
-    PostWarning(
-        nsPrintfCString("Exceeded %u live WebGL contexts, losing the least "
-                        "recently used one.",
-                        maxWebGLContexts));
+    const auto text = nsPrintfCString(
+        "Exceeded %u live WebGL contexts, losing the least "
+        "recently used one.",
+        maxWebGLContexts);
+    JsWarning(text.BeginReading());
     MOZ_ASSERT(oldestContext);  // if we reach this point, this can't be null
-    oldestContext->LoseContext();
+    oldestContext->LoseContext(webgl::ContextLossReason::None);
   }
 }
 
@@ -1378,6 +1285,8 @@ void WebGLContext::BlitBackbufferToCurDriverFB() const {
   }
 }
 
+// TODO: (JG) I think this should be removed, the Client should manage
+// TextureClients, and imperitively tell the Host what to render to.
 Maybe<ICRData> WebGLContext::InitializeCanvasRenderer(
     layers::LayersBackend backend) {
   if (!gl) {
@@ -1385,7 +1294,7 @@ Maybe<ICRData> WebGLContext::InitializeCanvasRenderer(
   }
 
   ICRData ret;
-  ret.size = DrawingBufferSize();
+  ret.size = {DrawingBufferSize().x, DrawingBufferSize().y};
   ret.hasAlpha = mOptions.alpha;
   ret.supportsAlpha = gl->Caps().alpha;
   ret.isPremultAlpha = IsPremultAlpha();
@@ -1435,7 +1344,7 @@ bool WebGLContext::PresentScreenBuffer(GLScreenBuffer* const targetScreen) {
   if ((!screen->IsReadBufferReady() || screen->Size() != mDefaultFB->mSize) &&
       !screen->Resize(mDefaultFB->mSize)) {
     GenerateWarning("screen->Resize failed. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
@@ -1453,7 +1362,7 @@ bool WebGLContext::PresentScreenBuffer(GLScreenBuffer* const targetScreen) {
 
   if (!screen->PublishFrame(screen->Size())) {
     GenerateWarning("PublishFrame failed. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
@@ -1523,14 +1432,14 @@ bool WebGLContext::Present() {
   if (!screen->Front()->Surf()) {
     GenerateWarning(
         "Present failed due to missing front buffer. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
   if (mBackend == LayersBackend::LAYERS_NONE) {
     GenerateWarning(
         "Present was not given a valid compositor layer type. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
@@ -1548,7 +1457,7 @@ bool WebGLContext::Present() {
 
   if (!host) {
     GenerateWarning("Present failed to create TextuteHost. Losing context.");
-    ForceLoseContext();
+    LoseContext();
     return false;
   }
 
@@ -1626,30 +1535,6 @@ static bool CheckContextLost(GLContext* gl, bool* const out_isGuilty) {
 
 void WebGLContext::RunContextLossTimer() { mContextLossHandler.RunTimer(); }
 
-class UpdateContextLossStatusTask : public CancelableRunnable {
-  RefPtr<WebGLContext> mWebGL;
-
- public:
-  explicit UpdateContextLossStatusTask(WebGLContext* webgl)
-      : CancelableRunnable("UpdateContextLossStatusTask"), mWebGL(webgl) {}
-
-  NS_IMETHOD Run() override {
-    if (mWebGL) mWebGL->UpdateContextLossStatus();
-
-    return NS_OK;
-  }
-
-  nsresult Cancel() override {
-    mWebGL = nullptr;
-    return NS_OK;
-  }
-};
-
-void WebGLContext::EnqueueUpdateContextLossStatus() {
-  nsCOMPtr<nsIRunnable> task = new UpdateContextLossStatusTask(this);
-  NS_DispatchToCurrentThread(task);
-}
-
 // We use this timer for many things. Here are the things that it is activated
 // for:
 // 1) If a script is using the MOZ_WEBGL_lose_context extension.
@@ -1665,104 +1550,25 @@ void WebGLContext::EnqueueUpdateContextLossStatus() {
 // met.
 // At a bare minimum, from context lost to context restores, it would take 3
 // full timer iterations: detection, webglcontextlost, webglcontextrestored.
-void WebGLContext::UpdateContextLossStatus() {
-  MOZ_ASSERT(mHost);
-  mContextLossHandler.ClearTimer();
+void WebGLContext::CheckForContextLoss() {
+  bool isGuilty = true;
+  const auto isContextLost = CheckContextLost(gl, &isGuilty);
+  if (!isContextLost) return;
 
-  if (mContextStatus == ContextStatus::NotLost) {
-    // We don't know that we're lost, but we might be, so we need to
-    // check. If we're guilty, don't allow restores, though.
+  mWebGLError = LOCAL_GL_CONTEXT_LOST;
 
-    bool isGuilty = true;
-    MOZ_ASSERT(gl);  // Shouldn't be missing gl if we're NotLost.
-    bool isContextLost = CheckContextLost(gl, &isGuilty);
-
-    if (isContextLost) {
-      if (isGuilty) mAllowContextRestore = false;
-
-      ForceLoseContext();
-    }
-
-    // Fall through.
+  auto reason = webgl::ContextLossReason::None;
+  if (isGuilty) {
+    reason = webgl::ContextLossReason::Guilty;
   }
-
-  if (mContextStatus == ContextStatus::LostAwaitingEvent) {
-    // The context has been lost and we haven't yet triggered the
-    // callback, so do that now.
-    mHost->OnLostContext();
-
-    // We sent the callback, so we're just 'regular lost' now.
-    mContextStatus = ContextStatus::Lost;
-
-    // This is cleared if the context lost event handler permits it
-    // (i.e. is not the default handler)
-    mDisallowContextRestore = true;
-    return;
-  }
-
-  if (mContextStatus == ContextStatus::Lost) {
-    // Context is lost, and we've already sent the callback. We
-    // should try to restore the context if we're both allowed to,
-    // and supposed to.
-
-    // Are we allowed to restore the context?
-    if (mDisallowContextRestore || (!mAllowContextRestore)) return;
-
-    // If we're only simulated-lost, we shouldn't auto-restore, and
-    // instead we should wait for restoreContext() to be called.
-    if (mLastLossWasSimulated) return;
-
-    ForceRestoreContext();
-    return;
-  }
-
-  if (mContextStatus == ContextStatus::LostAwaitingRestore) {
-    // Context is lost, but we should try to restore it.
-
-    if (mAllowContextRestore) {
-      DoSetDimensionsData sdData =
-          DoSetDimensions(mRequestedSize.width, mRequestedSize.height);
-      if (NS_FAILED(sdData.result)) {
-        // Assume broken forever.
-        mAllowContextRestore = false;
-      }
-    }
-    if (!mAllowContextRestore) {
-      // We might decide this after thinking we'd be OK restoring
-      // the context, so downgrade.
-      mContextStatus = ContextStatus::Lost;
-      return;
-    }
-
-    // Revival!
-    mContextStatus = ContextStatus::NotLost;
-    mHost->OnRestoredContext();
-    return;
-  }
+  LoseContext(reason);
 }
 
-void WebGLContext::ForceLoseContext(bool simulateLosing) {
-  printf_stderr("WebGL(%p)::ForceLoseContext\n", this);
-  MOZ_ASSERT(gl);
-  mContextStatus = ContextStatus::LostAwaitingEvent;
-  mWebGLError = LOCAL_GL_CONTEXT_LOST_WEBGL;
-
-  // Burn it all!
-  DestroyResourcesAndContext();
-  mLastLossWasSimulated = simulateLosing;
-
-  // Queue up a task, since we know the status changed.
-  EnqueueUpdateContextLossStatus();
-}
-
-void WebGLContext::ForceRestoreContext() {
-  printf_stderr("WebGL(%p)::ForceRestoreContext\n", this);
-  mContextStatus = ContextStatus::LostAwaitingRestore;
-  mAllowContextRestore = true;  // Hey, you did say 'force'.
-  mDisallowContextRestore = false;
-
-  // Queue up a task, since we know the status changed.
-  EnqueueUpdateContextLossStatus();
+void WebGLContext::LoseContext(const webgl::ContextLossReason reason) {
+  printf_stderr("WebGL(%p)::LoseContext(%u)\n", this,
+                static_cast<uint32_t>(reason));
+  mIsContextLost = true;
+  mHost->OnContextLoss(reason);
 }
 
 already_AddRefed<mozilla::gfx::SourceSurface> WebGLContext::GetSurfaceSnapshot(
@@ -1822,13 +1628,12 @@ void WebGLContext::DidRefresh() {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-gfx::IntSize WebGLContext::DrawingBufferSize() {
-  const gfx::IntSize zeros{0, 0};
-  if (IsContextLost()) return zeros;
+uvec2 WebGLContext::DrawingBufferSize() {
+  if (IsContextLost()) return {};
 
-  if (!EnsureDefaultFB()) return zeros;
+  if (!EnsureDefaultFB()) return {};
 
-  return mDefaultFB->mSize;
+  return *uvec2::From(mDefaultFB->mSize);
 }
 
 bool WebGLContext::ValidateAndInitFB(const WebGLFramebuffer* const fb,
@@ -2344,14 +2149,16 @@ bool ClientWebGLContext::ValidateArrayBufferView(
 
   size_t elemCount = byteLen / elemSize;
   if (elemOffset > elemCount) {
-    EnqueueErrorInvalidValue("Invalid offset into ArrayBufferView.");
+    EnqueueError(LOCAL_GL_INVALID_VALUE,
+                 "Invalid offset into ArrayBufferView.");
     return false;
   }
   elemCount -= elemOffset;
 
   if (elemCountOverride) {
     if (elemCountOverride > elemCount) {
-      EnqueueErrorInvalidValue("Invalid sub-length for ArrayBufferView.");
+      EnqueueError(LOCAL_GL_INVALID_VALUE,
+                   "Invalid sub-length for ArrayBufferView.");
       return false;
     }
     elemCount = elemCountOverride;
@@ -2394,28 +2201,13 @@ const char* WebGLContext::FuncName() const {
 WebGLContext::FuncScope::FuncScope(const WebGLContext& webgl,
                                    const char* const funcName)
     : mWebGL(webgl), mFuncName(bool(mWebGL.mFuncScope) ? nullptr : funcName) {
-  if (MOZ_UNLIKELY(!mFuncName)) {
-#ifdef DEBUG
-    mStillNeedsToCheckContextLost = false;
-#endif
-    return;
-  }
-
+  if (!mFuncName) return;
   mWebGL.mFuncScope = this;
 }
 
 WebGLContext::FuncScope::~FuncScope() {
-  if (MOZ_UNLIKELY(!mFuncName)) return;
-
-  MOZ_ASSERT(!mStillNeedsToCheckContextLost);
+  if (!mFuncName) return;
   mWebGL.mFuncScope = nullptr;
-}
-
-bool WebGLContext::IsContextLost() const {
-  if (MOZ_LIKELY(mFuncScope)) {
-    mFuncScope->OnCheckContextLost();
-  }
-  return mContextStatus != ContextStatus::NotLost;
 }
 
 // --
@@ -2596,4 +2388,87 @@ void DynDGpuManager::DispatchTick(
 }
 
 }  // namespace webgl
+
+// -
+
+void WebGLContext::GenerateErrorImpl(const GLenum err,
+                                     const nsACString& text) const {
+  /* ES2 section 2.5 "GL Errors" states that implementations can have
+   * multiple 'flags', as errors might be caught in different parts of
+   * a distributed implementation.
+   * We're signing up as a distributed implementation here, with
+   * separate flags for WebGL and the underlying GLContext.
+   */
+  if (!mWebGLError) mWebGLError = err;
+
+  if (mHost) {
+    mHost->JsWarning(text.BeginReading());
+  }
+}
+
+// -
+
+MaybeWebGLVariant WebGLContext::MOZDebugGetParameter(const GLenum pname) const {
+  const WebGLContext::FuncScope funcScope(*this, "MOZ_debug.getParameter");
+  if (IsContextLost()) {
+    return {};
+  }
+
+  switch (pname) {
+    case LOCAL_GL_EXTENSIONS: {
+      nsString ret;
+      if (!gl->IsCoreProfile()) {
+        const auto rawExts = (const char*)gl->fGetString(LOCAL_GL_EXTENSIONS);
+        ret = NS_ConvertUTF8toUTF16(rawExts);
+      } else {
+        const auto& numExts = gl->GetIntAs<GLuint>(LOCAL_GL_NUM_EXTENSIONS);
+        for (GLuint i = 0; i < numExts; i++) {
+          const auto rawExt =
+              (const char*)gl->fGetStringi(LOCAL_GL_EXTENSIONS, i);
+          if (i > 0) {
+            ret.AppendLiteral(" ");
+          }
+          ret.Append(NS_ConvertUTF8toUTF16(rawExt));
+        }
+      }
+      return AsSomeVariant(ret);
+    }
+
+    case LOCAL_GL_RENDERER:
+    case LOCAL_GL_VENDOR:
+    case LOCAL_GL_VERSION: {
+      const auto raw = (const char*)gl->fGetString(pname);
+      nsString ret = NS_ConvertUTF8toUTF16(raw);
+      return AsSomeVariant(ret);
+    }
+
+    case dom::MOZ_debug_Binding::WSI_INFO: {
+      nsCString info;
+      gl->GetWSIInfo(&info);
+      nsString ret = NS_ConvertUTF8toUTF16(info);
+      return AsSomeVariant(ret);
+    }
+
+    case dom::MOZ_debug_Binding::DOES_INDEX_VALIDATION:
+      return AsSomeVariant(std::move(mNeedsIndexValidation));
+
+    default:
+      ErrorInvalidEnumInfo("pname", pname);
+      return Nothing();
+  }
+}
+
+// If no source has been defined, compileShader() has not been called, or the
+// translation has failed for shader, an empty string is returned; otherwise,
+// return the translated source.
+nsString WebGLContext::GetTranslatedShaderSource(
+    const WebGLShader& shader) const {
+  const WebGLContext::FuncScope funcScope(*this, "getShaderTranslatedSource");
+  if (IsContextLost()) return {};
+
+  if (!ValidateObject("shader", shader)) return {};
+
+  return shader.GetShaderTranslatedSource();
+}
+
 }  // namespace mozilla

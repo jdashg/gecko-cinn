@@ -1443,15 +1443,6 @@ ClientWebGLContext* HTMLCanvasElement::GetClientWebGLContext() {
   return static_cast<ClientWebGLContext*>(GetContextAtIndex(0));
 }
 
-PWebGLChild* HTMLCanvasElement::GetWebGLChild() {
-  ClientWebGLContext* webgl = GetClientWebGLContext();
-  if (!webgl) {
-    return nullptr;
-  }
-
-  return webgl->GetWebGLChild();
-}
-
 void HTMLCanvasElement::ClearVRFrame() {
   if (GetCurrentContextType() != CanvasContextType::WebGL1 &&
       GetCurrentContextType() != CanvasContextType::WebGL2) {

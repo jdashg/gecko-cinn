@@ -22,9 +22,6 @@ UniquePtr<webgl::FormatUsageAuthority> WebGL2Context::CreateFormatUsage(
   return webgl::FormatUsageAuthority::CreateForWebGL2(gl);
 }
 
-/*static*/
-bool WebGL2Context::IsSupported() { return StaticPrefs::webgl_enable_webgl2(); }
-
 ////////////////////////////////////////////////////////////////////////////////
 // WebGL 2 initialisation
 
