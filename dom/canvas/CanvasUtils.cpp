@@ -202,7 +202,7 @@ bool GetCanvasContextType(const nsAString& str,
     return true;
   }
 
-  if (WebGL2Context::IsSupported()) {
+  if (gfxPrefs::WebGL2Enabled()) {
     if (str.EqualsLiteral("webgl2")) {
       *out_type = dom::CanvasContextType::WebGL2;
       return true;

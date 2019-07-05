@@ -13,10 +13,8 @@
 #include "nsString.h"
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
-#include "WebGLContextEndpoint.h"
 #include "mozilla/dom/WebGLTypes.h"
 #include "WebGLActiveInfo.h"
-#include "WebGLErrorQueue.h"
 #include "WebGLShaderPrecisionFormat.h"
 
 #ifndef WEBGL_BRIDGE_LOG_
@@ -32,6 +30,9 @@ class HostWebGLCommandSink;
 
 extern LazyLogModule gWebGLBridgeLog;
 
+namespace dom {
+class WebGLParent;
+}
 namespace layers {
 class CompositableHost;
 }
@@ -40,8 +41,6 @@ class CompositableHost;
  * Host endpoint of a WebGLContext.  HostWebGLContext owns a WebGLContext
  * that it uses to execute commands sent from its ClientWebGLContext.
  *
- * The HostWebGLContext provides host implementions of methods from the
- * WebGLContextEndpoint.
  * A HostWebGLContext continuously issues a Task to the Compositor thread that
  * causes it to drain its queue of commands.  It also maintains a map of WebGL
  * objects (e.g. ObjectIdMap<WebGLShader>) that it uses associate them with
@@ -51,25 +50,38 @@ class CompositableHost;
  * nsICanvasRenderingContextInternal DOM class.  That is the
  * ClientWebGLContext.
  */
-class HostWebGLContext : public WebGLContextEndpoint {
- public:
-  static UniquePtr<HostWebGLContext> Create(
-      WebGLVersion aVersion,
-      UniquePtr<HostWebGLCommandSink>&& aCommandSink = nullptr,
-      UniquePtr<HostWebGLErrorSource>&& aErrorSource = nullptr);
+class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
+  friend class WebGLContext;
 
+ public:
+  MOZ_DECLARE_WEAKREFERENCE_TYPENAME(HostWebGLContext)
+
+  struct RemotingData final {
+    dom::WebGLParent& mParent;
+    UniquePtr<HostWebGLCommandSink> mCommandSink;
+  };
+  struct OwnerData final {
+    Maybe<ClientWebGLContext*> inProcess;
+    Maybe<RemotingData> outOfProcess;
+  };
+
+  static UniquePtr<HostWebGLContext> Create(OwnerData&&,
+                                            const webgl::InitContextDesc&,
+                                            webgl::InitContextResult* out);
+
+ private:
+  explicit HostWebGLContext(OwnerData&&);
+
+ public:
   virtual ~HostWebGLContext();
 
-  WebGLContext* GetWebGLContext() { return mContext; }
+  WebGLContext* GetWebGLContext() const { return mContext; }
 
- protected:
-  HostWebGLContext(WebGLVersion aVersion, RefPtr<WebGLContext> aContext,
-                   UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-                   UniquePtr<HostWebGLErrorSource>&& aErrorSource);
+ public:
+  const OwnerData mOwnerData;
 
-  // These are null only if we are running single-process WebGL
-  UniquePtr<HostWebGLCommandSink> mCommandSink;
-  UniquePtr<HostWebGLErrorSource> mErrorSource;
+ private:
+  RefPtr<WebGLContext> mContext;
 
   // The host-side of an object ID map for types for which the client
   // generates the IDs.  (This is the majority of the types of objects that
@@ -217,12 +229,6 @@ class HostWebGLContext : public WebGLContextEndpoint {
  public:
   CommandResult RunCommandsForDuration(TimeDuration aDuration);
 
-  // This must be called if this is a Host for a single-process context
-  void SetClientContext(ClientWebGLContext* aClientContext) {
-    MOZ_ASSERT(!mCommandSink);
-    mClientContext = aClientContext;
-  }
-
   // -------------------------------------------------------------------------
   // Host-side methods.  Calls in the client are forwarded to the host.
   // -------------------------------------------------------------------------
@@ -243,19 +249,20 @@ class HostWebGLContext : public WebGLContextEndpoint {
 
   Maybe<ICRData> InitializeCanvasRenderer(layers::LayersBackend backend);
 
-  void SetContextOptions(const WebGLContextOptions& options);
+  void Resize(const uvec2& size);
 
-  SetDimensionsData SetDimensions(int32_t signedWidth, int32_t signedHeight);
-
-  gfx::IntSize DrawingBufferSize();
+  uvec2 DrawingBufferSize();
 
   void SetCompositableHost(RefPtr<layers::CompositableHost>& aCompositableHost);
 
   void OnMemoryPressure();
-
-  void AllowContextRestore();
+  void OnContextLoss(webgl::ContextLossReason);
 
   void DidRefresh();
+
+  void RequestExtension(const WebGLExtensionID ext) {
+    mContext->RequestExtension(ext);
+  }
 
   // ------------------------- GL State -------------------------
   bool IsContextLost() const;
@@ -574,8 +581,7 @@ class HostWebGLContext : public WebGLContextEndpoint {
   void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w,
                         FuncScopeId aFuncId = FuncScopeId::vertexAttribI4ui);
 
-  void VertexAttribDivisor(GLuint index, GLuint divisor,
-                           bool aFromExtension = false);
+  void VertexAttribDivisor(GLuint index, GLuint divisor);
 
   MaybeWebGLVariant GetIndexedParameter(GLenum target, GLuint index);
 
@@ -687,11 +693,8 @@ class HostWebGLContext : public WebGLContextEndpoint {
 
   // ------------------------------ WebGL Debug
   // ------------------------------------
-  void EnqueueError(GLenum aGLError, const nsCString& aMsg);
-
-  void EnqueueWarning(const nsCString& aMsg);
-
-  void ReportOOMAndLoseContext();
+  void GenerateError(GLenum error, const std::string&) const;
+  void JsWarning(const std::string&) const;
 
   // -------------------------------------------------------------------------
   // Host-side extension methods.  Calls in the client are forwarded to the
@@ -701,70 +704,51 @@ class HostWebGLContext : public WebGLContextEndpoint {
   // -------------------------------------------------------------------------
 
   // Misc. Extensions
-  void EnableExtension(dom::CallerType callerType, WebGLExtensionID ext);
-
-  const Maybe<ExtensionSets> GetSupportedExtensions();
-
-  void DrawBuffers(const nsTArray<GLenum>& buffers,
-                   bool aFromExtension = false);
+  void DrawBuffers(const nsTArray<GLenum>& buffers);
 
   Maybe<nsTArray<nsString>> GetASTCExtensionSupportedProfiles() const;
 
   nsString GetTranslatedShaderSource(const WebGLId<WebGLShader>& shader) const;
 
-  void LoseContext(bool isSimulated = true);
-
-  void RestoreContext();
+  void LoseContext(webgl::ContextLossReason);
 
   MaybeWebGLVariant MOZDebugGetParameter(GLenum pname) const;
 
   // VertexArrayObjectEXT
-  void BindVertexArray(const WebGLId<WebGLVertexArray>& array,
-                       bool aFromExtension = false);
+  void BindVertexArray(const WebGLId<WebGLVertexArray>&);
 
-  void CreateVertexArray(const WebGLId<WebGLVertexArray>& aId,
-                         bool aFromExtension = false);
+  void CreateVertexArray(const WebGLId<WebGLVertexArray>&);
 
-  void DeleteVertexArray(const WebGLId<WebGLVertexArray>& array,
-                         bool aFromExtension = false);
+  void DeleteVertexArray(const WebGLId<WebGLVertexArray>&);
 
   // InstancedElementsEXT
   void DrawArraysInstanced(GLenum mode, GLint first, GLsizei count,
-                           GLsizei primcount,
-      FuncScopeId aFuncId);
+                           GLsizei primcount, FuncScopeId aFuncId);
 
-  void DrawElementsInstanced(
-      GLenum mode, GLsizei count, GLenum type, WebGLintptr offset,
-      GLsizei primcount,
-      FuncScopeId aFuncId);
+  void DrawElementsInstanced(GLenum mode, GLsizei count, GLenum type,
+                             WebGLintptr offset, GLsizei primcount,
+                             FuncScopeId aFuncId);
 
   // GLQueryEXT
-  void CreateQuery(const WebGLId<WebGLQuery>& aId,
-                   bool aFromExtension = false) const;
+  void CreateQuery(const WebGLId<WebGLQuery>&) const;
 
-  void DeleteQuery(const WebGLId<WebGLQuery>& query,
-                   bool aFromExtension = false) const;
+  void DeleteQuery(const WebGLId<WebGLQuery>&);
 
-  void BeginQuery(GLenum target, const WebGLId<WebGLQuery>& query,
-                  bool aFromExtension = false) const;
+  void BeginQuery(GLenum target, const WebGLId<WebGLQuery>&) const;
 
-  void EndQuery(GLenum target, bool aFromExtension = false) const;
+  void EndQuery(GLenum target) const;
 
   void QueryCounter(const WebGLId<WebGLQuery>& query, GLenum target) const;
 
-  MaybeWebGLVariant GetQuery(GLenum target, GLenum pname,
-                             bool aFromExtension = false) const;
+  MaybeWebGLVariant GetQuery(GLenum target, GLenum pname) const;
 
   MaybeWebGLVariant GetQueryParameter(const WebGLId<WebGLQuery>& query,
-                                      GLenum pname,
-                                      bool aFromExtension = false) const;
+                                      GLenum pname) const;
 
   // -------------------------------------------------------------------------
   // Client-side methods.  Calls in the Host are forwarded to the client.
   // -------------------------------------------------------------------------
  public:
-  void PostWarning(const nsCString& aWarningMsg);
-
   void PostContextCreationError(const nsCString& aMsg);
 
   void OnLostContext();
@@ -776,8 +760,6 @@ class HostWebGLContext : public WebGLContextEndpoint {
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
 
  protected:
-  static WebGLContext* MakeWebGLContext(WebGLVersion aVersion);
-
   const WebGL2Context* GetWebGL2Context() const {
     MOZ_RELEASE_ASSERT(mContext->IsWebGL2(), "Requires WebGL2 context");
     return static_cast<WebGL2Context*>(mContext.get());
@@ -790,7 +772,6 @@ class HostWebGLContext : public WebGLContextEndpoint {
 
   mozilla::ipc::Shmem PopShmem() { return mShmemStack.PopLastElement(); }
 
-  RefPtr<WebGLContext> mContext;
   nsTArray<mozilla::ipc::Shmem> mShmemStack;
   ClientWebGLContext* mClientContext;
 };

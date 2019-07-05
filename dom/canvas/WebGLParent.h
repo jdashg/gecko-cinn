@@ -8,12 +8,11 @@
 
 #include "mozilla/GfxMessageUtils.h"
 #include "mozilla/dom/PWebGLParent.h"
-#include "mozilla/dom/WebGLCrossProcessCommandQueue.h"
-#include "mozilla/dom/WebGLErrorQueue.h"
 #include "mozilla/WeakPtr.h"
 
 namespace mozilla {
 
+class HostWebGLCommandSink;
 class HostWebGLContext;
 
 namespace layers {
@@ -22,22 +21,26 @@ class SharedSurfaceTextureClient;
 
 namespace dom {
 
-class WebGLParent : public PWebGLParent, public SupportsWeakPtr<WebGLParent> {
+class WebGLParent final : public PWebGLParent,
+                          public SupportsWeakPtr<WebGLParent> {
+  friend PWebGLParent;
+
  public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLParent)
 
-  static WebGLParent* Create(
-      WebGLVersion aVersion,
-      UniquePtr<mozilla::HostWebGLCommandSink>&& aCommandSink,
-      UniquePtr<mozilla::HostWebGLErrorSource>&& aErrorSource);
+  static WebGLParent* Create(const webgl::InitContextDesc&,
+                             UniquePtr<mozilla::HostWebGLCommandSink>&&,
+                             webgl::InitContextResult* out);
 
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
 
- protected:
-  friend PWebGLParent;
+ private:
+  WebGLParent();
 
-  WebGLParent(UniquePtr<HostWebGLContext>&& aHost);
+ public:
+  ~WebGLParent();
 
+ private:
   bool BeginCommandQueueDrain();
   static bool MaybeRunCommandQueue(const WeakPtr<WebGLParent>& weakWebGLParent);
   bool RunCommandQueue();

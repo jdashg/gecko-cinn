@@ -216,13 +216,9 @@ class CompositorBridgeChild final : public PCompositorBridgeChild,
   bool DeallocPAPZChild(PAPZChild* aActor);
 
   dom::PWebGLChild* AllocPWebGLChild(
-      const WebGLVersion& aVersion,
+      const webgl::InitContextDesc&,
       UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>&& aErrorSource);
-  dom::PWebGLChild* AllocPWebGLChild(
-      const WebGLVersion& aVersion,
-      UniquePtr<HostWebGLCommandSink>& aCommandSink,
-      UniquePtr<HostWebGLErrorSource>& aErrorSource);
+      webgl::InitContextResult* out);
   bool DeallocPWebGLChild(PWebGLChild* aActor);
 
   void WillEndTransaction();

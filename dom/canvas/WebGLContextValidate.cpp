@@ -288,7 +288,6 @@ bool WebGLContext::InitAndValidateGL(FailureReason* const out_failReason) {
     return false;
   }
 
-  mDisableExtensions = StaticPrefs::webgl_disable_extensions();
   mLoseContextOnMemoryPressure =
       StaticPrefs::webgl_lose_context_on_memory_pressure();
   mCanLoseContextInForeground =

@@ -97,10 +97,11 @@ struct PcqStatus {
     PcqOOMError,
   } mValue;
 
-  PcqStatus(EStatus status = Success) : mValue(status) {}
-  operator bool() { return mValue == Success; }
-  bool operator==(const EStatus& o) { return mValue == o; }
-  bool operator!=(const EStatus& o) { return !(*this == o); }
+  PcqStatus(const EStatus status = Success) : mValue(status) {}
+  explicit operator bool() const { return mValue == Success; }
+  explicit operator int() const { return static_cast<int>(mValue); }
+  bool operator==(const EStatus& o) const { return mValue == o; }
+  bool operator!=(const EStatus& o) const { return !(*this == o); }
 };
 
 bool IsSuccess(PcqStatus status) { return status == PcqStatus::Success; }

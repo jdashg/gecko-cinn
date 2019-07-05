@@ -10,11 +10,12 @@
 #include "mozilla/layers/TextureClientSharedSurface.h"
 
 #include "TexUnpackBlob.h"
-#include "WebGL1Context.h"
 #include "WebGL2Context.h"
 #include "WebGLBuffer.h"
+#include "WebGLContext.h"
 #include "WebGLCrossProcessCommandQueue.h"
 #include "WebGLFramebuffer.h"
+#include "WebGLParent.h"
 #include "WebGLProgram.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLSampler.h"
@@ -57,53 +58,27 @@ DEFINE_OBJECT_ID_MAP_FUNCS(Buffer);
 DEFINE_OBJECT_ID_MAP_FUNCS(Texture);
 DEFINE_OBJECT_ID_MAP_FUNCS(UniformLocation);
 
-/* static */ WebGLContext* HostWebGLContext::MakeWebGLContext(
-    WebGLVersion aVersion) {
-  switch (aVersion) {
-    case WEBGL1:
-      return WebGL1Context::Create();
-    case WEBGL2:
-      return WebGL2Context::Create();
-    default:
-      MOZ_ASSERT_UNREACHABLE("Illegal WebGLVersion");
-      return nullptr;
+/*static*/
+UniquePtr<HostWebGLContext> HostWebGLContext::Create(
+    OwnerData&& ownerData, const webgl::InitContextDesc& desc,
+    webgl::InitContextResult* const out) {
+  auto host = WrapUnique(new HostWebGLContext(std::move(ownerData)));
+  auto webgl = WebGLContext::Create(*host, desc, out);
+  if (!webgl) return nullptr;
+  return host;
+}
+
+HostWebGLContext::HostWebGLContext(OwnerData&& ownerData)
+    : mOwnerData(std::move(ownerData)) {
+  if (mOwnerData.outOfProcess) {
+    mOwnerData.outOfProcess->mCommandSink->mHostContext = this;
   }
 }
 
-HostWebGLContext::HostWebGLContext(
-    WebGLVersion aVersion, RefPtr<WebGLContext> aContext,
-    UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-    UniquePtr<HostWebGLErrorSource>&& aErrorSource)
-    : WebGLContextEndpoint(aVersion),
-      mCommandSink(std::move(aCommandSink)),
-      mErrorSource(std::move(aErrorSource)),
-      mContext(aContext),
-      mClientContext(nullptr) {
-  mContext->SetHost(this);
-  if (mCommandSink) {
-    mCommandSink->SetHostContext(this);
-  }
-}
-
-HostWebGLContext::~HostWebGLContext() {
-  if (mContext) {
-    mContext->SetHost(nullptr);
-  }
-}
-
-/* static */ UniquePtr<HostWebGLContext> HostWebGLContext::Create(
-    WebGLVersion aVersion, UniquePtr<HostWebGLCommandSink>&& aCommandSink,
-    UniquePtr<HostWebGLErrorSource>&& aErrorSource) {
-  WebGLContext* context = MakeWebGLContext(aVersion);
-  if (!context) {
-    return nullptr;
-  }
-  return WrapUnique(new HostWebGLContext(
-      aVersion, context, std::move(aCommandSink), std::move(aErrorSource)));
-}
+HostWebGLContext::~HostWebGLContext() = default;
 
 CommandResult HostWebGLContext::RunCommandsForDuration(TimeDuration aDuration) {
-  return mCommandSink->ProcessUpToDuration(aDuration);
+  return mOwnerData.outOfProcess->mCommandSink->ProcessUpToDuration(aDuration);
 }
 
 void HostWebGLContext::SetCompositableHost(
@@ -111,7 +86,19 @@ void HostWebGLContext::SetCompositableHost(
   mContext->SetCompositableHost(aCompositableHost);
 }
 
+// -
+
+void HostWebGLContext::OnContextLoss(const webgl::ContextLossReason reason) {
+  if (mOwnerData.inProcess) {
+    (*mOwnerData.inProcess)->OnContextLoss(reason);
+  } else {
+    (void)mOwnerData.outOfProcess->mParent.SendOnContextLoss(reason);
+  }
+}
+
 void HostWebGLContext::Present() { mContext->Present(); }
+
+// -
 
 void HostWebGLContext::CreateFramebuffer(const WebGLId<WebGLFramebuffer>& aId) {
   Insert(mContext->CreateFramebuffer(), aId);
@@ -161,29 +148,11 @@ void HostWebGLContext::CreateTransformFeedback(
   Insert(GetWebGL2Context()->CreateTransformFeedback(), aId);
 }
 
-void HostWebGLContext::CreateVertexArray(const WebGLId<WebGLVertexArray>& aId,
-                                         bool aFromExtension) {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::OES_vertex_array_object>();
-    MOZ_RELEASE_ASSERT(ext);
-    Insert(ext->CreateVertexArrayOES(), aId);
-    return;
-  }
-
+void HostWebGLContext::CreateVertexArray(const WebGLId<WebGLVertexArray>& aId) {
   Insert(mContext->CreateVertexArray(), aId);
 }
 
-void HostWebGLContext::CreateQuery(const WebGLId<WebGLQuery>& aId,
-                                   bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    Insert(ext->CreateQueryEXT(), aId);
-    return;
-  }
-
+void HostWebGLContext::CreateQuery(const WebGLId<WebGLQuery>& aId) const {
   Insert(const_cast<WebGL2Context*>(GetWebGL2Context())->CreateQuery(), aId);
 }
 
@@ -193,25 +162,16 @@ Maybe<ICRData> HostWebGLContext::InitializeCanvasRenderer(
   return mContext->InitializeCanvasRenderer(backend);
 }
 
-void HostWebGLContext::SetContextOptions(const WebGLContextOptions& options) {
-  mContext->SetOptions(options);
+void HostWebGLContext::Resize(const uvec2& size) {
+  return mContext->Resize(size);
 }
 
-SetDimensionsData HostWebGLContext::SetDimensions(int32_t signedWidth,
-                                                  int32_t signedHeight) {
-  return mContext->SetDimensions(signedWidth, signedHeight);
-}
-
-gfx::IntSize HostWebGLContext::DrawingBufferSize() {
+uvec2 HostWebGLContext::DrawingBufferSize() {
   return mContext->DrawingBufferSize();
 }
 
 void HostWebGLContext::OnMemoryPressure() {
   return mContext->OnMemoryPressure();
-}
-
-void HostWebGLContext::AllowContextRestore() {
-  mContext->AllowContextRestore();
 }
 
 void HostWebGLContext::DidRefresh() { mContext->DidRefresh(); }
@@ -873,8 +833,7 @@ void HostWebGLContext::VertexAttribI4ui(GLuint index, GLuint x, GLuint y,
   GetWebGL2Context()->VertexAttribI4ui(index, x, y, z, w);
 }
 
-void HostWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor,
-                                           bool aFromExtension) {
+void HostWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor) {
   GetWebGL2Context()->VertexAttribDivisor(index, divisor);
 }
 
@@ -1081,17 +1040,18 @@ Maybe<WebGLActiveInfo> HostWebGLContext::GetTransformFeedbackVarying(
 
 // ------------------------------ WebGL Debug
 // ------------------------------------
-void HostWebGLContext::EnqueueError(GLenum aGLError, const nsCString& aMsg) {
-  mContext->GenerateError(aGLError, aMsg.BeginReading());
+
+void HostWebGLContext::GenerateError(const GLenum error,
+                                     const std::string& text) const {
+  mContext->GenerateError(error, text.c_str());
 }
 
-void HostWebGLContext::EnqueueWarning(const nsCString& aMsg) {
-  mContext->GenerateWarning(aMsg.BeginReading());
-}
-
-void HostWebGLContext::ReportOOMAndLoseContext() {
-  mContext->ErrorOutOfMemory("Ran out of memory in WebGL IPC.");
-  LoseContext(false);
+void HostWebGLContext::JsWarning(const std::string& text) const {
+  if (mOwnerData.inProcess) {
+    (*mOwnerData.inProcess)->JsWarning(text);
+    return;
+  }
+  (void)mOwnerData.outOfProcess->mParent.SendJsWarning(text);
 }
 
 // -------------------------------------------------------------------------
@@ -1099,80 +1059,31 @@ void HostWebGLContext::ReportOOMAndLoseContext() {
 // -------------------------------------------------------------------------
 
 // Misc. Extensions
-void HostWebGLContext::EnableExtension(dom::CallerType callerType,
-                                       WebGLExtensionID ext) {
-  if (ext >= WebGLExtensionID::Max) {
-    MOZ_ASSERT_UNREACHABLE("Illegal extension ID");
-    return;
-  }
-  mContext->EnableExtension(ext, callerType);
-}
-
-const Maybe<ExtensionSets> HostWebGLContext::GetSupportedExtensions() {
-  return mContext->GetSupportedExtensions();
-}
-
-void HostWebGLContext::DrawBuffers(const nsTArray<GLenum>& buffers,
-                                   bool aFromExtension) {
-  if (aFromExtension) {
-    auto* ext = mContext->GetExtension<WebGLExtensionID::WEBGL_draw_buffers>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->DrawBuffersWEBGL(buffers);
-  }
-
+void HostWebGLContext::DrawBuffers(const nsTArray<GLenum>& buffers) {
   return GetWebGL2Context()->DrawBuffers(buffers);
-}
-
-Maybe<nsTArray<nsString>> HostWebGLContext::GetASTCExtensionSupportedProfiles()
-    const {
-  auto* ext =
-      mContext->GetExtension<WebGLExtensionID::WEBGL_compressed_texture_astc>();
-  MOZ_RELEASE_ASSERT(ext);
-  return ext->GetSupportedProfiles();
 }
 
 nsString HostWebGLContext::GetTranslatedShaderSource(
     const WebGLId<WebGLShader>& shader) const {
-  auto* ext = mContext->GetExtension<WebGLExtensionID::WEBGL_debug_shaders>();
-  MOZ_RELEASE_ASSERT(ext);
-  return ext->GetTranslatedShaderSource(*MustFind(shader));
+  return mContext->GetTranslatedShaderSource(*MustFind(shader));
 }
 
-void HostWebGLContext::LoseContext(bool isSimulated) {
-  isSimulated ? mContext->LoseContext() : mContext->ForceLoseContext();
+void HostWebGLContext::LoseContext(const webgl::ContextLossReason reason) {
+  mContext->LoseContext(reason);
 }
-
-void HostWebGLContext::RestoreContext() { mContext->RestoreContext(); }
 
 MaybeWebGLVariant HostWebGLContext::MOZDebugGetParameter(GLenum pname) const {
-  auto* ext = mContext->GetExtension<WebGLExtensionID::MOZ_debug>();
-  MOZ_RELEASE_ASSERT(ext);
-  return ext->GetParameter(pname);
+  return mContext->MOZDebugGetParameter(pname);
 }
 
 // VertexArrayObjectEXT
-void HostWebGLContext::BindVertexArray(const WebGLId<WebGLVertexArray>& array,
-                                       bool aFromExtension) {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::OES_vertex_array_object>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->BindVertexArrayOES(Find(array));
-  }
-
+void HostWebGLContext::BindVertexArray(const WebGLId<WebGLVertexArray>& array) {
   GetWebGL2Context()->BindVertexArray(Find(array));
 }
 
-void HostWebGLContext::DeleteVertexArray(const WebGLId<WebGLVertexArray>& array,
-                                         bool aFromExtension) {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::OES_vertex_array_object>();
-    MOZ_RELEASE_ASSERT(ext);
-    ext->DeleteVertexArrayOES(Find(array));
-  } else {
-    mContext->DeleteVertexArray(Find(array));
-  }
+void HostWebGLContext::DeleteVertexArray(
+    const WebGLId<WebGLVertexArray>& array) {
+  mContext->DeleteVertexArray(Find(array));
 }
 
 // -
@@ -1193,107 +1104,35 @@ void HostWebGLContext::DrawElementsInstanced(GLenum mode, GLsizei count,
 }
 
 // GLQueryEXT
-void HostWebGLContext::DeleteQuery(const WebGLId<WebGLQuery>& query,
-                                   bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    ext->DeleteQueryEXT(Find(query));
-  } else {
-    const_cast<WebGL2Context*>(GetWebGL2Context())->DeleteQuery(Find(query));
-  }
+void HostWebGLContext::DeleteQuery(const WebGLId<WebGLQuery>& query) {
+  GetWebGL2Context()->DeleteQuery(Find(query));
 }
 
 void HostWebGLContext::BeginQuery(GLenum target,
-                                  const WebGLId<WebGLQuery>& query,
-                                  bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->BeginQueryEXT(target, *MustFind(query));
-  }
-
+                                  const WebGLId<WebGLQuery>& query) const {
   const_cast<WebGL2Context*>(GetWebGL2Context())
       ->BeginQuery(target, *MustFind(query));
 }
 
-void HostWebGLContext::EndQuery(GLenum target, bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->EndQueryEXT(target);
-  }
-
+void HostWebGLContext::EndQuery(GLenum target) const {
   const_cast<WebGL2Context*>(GetWebGL2Context())->EndQuery(target);
 }
 
 void HostWebGLContext::QueryCounter(const WebGLId<WebGLQuery>& query,
                                     GLenum target) const {
-  auto* ext =
-      mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-  MOZ_RELEASE_ASSERT(ext);
-  return ext->QueryCounterEXT(*MustFind(query), target);
+  return mContext->QueryCounter(*MustFind(query), target);
 }
 
-MaybeWebGLVariant HostWebGLContext::GetQuery(GLenum target, GLenum pname,
-                                             bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->GetQueryEXT(target, pname);
-  }
-
+MaybeWebGLVariant HostWebGLContext::GetQuery(GLenum target,
+                                             GLenum pname) const {
   return const_cast<WebGL2Context*>(GetWebGL2Context())
       ->GetQuery(target, pname);
 }
 
 MaybeWebGLVariant HostWebGLContext::GetQueryParameter(
-    const WebGLId<WebGLQuery>& query, GLenum pname, bool aFromExtension) const {
-  if (aFromExtension) {
-    auto* ext =
-        mContext->GetExtension<WebGLExtensionID::EXT_disjoint_timer_query>();
-    MOZ_RELEASE_ASSERT(ext);
-    return ext->GetQueryObjectEXT(*MustFind(query), pname);
-  }
-
+    const WebGLId<WebGLQuery>& query, GLenum pname) const {
   return const_cast<WebGL2Context*>(GetWebGL2Context())
       ->GetQueryParameter(*MustFind(query), pname);
-}
-
-void HostWebGLContext::PostWarning(const nsCString& aWarningMsg) {
-  if (mClientContext) {
-    mClientContext->PostWarning(aWarningMsg);
-    return;
-  }
-  mErrorSource->RunCommand(WebGLErrorCommand::Warning, aWarningMsg);
-}
-
-void HostWebGLContext::PostContextCreationError(const nsCString& aMsg) {
-  if (mClientContext) {
-    mClientContext->PostContextCreationError(aMsg);
-    return;
-  }
-  mErrorSource->RunCommand(WebGLErrorCommand::CreationError, aMsg);
-}
-
-void HostWebGLContext::OnLostContext() {
-  if (mClientContext) {
-    mClientContext->OnLostContext();
-    return;
-  }
-  mErrorSource->RunCommand(WebGLErrorCommand::OnLostContext);
-}
-
-void HostWebGLContext::OnRestoredContext() {
-  if (mClientContext) {
-    mClientContext->OnRestoredContext();
-    return;
-  }
-  mErrorSource->RunCommand(WebGLErrorCommand::OnRestoredContext);
 }
 
 already_AddRefed<layers::SharedSurfaceTextureClient>

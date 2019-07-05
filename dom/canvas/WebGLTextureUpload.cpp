@@ -71,7 +71,7 @@ bool ClientWebGLContext::ValidateExtents(GLsizei width, GLsizei height,
                                          uint32_t* const out_depth) {
   // Check border
   if (border != 0) {
-    EnqueueErrorInvalidValue("`border` must be 0.");
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return false;
   }
 
@@ -81,7 +81,8 @@ bool ClientWebGLContext::ValidateExtents(GLsizei width, GLsizei height,
      *   and if either wt or ht are less than zero, then the error
      *   INVALID_VALUE is generated."
      */
-    EnqueueErrorInvalidValue("`width`/`height`/`depth` must be >= 0.");
+    EnqueueError(LOCAL_GL_INVALID_VALUE,
+                 "`width`/`height`/`depth` must be >= 0.");
     return false;
   }
 
@@ -186,7 +187,7 @@ static MaybeWebGLTexUnpackVariant ClientFromPboOffset(
     uint32_t height, uint32_t depth, WebGLsizeiptr pboOffset,
     const Maybe<GLsizei>& expectedImageSize) {
   if (pboOffset < 0) {
-    webgl->EnqueueErrorInvalidValue("offset cannot be negative.");
+    webgl->EnqueueError(LOCAL_GL_INVALID_VALUE, "offset cannot be negative.");
     return Nothing();
   }
 
@@ -259,7 +260,7 @@ static MaybeWebGLTexUnpackVariant ClientFromImageData(
       gfx::Factory::CreateWrappingDataSourceSurface(wrappableData, stride, size,
                                                     surfFormat);
   if (!surf) {
-    webgl->EnqueueErrorOutOfMemory("OOM in FromImageData.");
+    webgl->EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "OOM in FromImageData.");
     return Nothing();
   }
 
@@ -367,7 +368,7 @@ MaybeWebGLTexUnpackVariant ClientWebGLContext::ClientFromDomElem(
     nsIPrincipal* dstPrincipal = GetCanvas()->NodePrincipal();
 
     if (!dstPrincipal->Subsumes(srcPrincipal)) {
-      EnqueueWarning(nsCString("Cross-origin elements require CORS."));
+      EnqueueWarning("Cross-origin elements require CORS.");
       out_error->Throw(NS_ERROR_DOM_SECURITY_ERR);
       return Nothing();
     }
@@ -377,8 +378,7 @@ MaybeWebGLTexUnpackVariant ClientWebGLContext::ClientFromDomElem(
     // mIsWriteOnly defaults to true, and so will be true even if SFE merely
     // failed. Thus we must test mIsWriteOnly after successfully retrieving an
     // Image or SourceSurface.
-    EnqueueWarning(
-        nsCString("Element is write-only, thus cannot be uploaded."));
+    EnqueueWarning("Element is write-only, thus cannot be uploaded.");
     out_error->Throw(NS_ERROR_DOM_SECURITY_ERR);
     return Nothing();
   }
@@ -402,7 +402,8 @@ MaybeWebGLTexUnpackVariant ClientWebGLContext::ClientFromDomElem(
                                           height, depth, dataSurf,
                                           sfer.mAlphaType);
   if ((!texUnpackSurf) || (!texUnpackSurf->mData)) {
-    EnqueueErrorOutOfMemory("Failed to map source surface for upload.");
+    EnqueueError(LOCAL_GL_OUT_OF_MEMORY,
+                 "Failed to map source surface for upload.");
     return Nothing();
   }
   return AsSomeVariant(std::move(texUnpackSurf));

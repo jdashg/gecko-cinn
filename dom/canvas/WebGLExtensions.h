@@ -129,8 +129,6 @@ class WebGLExtensionDebugShaders : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionDebugShaders(WebGLContext*);
   virtual ~WebGLExtensionDebugShaders();
-
-  nsString GetTranslatedShaderSource(const WebGLShader& shader) const;
 };
 
 class WebGLExtensionDepthTexture : public WebGLExtensionBase {
@@ -194,9 +192,6 @@ class WebGLExtensionLoseContext : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionLoseContext(WebGLContext*);
   virtual ~WebGLExtensionLoseContext();
-
-  void LoseContext();
-  void RestoreContext();
 };
 
 class WebGLExtensionSRGB : public WebGLExtensionBase {
@@ -329,16 +324,6 @@ class WebGLExtensionDisjointTimerQuery : public WebGLExtensionBase {
   explicit WebGLExtensionDisjointTimerQuery(WebGLContext* webgl);
   virtual ~WebGLExtensionDisjointTimerQuery();
 
-  already_AddRefed<WebGLQuery> CreateQueryEXT() const;
-  void DeleteQueryEXT(WebGLQuery* query) const;
-  bool IsQueryEXT(const WebGLQuery* query) const;
-  void BeginQueryEXT(GLenum target, WebGLQuery& query) const;
-  void EndQueryEXT(GLenum target) const;
-  void QueryCounterEXT(WebGLQuery& query, GLenum target) const;
-  MaybeWebGLVariant GetQueryEXT(GLenum target, GLenum pname) const;
-  MaybeWebGLVariant GetQueryObjectEXT(const WebGLQuery& query,
-                                      GLenum pname) const;
-
   static bool IsSupported(const WebGLContext*);
 };
 
@@ -346,8 +331,6 @@ class WebGLExtensionMOZDebug final : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionMOZDebug(WebGLContext* webgl);
   virtual ~WebGLExtensionMOZDebug();
-
-  MaybeWebGLVariant GetParameter(GLenum pname) const;
 };
 
 template <WebGLExtensionID ext>
