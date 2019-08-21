@@ -317,13 +317,18 @@ class WebGLId {
   using IdType = uint64_t;
 
   WebGLId() : mId(0){};
-  WebGLId(IdType aId) : mId(aId){};
-  WebGLId(const WebGLId<HostType>* aPtr) { mId = aPtr ? aPtr->mId : 0; }
-  WebGLId(const HostType* aPtr) { mId = aPtr ? aPtr->Id() : 0; }
+  explicit WebGLId(const IdType aId) : mId(aId){};
+  MOZ_IMPLICIT WebGLId(const WebGLId<HostType>* const aPtr) {
+    mId = aPtr ? aPtr->mId : 0;
+  }
+  MOZ_IMPLICIT WebGLId(HostType* const aPtr) { mId = aPtr ? aPtr->Id() : 0; }
+  MOZ_IMPLICIT WebGLId(const HostType* const aPtr) {
+    mId = aPtr ? aPtr->Id() : 0;
+  }
 
   IdType Id() const { return mId; }
 
-  operator bool() const { return mId != 0; }
+  explicit operator bool() const { return bool(mId); }
 
   bool operator<(const WebGLId<HostType>& o) const { return mId < o.mId; }
   bool operator!=(const WebGLId<HostType>& o) const { return mId != o.mId; }
@@ -459,7 +464,7 @@ class ExtensionBits final {
     ExtensionBits& bits;
     const uint64_t mask;
 
-    operator bool() const { return bits.mBits & mask; }
+    explicit operator bool() const { return bits.mBits & mask; }
 
     auto& operator=(const bool val) {
       if (val) {
@@ -500,8 +505,9 @@ inline bool ReadContextLossReason(const uint8_t val,
 // -
 
 struct InitContextDesc final {
-  bool isWebgl2;
-  uvec2 size;
+  bool isWebgl2 = false;
+  bool resistFingerprinting = false;
+  uvec2 size = {};
   WebGLContextOptions options;
 };
 
@@ -561,12 +567,12 @@ class AsSomeVariantT {
   Maybe<T> mMaybeObj;
 
  public:
-  AsSomeVariantT(Maybe<T>&& aObj) : mMaybeObj(std::move(aObj)) {}
+  explicit AsSomeVariantT(Maybe<T>&& aObj) : mMaybeObj(std::move(aObj)) {}
 
   template <typename... As>
-  operator Maybe<Variant<As...>>() {
+  MOZ_IMPLICIT operator Maybe<Variant<As...>>() {
     if (mMaybeObj.isNothing()) {
-      return Nothing();
+      return {};
     }
     return Some(Variant<As...>(std::forward<T>(mMaybeObj.ref())));
   }
@@ -670,7 +676,7 @@ class RawBuffer {
     return mData[idx];
   }
 
-  operator bool() const { return mData && mLength; }
+  explicit operator bool() const { return mData && mLength; }
 
   RawBuffer() {}
   RawBuffer(const RawBuffer&) = delete;

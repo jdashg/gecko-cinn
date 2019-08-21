@@ -10,6 +10,7 @@
 #include "mozilla/dom/ToJSValue.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/BindingUtils.h"
+#include "mozilla/StaticPrefs_webgl.h"
 #include "WebGLContext.h"
 #include "WebGLQuery.h"
 
@@ -34,7 +35,7 @@ void WebGLContext::QueryCounter(WebGLQuery& query, const GLenum target) const {
 
 bool WebGLExtensionDisjointTimerQuery::IsSupported(
     const WebGLContext* const webgl) {
-  if (!gfxPrefs::WebGLPrivilegedExtensionsEnabled()) return false;
+  if (!StaticPrefs::webgl_enable_privileged_extensions()) return false;
 
   gl::GLContext* gl = webgl->GL();
   return gl->IsSupported(gl::GLFeature::query_objects) &&

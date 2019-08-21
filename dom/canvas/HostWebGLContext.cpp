@@ -316,6 +316,14 @@ void HostWebGLContext::FramebufferTexture2D(GLenum target, GLenum attachment,
                                  level);
 }
 
+void HostWebGLContext::FramebufferTextureMultiview(
+    const GLenum target, const GLenum attachEnum,
+    const WebGLId<WebGLTexture>& tex, const GLint mipLevel,
+    const GLint zLayerBase, const GLsizei numViewLayers) const {
+  mContext->FramebufferTextureMultiview(target, attachEnum, Find(tex), mipLevel,
+                                        zLayerBase, numViewLayers);
+}
+
 void HostWebGLContext::FrontFace(GLenum mode) { mContext->FrontFace(mode); }
 
 Maybe<WebGLActiveInfo> HostWebGLContext::GetActiveAttrib(

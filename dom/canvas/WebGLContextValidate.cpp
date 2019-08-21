@@ -514,7 +514,7 @@ bool WebGLContext::InitAndValidateGL(FailureReason* const out_failReason) {
     }
 
     mDisableFragHighP = true;
-  } else if (ShouldResistFingerprinting()) {
+  } else if (mResistFingerprinting) {
     bool ok = true;
 
     ok &= RestrictCap(&mGLMaxTextureSize, kCommonMaxTextureSize);

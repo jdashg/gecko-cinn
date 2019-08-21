@@ -26,21 +26,18 @@ class WebGLParent final : public PWebGLParent,
   friend PWebGLParent;
 
  public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(WebGLParent, override);
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLParent)
 
-  static WebGLParent* Create(const webgl::InitContextDesc&,
-                             UniquePtr<mozilla::HostWebGLCommandSink>&&,
-                             webgl::InitContextResult* out);
+  static RefPtr<WebGLParent> Create(const webgl::InitContextDesc&,
+                                    webgl::InitContextResult* out);
 
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
 
  private:
   WebGLParent();
-
- public:
   ~WebGLParent();
 
- private:
   bool BeginCommandQueueDrain();
   static bool MaybeRunCommandQueue(const WeakPtr<WebGLParent>& weakWebGLParent);
   bool RunCommandQueue();

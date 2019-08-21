@@ -350,6 +350,11 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                             GLenum texImageTarget,
                             const WebGLId<WebGLTexture>& tex, GLint level);
 
+  void FramebufferTextureMultiview(const GLenum target, const GLenum attachEnum,
+                                   const WebGLId<WebGLTexture>& tex,
+                                   const GLint mipLevel, const GLint zLayerBase,
+                                   const GLsizei numViewLayers) const;
+
   void FrontFace(GLenum mode);
 
   Maybe<WebGLActiveInfo> GetActiveAttrib(const WebGLId<WebGLProgram>& progId,

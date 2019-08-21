@@ -771,8 +771,9 @@ struct IPDLParamTraits<mozilla::BasicSource> {
  public:
   typedef mozilla::BasicSource paramType;
 
-  static void Write(IPC::Message* aMsg, IProtocol* aActor, paramType& aParam) {
-    WriteIPDLParam(aMsg, aActor, std::move(aParam.mProducer));
+  static void Write(IPC::Message* aMsg, IProtocol* aActor,
+                    const paramType& aParam) {
+    WriteIPDLParam(aMsg, aActor, aParam.mProducer);
   }
 
   static bool Read(const IPC::Message* aMsg, PickleIterator* aIter,
@@ -786,8 +787,9 @@ struct IPDLParamTraits<mozilla::BasicSink> {
  public:
   typedef mozilla::BasicSink paramType;
 
-  static void Write(IPC::Message* aMsg, IProtocol* aActor, paramType& aParam) {
-    WriteIPDLParam(aMsg, aActor, std::move(aParam.mConsumer));
+  static void Write(IPC::Message* aMsg, IProtocol* aActor,
+                    const paramType& aParam) {
+    WriteIPDLParam(aMsg, aActor, aParam.mConsumer);
   }
 
   static bool Read(const IPC::Message* aMsg, PickleIterator* aIter,

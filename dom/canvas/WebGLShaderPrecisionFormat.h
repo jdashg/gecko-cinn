@@ -42,7 +42,8 @@ class ClientWebGLShaderPrecisionFormat final {
                                    GLint precision)
       : mSPF(rangeMin, rangeMax, precision) {}
 
-  ClientWebGLShaderPrecisionFormat(const WebGLShaderPrecisionFormat& aOther)
+  explicit ClientWebGLShaderPrecisionFormat(
+      const WebGLShaderPrecisionFormat& aOther)
       : mSPF(aOther.RangeMin(), aOther.RangeMax(), aOther.Precision()) {}
 
   // WebIDL WebGLShaderPrecisionFormat API

@@ -167,6 +167,10 @@ RefPtr<ClientWebGLExtensionBase> ClientWebGLContext::GetExtension(
         case WebGLExtensionID::OES_vertex_array_object:
           return new ClientWebGLExtensionVertexArray(this);
 
+        // OVR_
+        case WebGLExtensionID::OVR_multiview2:
+          return new ClientWebGLExtensionMultiview(this);
+
         // WEBGL_
         case WebGLExtensionID::WEBGL_color_buffer_float:
           return new ClientWebGLExtensionColorBufferFloat(this);
@@ -190,6 +194,8 @@ RefPtr<ClientWebGLExtensionBase> ClientWebGLContext::GetExtension(
           return new ClientWebGLExtensionDepthTexture(this);
         case WebGLExtensionID::WEBGL_draw_buffers:
           return new ClientWebGLExtensionDrawBuffers(this);
+        case WebGLExtensionID::WEBGL_explicit_present:
+          return new ClientWebGLExtensionExplicitPresent(this);
 
         case WebGLExtensionID::WEBGL_lose_context:
         case WebGLExtensionID::Max:
@@ -314,10 +320,10 @@ bool WebGLContext::IsExtensionSupported(WebGLExtensionID ext) const {
 
     case WebGLExtensionID::WEBGL_debug_renderer_info:
       return Preferences::GetBool("webgl.enable-debug-renderer-info", false) &&
-             !shouldResistFingerprinting;
+             !mResistFingerprinting;
 
     case WebGLExtensionID::WEBGL_debug_shaders:
-      return !shouldResistFingerprinting;
+      return !mResistFingerprinting;
 
     case WebGLExtensionID::WEBGL_depth_texture:
       return WebGLExtensionDepthTexture::IsSupported(this);
@@ -346,10 +352,11 @@ void WebGLContext::WarnIfImplicit(const WebGLExtensionID ext) const {
   GenerateWarning(
       "Using format enabled by implicitly enabled extension: %s. "
       "For maximal portability enable it explicitly.",
-      GetExtensionString(ext));
+      GetExtensionName(ext));
 }
 
-void WebGLContext::RequestExtension(const WebGLExtensionID ext, const bool explicit) {
+void WebGLContext::RequestExtension(const WebGLExtensionID ext,
+                                    const bool explicitly) {
   if (!mSupportedExtensions[ext]) return;
 
   auto& slot = mExtensions[ext];
@@ -465,7 +472,7 @@ void WebGLContext::RequestExtension(const WebGLExtensionID ext, const bool expli
       slot = new WebGLExtensionDrawBuffers(this);
       break;
     case WebGLExtensionID::WEBGL_explicit_present:
-      obj = new WebGLExtensionExplicitPresent(this);
+      slot = new WebGLExtensionExplicitPresent(this);
       break;
     case WebGLExtensionID::WEBGL_lose_context:
       slot = new WebGLExtensionLoseContext(this);
@@ -477,7 +484,7 @@ void WebGLContext::RequestExtension(const WebGLExtensionID ext, const bool expli
   MOZ_ASSERT(slot);
   const auto& obj = slot;
 
-  if (explict && !obj->IsExplicit()) {
+  if (explicitly && !obj->IsExplicit()) {
     obj->SetExplicit();
   }
 

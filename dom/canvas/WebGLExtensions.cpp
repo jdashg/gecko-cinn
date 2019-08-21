@@ -44,11 +44,6 @@ bool WebGLExtensionExplicitPresent::IsSupported(
   return StaticPrefs::webgl_enable_draft_extensions();
 }
 
-void WebGLExtensionExplicitPresent::Present() const {
-  if (mIsLost || !mContext) return;
-  mContext->PresentScreenBuffer();
-}
-
 // -
 
 WebGLExtensionFloatBlend::WebGLExtensionFloatBlend(WebGLContext* const webgl)

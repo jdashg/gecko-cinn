@@ -320,7 +320,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     // ---------------------------------------------------------------------
     //
     // where 'A -> B' means "A owns B"
-    UniquePtr<mozilla::dom::WebGLChild> mWebGLChild;
+    RefPtr<mozilla::dom::WebGLChild> mWebGLChild;
     UniquePtr<ClientWebGLCommandSource> mCommandSource;
   };
   struct NotLostData final {
@@ -740,6 +740,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   }
   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
 
+  void Present();
+
  private:
   const uvec2& DrawingBufferSize();
   bool HasAlphaSupport() { return mSurfaceInfo.supportsAlpha; }
@@ -897,6 +899,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void FramebufferTexture2D(GLenum target, GLenum attachment,
                             GLenum texImageTarget,
                             const WebGLId<WebGLTexture>& tex, GLint level);
+
+  void FramebufferTextureMultiview(const GLenum target, const GLenum attachEnum,
+                                   const WebGLId<WebGLTexture>& tex,
+                                   const GLint mipLevel, const GLint zLayerBase,
+                                   const GLsizei numViewLayers) const;
 
   void FrontFace(GLenum mode);
 
@@ -1780,6 +1787,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  protected:
   bool IsHostOOP() const { return bool{mNotLost->outOfProcess}; }
+
+  bool ShouldResistFingerprinting() const;
 
   void LoseOldestWebGLContextIfLimitExceeded();
   void UpdateLastUseIndex();

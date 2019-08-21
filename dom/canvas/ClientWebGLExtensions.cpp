@@ -47,6 +47,7 @@ DEFINE_WEBGL_EXTENSION_GOOP(OES_texture_half_float,
 DEFINE_WEBGL_EXTENSION_GOOP(OES_texture_half_float_linear,
                             WebGLExtensionTextureHalfFloatLinear)
 DEFINE_WEBGL_EXTENSION_GOOP(OES_vertex_array_object, WebGLExtensionVertexArray)
+DEFINE_WEBGL_EXTENSION_GOOP(OVR_multiview2, WebGLExtensionMultiview)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_color_buffer_float,
                             WebGLExtensionColorBufferFloat)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_compressed_texture_astc,
@@ -66,6 +67,8 @@ DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_debug_renderer_info,
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_debug_shaders, WebGLExtensionDebugShaders)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_depth_texture, WebGLExtensionDepthTexture)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_draw_buffers, WebGLExtensionDrawBuffers)
+DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_explicit_present,
+                            WebGLExtensionExplicitPresent)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_lose_context, WebGLExtensionLoseContext)
 
 }  // namespace mozilla

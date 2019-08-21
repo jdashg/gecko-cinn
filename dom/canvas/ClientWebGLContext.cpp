@@ -8,6 +8,7 @@
 #include "ClientWebGLExtensions.h"
 #include "HostWebGLContext.h"
 #include "mozilla/dom/WebGLContextEvent.h"
+#include "mozilla/dom/WorkerCommon.h"
 #include "mozilla/EnumeratedRange.h"
 #include "mozilla/ipc/Shmem.h"
 #include "mozilla/layers/CompositorBridgeChild.h"
@@ -15,6 +16,7 @@
 #include "mozilla/layers/LayerTransactionChild.h"
 #include "mozilla/layers/OOPCanvasRenderer.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
+#include "mozilla/StaticPrefs_webgl.h"
 #include "nsIGfxInfo.h"
 #include "TexUnpackBlob.h"
 #include "WebGLMethodDispatcher.h"
@@ -384,6 +386,12 @@ void ClientWebGLContext::EndComposition() {
   UpdateLastUseIndex();
 }
 
+void ClientWebGLContext::Present() {
+  if (mNotLost) {
+    Run<RPROC(Present)>();
+  }
+}
+
 already_AddRefed<layers::Layer> ClientWebGLContext::GetCanvasLayer(
     nsDisplayListBuilder* builder, Layer* oldLayer, LayerManager* manager) {
   if (!mResetLayer && oldLayer && oldLayer->HasUserData(&gWebGLLayerUserData)) {
@@ -549,7 +557,7 @@ void ClientWebGLContext::GetContextAttributes(
   result.mAlpha.Construct(options.alpha);
   result.mDepth = options.depth;
   result.mStencil = options.stencil;
-  result.mAntialias = options.antialias;
+  result.mAntialias.Construct(options.antialias);
   result.mPremultipliedAlpha = options.premultipliedAlpha;
   result.mPreserveDrawingBuffer = options.preserveDrawingBuffer;
   result.mFailIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
@@ -599,17 +607,18 @@ ClientWebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight) {
 bool ClientWebGLContext::CreateHostContext() {
   ClientWebGLContext::NotLostData notLost;
 
-  const auto res = [&]() -> Result<Ok, std::string> {
+  auto res = [&]() -> Result<Ok, std::string> {
     auto options = *mInitialOptions;
-    if (gfxPrefs::WebGLDisableFailIfMajorPerformanceCaveat()) {
+    if (StaticPrefs::webgl_disable_fail_if_major_performance_caveat()) {
       options.failIfMajorPerformanceCaveat = false;
     }
-    const auto initDesc =
-        webgl::InitContextDesc{mIsWebGL2, mRequestedSize, options};
+    const bool resistFingerprinting = ShouldResistFingerprinting();
+    const auto initDesc = webgl::InitContextDesc{
+        mIsWebGL2, resistFingerprinting, mRequestedSize, options};
 
     // -
 
-    if (!gfxPrefs::WebGLIsRemoted()) {
+    if (!StaticPrefs::webgl_out_of_process()) {
       auto ownerData = HostWebGLContext::OwnerData{
           Some(this),
       };
@@ -648,9 +657,9 @@ bool ClientWebGLContext::CreateHostContext() {
     // Use the error/warning and command queues to construct a
     // ClientWebGLContext in this process and a HostWebGLContext
     // in the host process.
-    outOfProcess.mWebGLChild = MakeUnique<dom::WebGLChild>(*this);
+    outOfProcess.mWebGLChild = new dom::WebGLChild(*this);
     if (!cbc->SendPWebGLConstructor(outOfProcess.mWebGLChild.get(), initDesc,
-                                    std::move(sink), &notLost.info)) {
+                                    &notLost.info)) {
       return Err("SendPWebGLConstructor failed");
     }
 
@@ -701,7 +710,6 @@ ClientWebGLContext::SetContextOptions(JSContext* cx,
   newOpts.stencil = attributes.mStencil;
   newOpts.depth = attributes.mDepth;
   newOpts.premultipliedAlpha = attributes.mPremultipliedAlpha;
-  newOpts.antialias = attributes.mAntialias;
   newOpts.preserveDrawingBuffer = attributes.mPreserveDrawingBuffer;
   newOpts.failIfMajorPerformanceCaveat =
       attributes.mFailIfMajorPerformanceCaveat;
@@ -721,9 +729,12 @@ ClientWebGLContext::SetContextOptions(JSContext* cx,
   if (attributes.mAlpha.WasPassed()) {
     newOpts.alpha = attributes.mAlpha.Value();
   }
+  if (attributes.mAntialias.WasPassed()) {
+    newOpts.antialias = attributes.mAntialias.Value();
+  }
 
   // Don't do antialiasing if we've disabled MSAA.
-  if (!gfxPrefs::MSAALevel()) {
+  if (!StaticPrefs::webgl_msaa_samples()) {
     newOpts.antialias = false;
   }
 
@@ -1449,6 +1460,14 @@ void ClientWebGLContext::FramebufferTexture2D(GLenum target, GLenum attachment,
                                               GLint level) {
   Run<RPROC(FramebufferTexture2D)>(target, attachment, texImageTarget, tex,
                                    level);
+}
+
+void ClientWebGLContext::FramebufferTextureMultiview(
+    const GLenum target, const GLenum attachEnum,
+    const WebGLId<WebGLTexture>& tex, const GLint mipLevel,
+    const GLint zLayerBase, const GLsizei numViewLayers) const {
+  Run<RPROC(FramebufferTextureMultiview)>(target, attachEnum, tex, mipLevel,
+                                          zLayerBase, numViewLayers);
 }
 
 void ClientWebGLContext::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1,
@@ -2573,7 +2592,7 @@ static bool IsExtensionForbiddenForCaller(const WebGLExtensionID ext,
                                           const dom::CallerType callerType) {
   if (callerType == dom::CallerType::System) return false;
 
-  if (gfxPrefs::WebGLPrivilegedExtensionsEnabled()) return false;
+  if (StaticPrefs::webgl_enable_privileged_extensions()) return false;
 
   switch (ext) {
     case WebGLExtensionID::MOZ_debug:
@@ -2619,6 +2638,27 @@ void ClientWebGLContext::GetSupportedProfilesASTC(
   if (mNotLost->info.astcHdr) {
     retarr.AppendElement(NS_LITERAL_STRING("hdr"));
   }
+}
+
+// -
+
+bool ClientWebGLContext::ShouldResistFingerprinting() const {
+  if (NS_IsMainThread()) {
+    if (mCanvasElement) {
+      // If we're constructed from a canvas element
+      return nsContentUtils::ShouldResistFingerprinting(GetOwnerDoc());
+    }
+    // if (mOffscreenCanvas->GetOwnerGlobal()) {
+    //  // If we're constructed from an offscreen canvas
+    //  return nsContentUtils::ShouldResistFingerprinting(
+    //      mOffscreenCanvas->GetOwnerGlobal()->PrincipalOrNull());
+    //}
+    // Last resort, just check the global preference
+    return nsContentUtils::ShouldResistFingerprinting();
+  }
+  dom::WorkerPrivate* workerPrivate = dom::GetCurrentThreadWorkerPrivate();
+  MOZ_ASSERT(workerPrivate);
+  return nsContentUtils::ShouldResistFingerprinting(workerPrivate);
 }
 
 // -

@@ -18,11 +18,16 @@ namespace dom {
 
 class WebGLChild final : public PWebGLChild {
  public:
+  NS_INLINE_DECL_THREADSAFE_REFCOUNTING(WebGLChild, override);
+
   ClientWebGLContext& mContext;
 
   explicit WebGLChild(ClientWebGLContext&);
+
+ private:
   virtual ~WebGLChild();
 
+ public:
   mozilla::ipc::IPCResult RecvJsWarning(const std::string&) const;
   mozilla::ipc::IPCResult RecvOnContextLoss(webgl::ContextLossReason) const;
 };

@@ -237,6 +237,15 @@ class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
   }
 };
 
+class ClientWebGLExtensionExplicitPresent : public ClientWebGLExtensionBase {
+  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionExplicitPresent)
+
+  void Present() const {
+    if (!mContext) return;
+    mContext->Present();
+  }
+};
+
 class ClientWebGLExtensionMOZDebug : public ClientWebGLExtensionBase {
   DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionMOZDebug)
 
@@ -245,6 +254,21 @@ class ClientWebGLExtensionMOZDebug : public ClientWebGLExtensionBase {
                     ErrorResult& er) const {
     if (!mContext) return;
     mContext->MOZDebugGetParameter(cx, pname, retval, er);
+  }
+};
+
+class ClientWebGLExtensionMultiview : public ClientWebGLExtensionBase {
+  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionMultiview)
+
+  void FramebufferTextureMultiviewOVR(const GLenum target,
+                                      const GLenum attachment,
+                                      ClientWebGLTexture* const texture,
+                                      const GLint level,
+                                      const GLint baseViewIndex,
+                                      const GLsizei numViews) const {
+    if (!mContext) return;
+    mContext->FramebufferTextureMultiview(target, attachment, texture, level,
+                                          baseViewIndex, numViews);
   }
 };
 
