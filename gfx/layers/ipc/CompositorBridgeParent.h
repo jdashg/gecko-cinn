@@ -286,10 +286,8 @@ class CompositorBridgeParentBase : public PCompositorBridgeParent,
       Endpoint<PCanvasParent>&& aEndpoint) = 0;
   virtual mozilla::ipc::IPCResult RecvReleasePCanvasParent() = 0;
 
-  virtual PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
-                                          UniquePtr<HostWebGLCommandSink>&&,
+  virtual already_AddRefed<PWebGLParent> AllocPWebGLParent(const webgl::InitContextDesc&,
                                           webgl::InitContextResult* out) = 0;
-  virtual bool DeallocPWebGLParent(PWebGLParent* aWebGLParent) = 0;
 
   bool mCanSend;
 
@@ -675,18 +673,11 @@ class CompositorBridgeParent final : public CompositorBridgeParentBase,
 
   WebRenderBridgeParent* GetWrBridge() { return mWrBridge; }
 
-  PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
-                                  UniquePtr<HostWebGLCommandSink>&&,
+  already_AddRefed<PWebGLParent> AllocPWebGLParent(const webgl::InitContextDesc&,
                                   webgl::InitContextResult*) override {
     MOZ_ASSERT_UNREACHABLE(
         "This message is CrossProcessCompositorBridgeParent only");
     return nullptr;
-  }
-
-  bool DeallocPWebGLParent(PWebGLParent*) override {
-    MOZ_ASSERT_UNREACHABLE(
-        "This message is CrossProcessCompositorBridgeParent only");
-    return false;
   }
 
  private:

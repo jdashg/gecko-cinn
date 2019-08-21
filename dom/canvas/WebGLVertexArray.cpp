@@ -41,22 +41,4 @@ void WebGLVertexArray::Delete() {
   mAttribs.clear();
 }
 
-// -
-
-inline void ImplCycleCollectionTraverse(
-    nsCycleCollectionTraversalCallback& callback,
-    const std::vector<WebGLVertexAttribData>& field, const char* name,
-    uint32_t flags = 0) {
-  for (auto& cur : field) {
-    ImplCycleCollectionTraverse(callback, cur.mBuf, name, flags);
-  }
-}
-
-inline void ImplCycleCollectionUnlink(
-    std::vector<WebGLVertexAttribData>& field) {
-  for (auto& cur : field) {
-    cur.mBuf = nullptr;
-  }
-}
-
 }  // namespace mozilla

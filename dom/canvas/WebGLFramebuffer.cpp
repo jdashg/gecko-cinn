@@ -311,7 +311,7 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
       //////
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL:
-      if (mTexturePtr) return AsSomeVariant(MipLevel());
+      if (mTexturePtr) return AsSomeVariant(AssertedCast<uint32_t>(MipLevel()));
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE:
@@ -328,19 +328,19 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER:
       if (webgl->IsWebGL2()) {
-        return JS::Int32Value(AssertedCast<int32_t>(Layer()));
+        return AsSomeVariant(AssertedCast<int32_t>(Layer()));
       }
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_BASE_VIEW_INDEX_OVR:
       if (webgl->IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return JS::Int32Value(AssertedCast<int32_t>(Layer()));
+        return AsSomeVariant(AssertedCast<int32_t>(Layer()));
       }
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_NUM_VIEWS_OVR:
       if (webgl->IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return JS::Int32Value(ZLayerCount());
+        return AsSomeVariant(AssertedCast<uint32_t>(ZLayerCount()));
       }
       break;
 
@@ -1294,7 +1294,8 @@ void WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl, GLint srcX0,
 
     GetBackbufferFormats(webgl, &srcColorFormat, &srcDepthFormat,
                          &srcStencilFormat);
-    srcSize = webgl->DrawingBufferSize();
+    const auto& size = webgl->DrawingBufferSize();
+    srcSize = {size.x, size.y};
   }
 
   ////
@@ -1341,7 +1342,8 @@ void WebGLFramebuffer::BlitFramebuffer(WebGLContext* webgl, GLint srcX0,
 
     fnCheckColorFormat(dstColorFormat);
 
-    dstSize = webgl->DrawingBufferSize();
+    const auto& size = webgl->DrawingBufferSize();
+    dstSize = {size.x, size.y};
   }
 
   ////

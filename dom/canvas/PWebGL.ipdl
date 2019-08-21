@@ -21,7 +21,7 @@ namespace dom {
  * command from the content process, and a WebGLParent in the compositor
  * process that runs the commands.
  */
-sync protocol PWebGL
+sync refcounted protocol PWebGL
 {
   manager PCompositorBridge;
 

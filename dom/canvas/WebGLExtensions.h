@@ -150,10 +150,6 @@ class WebGLExtensionExplicitPresent : public WebGLExtensionBase {
   explicit WebGLExtensionExplicitPresent(WebGLContext*);
 
   static bool IsSupported(const WebGLContext*);
-
-  void Present() const;
-
-  DECL_WEBGL_EXTENSION_GOOP
 };
 
 class WebGLExtensionEXTColorBufferFloat : public WebGLExtensionBase {
@@ -192,6 +188,18 @@ class WebGLExtensionLoseContext : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionLoseContext(WebGLContext*);
   virtual ~WebGLExtensionLoseContext();
+};
+
+class WebGLExtensionMultiview : public WebGLExtensionBase {
+ public:
+  explicit WebGLExtensionMultiview(WebGLContext*);
+  virtual ~WebGLExtensionMultiview();
+  static bool IsSupported(const WebGLContext*);
+
+  void FramebufferTextureMultiviewOVR(GLenum target, GLenum attachment,
+                                      WebGLTexture* texture, GLint level,
+                                      GLint baseViewIndex,
+                                      GLsizei numViews) const;
 };
 
 class WebGLExtensionSRGB : public WebGLExtensionBase {
@@ -377,6 +385,7 @@ DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(OES_texture_half_float_linear,
                                        WebGLExtensionTextureHalfFloatLinear)
 DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(OES_vertex_array_object,
                                        WebGLExtensionVertexArray)
+DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(OVR_multiview2, WebGLExtensionMultiview)
 DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_color_buffer_float,
                                        WebGLExtensionEXTColorBufferFloat)
 DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_compressed_texture_astc,
@@ -399,22 +408,10 @@ DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_depth_texture,
                                        WebGLExtensionDepthTexture)
 DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_draw_buffers,
                                        WebGLExtensionDrawBuffers)
+DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_explicit_present,
+                                       WebGLExtensionExplicitPresent)
 DEFINE_WEBGL_EXTENSION_CLASS_MAP_ENTRY(WEBGL_lose_context,
                                        WebGLExtensionLoseContext)
-
-class WebGLExtensionMultiview : public WebGLExtensionBase {
- public:
-  explicit WebGLExtensionMultiview(WebGLContext*);
-  virtual ~WebGLExtensionMultiview();
-  static bool IsSupported(const WebGLContext*);
-
-  void FramebufferTextureMultiviewOVR(GLenum target, GLenum attachment,
-                                      WebGLTexture* texture, GLint level,
-                                      GLint baseViewIndex,
-                                      GLsizei numViews) const;
-
-  DECL_WEBGL_EXTENSION_GOOP
-};
 
 }  // namespace mozilla
 

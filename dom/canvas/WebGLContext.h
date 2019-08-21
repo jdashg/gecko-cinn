@@ -302,6 +302,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
  protected:
   const WeakPtr<HostWebGLContext> mHost;
+  const bool mResistFingerprinting;
   WebGLContextOptions mOptions;
   webgl::ExtensionBits mSupportedExtensions;
 
@@ -335,7 +336,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   RefPtr<layers::CompositableHost> mCompositableHost;
 
-  layers::LayersBackend mBackend = LayersBackend::LAYERS_NONE;
+  layers::LayersBackend mBackend = layers::LayersBackend::LAYERS_NONE;
 
  public:
   NS_INLINE_DECL_REFCOUNTING(WebGLContext)
@@ -468,9 +469,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                                  layers::Layer* oldLayer,
                                                  layers::LayerManager* manager);
 
-  bool UpdateWebRenderCanvasData(nsDisplayListBuilder* aBuilder,
-                                 layers::WebRenderCanvasData* aCanvasData);
-
   Maybe<ICRData> InitializeCanvasRenderer(layers::LayersBackend backend);
 
   gl::GLContext* GL() const { return gl; }
@@ -582,9 +580,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
-  virtual MaybeWebGLVariant GetFramebufferAttachmentParameter(GLenum target,
-                                                              GLenum attachment,
-                                                              GLenum pname);
+  MaybeWebGLVariant GetFramebufferAttachmentParameter(GLenum target,
+                                                      GLenum attachment,
+                                                      GLenum pname);
 
   MaybeWebGLVariant GetProgramParameter(const WebGLProgram& prog, GLenum pname);
 
@@ -1115,7 +1113,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       mExtensions;
 
  public:
-  void RequestExtension(WebGLExtensionID, bool explicit = true);
+  void RequestExtension(WebGLExtensionID, bool explicitly = true);
 
   // returns true if the extension has been enabled by calling getExtension.
   bool IsExtensionEnabled(const WebGLExtensionID ext) const {
@@ -1518,8 +1516,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool BindDefaultFBForRead();
 
   // --
-
-  bool ShouldResistFingerprinting() const;
 
  public:
   // console logging helpers

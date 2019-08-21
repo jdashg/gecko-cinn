@@ -1034,20 +1034,6 @@ bool CompositorBridgeChild::DeallocPAPZCTreeManagerChild(
 
 // -
 
-dom::PWebGLChild* CompositorBridgeChild::AllocPWebGLChild(
-    const webgl::InitContextDesc&, UniquePtr<HostWebGLCommandSink>&&,
-    webgl::InitContextResult*) {
-  MOZ_CRASH("Should create PWebGLChild outside of IPDL");
-  return nullptr;
-}
-
-bool CompositorBridgeChild::DeallocPWebGLChild(PWebGLChild* aActor) {
-  delete static_cast<dom::WebGLChild*>(aActor);
-  return true;
-}
-
-// -
-
 void CompositorBridgeChild::WillEndTransaction() { ResetShmemCounter(); }
 
 PWebRenderBridgeChild* CompositorBridgeChild::AllocPWebRenderBridgeChild(

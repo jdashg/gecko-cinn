@@ -31,7 +31,6 @@
 #include "mozilla/dom/HTMLVideoElement.h"
 #include "mozilla/dom/ImageData.h"
 #include "mozilla/dom/WebGLContextEvent.h"
-#include "mozilla/dom/WorkerCommon.h"
 #include "mozilla/EnumeratedArrayCycleCollection.h"
 #include "mozilla/EnumeratedRange.h"
 #include "mozilla/Preferences.h"
@@ -138,6 +137,7 @@ WebGLContext::WebGLContext(HostWebGLContext& host,
                            const webgl::InitContextDesc& desc)
     : gl(mGL_OnlyClearInDestroyResourcesAndContext),  // const reference
       mHost(&host),
+      mResistFingerprinting(desc.resistFingerprinting),
       mOptions(desc.options),
       mMaxPerfWarnings(StaticPrefs::webgl_perf_max_warnings()),
       mMaxAcceptableFBStatusInvals(
@@ -188,7 +188,7 @@ WebGLContext::WebGLContext(HostWebGLContext& host,
 
   mDrawCallsSinceLastFlush = 0;
 
-  if (mOptions.antialias && !gfxPrefs::WebGLForceMSAA()) {
+  if (mOptions.antialias && !StaticPrefs::webgl_msaa_force()) {
     const nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
 
     nsCString blocklistId;
@@ -685,11 +685,11 @@ RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
                                           const webgl::InitContextDesc& desc,
                                           webgl::InitContextResult* const out) {
   nsCString failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_UNKOWN");
-  const bool forceEnabled = gfxPrefs::WebGLForceEnabled();
+  const bool forceEnabled = StaticPrefs::webgl_force_enabled();
   ScopedGfxFeatureReporter reporter("WebGL", forceEnabled);
 
-  const auto res = [&]() -> Result<RefPtr<WebGLContext>, std::string> {
-    bool disabled = gfxPrefs::WebGLDisabled();
+  auto res = [&]() -> Result<RefPtr<WebGLContext>, std::string> {
+    bool disabled = StaticPrefs::webgl_disabled();
 
     // TODO: When we have software webgl support we should use that instead.
     disabled |= gfxPlatform::InSafeMode();
@@ -964,231 +964,6 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
     MOZ_ASSERT(oldestContext);  // if we reach this point, this can't be null
     oldestContext->LoseContext(webgl::ContextLossReason::None);
   }
-}
-
-UniquePtr<uint8_t[]> WebGLContext::GetImageBuffer(int32_t* out_format) {
-  *out_format = 0;
-
-  // Use GetSurfaceSnapshot() to make sure that appropriate y-flip gets applied
-  gfxAlphaType any;
-  RefPtr<SourceSurface> snapshot = GetSurfaceSnapshot(&any);
-  if (!snapshot) return nullptr;
-
-  RefPtr<DataSourceSurface> dataSurface = snapshot->GetDataSurface();
-
-  return gfxUtils::GetImageBuffer(dataSurface, mOptions.premultipliedAlpha,
-                                  out_format);
-}
-
-NS_IMETHODIMP
-WebGLContext::GetInputStream(const char* mimeType,
-                             const nsAString& encoderOptions,
-                             nsIInputStream** out_stream) {
-  NS_ASSERTION(gl, "GetInputStream on invalid context?");
-  if (!gl) return NS_ERROR_FAILURE;
-
-  // Use GetSurfaceSnapshot() to make sure that appropriate y-flip gets applied
-  gfxAlphaType any;
-  RefPtr<SourceSurface> snapshot = GetSurfaceSnapshot(&any);
-  if (!snapshot) return NS_ERROR_FAILURE;
-
-  RefPtr<DataSourceSurface> dataSurface = snapshot->GetDataSurface();
-  return gfxUtils::GetInputStream(dataSurface, mOptions.premultipliedAlpha,
-                                  mimeType, encoderOptions, out_stream);
-}
-
-void WebGLContext::UpdateLastUseIndex() {
-  static CheckedInt<uint64_t> sIndex = 0;
-
-  sIndex++;
-
-  // should never happen with 64-bit; trying to handle this would be riskier
-  // than not handling it as the handler code would never get exercised.
-  if (!sIndex.isValid())
-    MOZ_CRASH("Can't believe it's been 2^64 transactions already!");
-  mLastUseIndex = sIndex.value();
-}
-
-static uint8_t gWebGLLayerUserData;
-
-class WebGLContextUserData : public LayerUserData {
- public:
-  explicit WebGLContextUserData(HTMLCanvasElement* canvas) : mCanvas(canvas) {}
-
-  /* PreTransactionCallback gets called by the Layers code every time the
-   * WebGL canvas is going to be composited.
-   */
-  static void PreTransactionCallback(void* data) {
-    WebGLContext* webgl = static_cast<WebGLContext*>(data);
-
-    // Prepare the context for composition
-    webgl->BeginComposition();
-  }
-
-  /** DidTransactionCallback gets called by the Layers code everytime the WebGL
-   * canvas gets composite, so it really is the right place to put actions that
-   * have to be performed upon compositing
-   */
-  static void DidTransactionCallback(void* data) {
-    WebGLContext* webgl = static_cast<WebGLContext*>(data);
-
-    // Clean up the context after composition
-    webgl->EndComposition();
-  }
-
- private:
-  RefPtr<HTMLCanvasElement> mCanvas;
-};
-
-already_AddRefed<layers::Layer> WebGLContext::GetCanvasLayer(
-    nsDisplayListBuilder* builder, Layer* oldLayer, LayerManager* manager) {
-  if (!mResetLayer && oldLayer && oldLayer->HasUserData(&gWebGLLayerUserData)) {
-    RefPtr<layers::Layer> ret = oldLayer;
-    return ret.forget();
-  }
-
-  RefPtr<CanvasLayer> canvasLayer = manager->CreateCanvasLayer();
-  if (!canvasLayer) {
-    NS_WARNING("CreateCanvasLayer returned null!");
-    return nullptr;
-  }
-
-  WebGLContextUserData* userData = nullptr;
-  if (builder->IsPaintingToWindow() && mCanvasElement) {
-    userData = new WebGLContextUserData(mCanvasElement);
-  }
-
-  canvasLayer->SetUserData(&gWebGLLayerUserData, userData);
-
-  CanvasRenderer* canvasRenderer = canvasLayer->CreateOrGetCanvasRenderer();
-  if (!InitializeCanvasRenderer(builder, canvasRenderer)) return nullptr;
-
-  if (!gl) {
-    NS_WARNING("GLContext is null!");
-    return nullptr;
-  }
-
-  uint32_t flags = gl->Caps().alpha ? 0 : Layer::CONTENT_OPAQUE;
-  canvasLayer->SetContentFlags(flags);
-
-  mResetLayer = false;
-
-  return canvasLayer.forget();
-}
-
-bool WebGLContext::UpdateWebRenderCanvasData(nsDisplayListBuilder* aBuilder,
-                                             WebRenderCanvasData* aCanvasData) {
-  CanvasRenderer* renderer = aCanvasData->GetCanvasRenderer();
-
-  if (!mResetLayer && renderer) {
-    return true;
-  }
-
-  renderer = aCanvasData->CreateCanvasRenderer();
-  if (!InitializeCanvasRenderer(aBuilder, renderer)) {
-    // Clear CanvasRenderer of WebRenderCanvasData
-    aCanvasData->ClearCanvasRenderer();
-    return false;
-  }
-
-  MOZ_ASSERT(renderer);
-  mResetLayer = false;
-  return true;
-}
-
-bool WebGLContext::InitializeCanvasRenderer(nsDisplayListBuilder* aBuilder,
-                                            CanvasRenderer* aRenderer) {
-  const FuncScope funcScope(*this, "<InitializeCanvasRenderer>");
-  if (IsContextLost()) return false;
-
-  CanvasInitializeData data;
-  if (aBuilder->IsPaintingToWindow() && mCanvasElement) {
-    // Make the layer tell us whenever a transaction finishes (including
-    // the current transaction), so we can clear our invalidation state and
-    // start invalidating again. We need to do this for the layer that is
-    // being painted to a window (there shouldn't be more than one at a time,
-    // and if there is, flushing the invalidation state more often than
-    // necessary is harmless).
-
-    // The layer will be destroyed when we tear down the presentation
-    // (at the latest), at which time this userData will be destroyed,
-    // releasing the reference to the element.
-    // The userData will receive DidTransactionCallbacks, which flush the
-    // the invalidation state to indicate that the canvas is up to date.
-    data.mPreTransCallback = WebGLContextUserData::PreTransactionCallback;
-    data.mPreTransCallbackData = this;
-    data.mDidTransCallback = WebGLContextUserData::DidTransactionCallback;
-    data.mDidTransCallbackData = this;
-  }
-
-  data.mSize = DrawingBufferSize();
-  data.mHasAlpha = mOptions.alpha;
-  data.mIsGLAlphaPremult = IsPremultAlpha() || !data.mHasAlpha;
-  data.mGLContext = gl;
-
-  aRenderer->Initialize(data);
-  aRenderer->SetDirty();
-  mVRReady = true;
-  return true;
-}
-
-layers::LayersBackend WebGLContext::GetCompositorBackendType() const {
-  if (mCanvasElement) {
-    return mCanvasElement->GetCompositorBackendType();
-  } else if (mOffscreenCanvas) {
-    return mOffscreenCanvas->GetCompositorBackendType();
-  }
-
-  return LayersBackend::LAYERS_NONE;
-}
-
-Document* WebGLContext::GetOwnerDoc() const {
-  MOZ_ASSERT(mCanvasElement);
-  if (!mCanvasElement) {
-    return nullptr;
-  }
-  return mCanvasElement->OwnerDoc();
-}
-
-void WebGLContext::Commit() {
-  if (mOffscreenCanvas) {
-    mOffscreenCanvas->CommitFrameToCompositor();
-  }
-}
-
-void WebGLContext::GetCanvas(
-    Nullable<dom::OwningHTMLCanvasElementOrOffscreenCanvas>& retval) {
-  if (mCanvasElement) {
-    MOZ_RELEASE_ASSERT(!mOffscreenCanvas, "GFX: Canvas is offscreen.");
-
-    if (mCanvasElement->IsInNativeAnonymousSubtree()) {
-      retval.SetNull();
-    } else {
-      retval.SetValue().SetAsHTMLCanvasElement() = mCanvasElement;
-    }
-  } else if (mOffscreenCanvas) {
-    retval.SetValue().SetAsOffscreenCanvas() = mOffscreenCanvas;
-  } else {
-    retval.SetNull();
-  }
-}
-
-void WebGLContext::GetContextAttributes(
-    dom::Nullable<dom::WebGLContextAttributes>& retval) {
-  retval.SetNull();
-  const FuncScope funcScope(*this, "getContextAttributes");
-  if (IsContextLost()) return;
-
-  dom::WebGLContextAttributes& result = retval.SetValue();
-
-  result.mAlpha.Construct(mOptions.alpha);
-  result.mDepth = mOptions.depth;
-  result.mStencil = mOptions.stencil;
-  result.mAntialias.Construct(mOptions.antialias);
-  result.mPremultipliedAlpha = mOptions.premultipliedAlpha;
-  result.mPreserveDrawingBuffer = mOptions.preserveDrawingBuffer;
-  result.mFailIfMajorPerformanceCaveat = mOptions.failIfMajorPerformanceCaveat;
-  result.mPowerPreference = mOptions.powerPreference;
 }
 
 // -
@@ -1819,14 +1594,14 @@ ScopedUnpackReset::ScopedUnpackReset(const WebGLContext* const webgl)
     : mWebGL(webgl) {
   const auto& gl = mWebGL->gl;
   // clang-format off
-  if (mWebGL->mPixelStore_UnpackAlignment != 4) gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, 4);
+  if (mWebGL->mPixelStore.mUnpackAlignment != 4) gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, 4);
 
   if (mWebGL->IsWebGL2()) {
-    if (mWebGL->mPixelStore_UnpackRowLength   != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_ROW_LENGTH  , 0);
-    if (mWebGL->mPixelStore_UnpackImageHeight != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_IMAGE_HEIGHT, 0);
-    if (mWebGL->mPixelStore_UnpackSkipPixels  != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_PIXELS , 0);
-    if (mWebGL->mPixelStore_UnpackSkipRows    != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_ROWS   , 0);
-    if (mWebGL->mPixelStore_UnpackSkipImages  != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_IMAGES , 0);
+    if (mWebGL->mPixelStore.mUnpackRowLength   != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_ROW_LENGTH  , 0);
+    if (mWebGL->mPixelStore.mUnpackImageHeight != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_IMAGE_HEIGHT, 0);
+    if (mWebGL->mPixelStore.mUnpackSkipPixels  != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_PIXELS , 0);
+    if (mWebGL->mPixelStore.mUnpackSkipRows    != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_ROWS   , 0);
+    if (mWebGL->mPixelStore.mUnpackSkipImages  != 0) gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_IMAGES , 0);
 
     if (mWebGL->mBoundPixelUnpackBuffer) gl->fBindBuffer(LOCAL_GL_PIXEL_UNPACK_BUFFER, 0);
   }
@@ -1836,14 +1611,14 @@ ScopedUnpackReset::ScopedUnpackReset(const WebGLContext* const webgl)
 ScopedUnpackReset::~ScopedUnpackReset() {
   const auto& gl = mWebGL->gl;
   // clang-format off
-  gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, mWebGL->mPixelStore_UnpackAlignment);
+  gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, mWebGL->mPixelStore.mUnpackAlignment);
 
   if (mWebGL->IsWebGL2()) {
-    gl->fPixelStorei(LOCAL_GL_UNPACK_ROW_LENGTH  , mWebGL->mPixelStore_UnpackRowLength  );
-    gl->fPixelStorei(LOCAL_GL_UNPACK_IMAGE_HEIGHT, mWebGL->mPixelStore_UnpackImageHeight);
-    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_PIXELS , mWebGL->mPixelStore_UnpackSkipPixels );
-    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_ROWS   , mWebGL->mPixelStore_UnpackSkipRows   );
-    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_IMAGES , mWebGL->mPixelStore_UnpackSkipImages );
+    gl->fPixelStorei(LOCAL_GL_UNPACK_ROW_LENGTH  , mWebGL->mPixelStore.mUnpackRowLength  );
+    gl->fPixelStorei(LOCAL_GL_UNPACK_IMAGE_HEIGHT, mWebGL->mPixelStore.mUnpackImageHeight);
+    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_PIXELS , mWebGL->mPixelStore.mUnpackSkipPixels );
+    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_ROWS   , mWebGL->mPixelStore.mUnpackSkipRows   );
+    gl->fPixelStorei(LOCAL_GL_UNPACK_SKIP_IMAGES , mWebGL->mPixelStore.mUnpackSkipImages );
 
     GLuint pbo = 0;
     if (mWebGL->mBoundPixelUnpackBuffer) {
@@ -2208,53 +1983,6 @@ WebGLContext::FuncScope::FuncScope(const WebGLContext& webgl,
 WebGLContext::FuncScope::~FuncScope() {
   if (!mFuncName) return;
   mWebGL.mFuncScope = nullptr;
-}
-
-// --
-
-bool WebGLContext::ValidateIsObject(
-    const WebGLDeletableObject* const object) const {
-  if (IsContextLost()) return false;
-
-  if (!object) return false;
-
-  if (!object->IsCompatibleWithContext(this)) return false;
-
-  if (object->IsDeleted()) return false;
-
-  return true;
-}
-
-bool WebGLContext::ValidateDeleteObject(
-    const WebGLDeletableObject* const object) {
-  if (IsContextLost()) return false;
-
-  if (!object) return false;
-
-  if (!ValidateObjectAllowDeleted("obj", *object)) return false;
-
-  if (object->IsDeleteRequested()) return false;
-
-  return true;
-}
-
-bool WebGLContext::ShouldResistFingerprinting() const {
-  if (NS_IsMainThread()) {
-    if (mCanvasElement) {
-      // If we're constructed from a canvas element
-      return nsContentUtils::ShouldResistFingerprinting(GetOwnerDoc());
-    }
-    if (mOffscreenCanvas->GetOwnerGlobal()) {
-      // If we're constructed from an offscreen canvas
-      return nsContentUtils::ShouldResistFingerprinting(
-          mOffscreenCanvas->GetOwnerGlobal()->PrincipalOrNull());
-    }
-    // Last resort, just check the global preference
-    return nsContentUtils::ShouldResistFingerprinting();
-  }
-  dom::WorkerPrivate* workerPrivate = dom::GetCurrentThreadWorkerPrivate();
-  MOZ_ASSERT(workerPrivate);
-  return nsContentUtils::ShouldResistFingerprinting(workerPrivate);
 }
 
 // --

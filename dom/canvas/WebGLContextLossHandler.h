@@ -17,7 +17,7 @@ class WebGLContext;
 class WebGLContextLossHandler final
     : public SupportsWeakPtr<WebGLContextLossHandler> {
   RefPtr<Runnable> mRunnable;
-  Atomic<bool> mTimerIsScheduled = false;
+  Atomic<bool> mTimerIsScheduled;
 
  public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLContextLossHandler)

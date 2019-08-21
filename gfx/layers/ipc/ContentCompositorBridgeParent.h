@@ -157,11 +157,8 @@ class ContentCompositorBridgeParent final : public CompositorBridgeParentBase {
     return IPC_FAIL_NO_REASON(this);
   }
 
-  dom::PWebGLParent* AllocPWebGLParent(const webgl::InitContextDesc&,
-                                       UniquePtr<HostWebGLCommandSink>&&,
+  already_AddRefed<dom::PWebGLParent> AllocPWebGLParent(const webgl::InitContextDesc&,
                                        webgl::InitContextResult* out) override;
-
-  bool DeallocPWebGLParent(PWebGLParent* aWebGLParent) override;
 
   // Use DidCompositeLocked if you already hold a lock on
   // sIndirectLayerTreesLock; Otherwise use DidComposite, which would request

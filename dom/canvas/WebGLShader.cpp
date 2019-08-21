@@ -144,8 +144,8 @@ void WebGLShader::CompileShader() {
                              &mCompilationLog);
 }
 
-void WebGLShader::GetShaderInfoLog(nsAString* const out) const {
-  CopyASCIItoUTF16(mCompilationLog, *out);
+nsString WebGLShader::GetShaderInfoLog() const {
+  return NS_ConvertUTF8toUTF16(mCompilationLog);
 }
 
 MaybeWebGLVariant WebGLShader::GetShaderParameter(GLenum pname) const {
@@ -167,11 +167,10 @@ MaybeWebGLVariant WebGLShader::GetShaderParameter(GLenum pname) const {
 
 nsString WebGLShader::GetShaderSource() const { return mSource; }
 
-void WebGLShader::GetShaderTranslatedSource(nsAString* out) const {
-  out->SetIsVoid(false);
+nsString WebGLShader::GetShaderTranslatedSource() const {
   const auto& wrapper =
       nsDependentCString(mCompileResults->mObjectCode.c_str());
-  CopyASCIItoUTF16(wrapper, *out);
+  return NS_ConvertUTF8toUTF16(wrapper);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

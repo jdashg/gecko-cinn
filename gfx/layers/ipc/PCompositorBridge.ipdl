@@ -49,8 +49,6 @@ using mozilla::layers::TransactionId from "mozilla/layers/LayersTypes.h";
 using mozilla::webgl::InitContextDesc from "mozilla/dom/WebGLIpdl.h";
 using mozilla::webgl::InitContextResult from "mozilla/dom/WebGLIpdl.h";
 
-using shmemholder mozilla::HostWebGLCommandSink from "mozilla/dom/WebGLCrossProcessCommandQueue.h";
-
 namespace mozilla {
 namespace layers {
 
@@ -288,8 +286,7 @@ parent:
 
   // Actor that represents one WebGL context.
   // (modeled after `sync PBackgroundLSSnapshot`)
-  sync PWebGL(InitContextDesc desc,
-              UniquePtr<HostWebGLCommandSink> aCommandSink)
+  sync PWebGL(InitContextDesc desc)
     returns (InitContextResult res);
 
 child:

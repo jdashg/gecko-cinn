@@ -411,7 +411,7 @@ MaybeWebGLVariant WebGLContext::GetParameter(GLenum pname) {
 
     case LOCAL_GL_MAX_VIEWS_OVR:
       if (IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return JS::NumberValue(mGLMaxMultiviewViews);
+        return AsSomeVariant(mGLMaxMultiviewViews);
       }
       break;
 

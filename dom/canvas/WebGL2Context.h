@@ -54,12 +54,6 @@ class WebGL2Context final : public WebGLContext {
                        GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
                        GLbitfield mask, GLenum filter);
 
-  virtual MaybeWebGLVariant GetFramebufferAttachmentParameter(
-      GLenum target, GLenum attachment, GLenum pname) override;
-
-  // Make the inline version from the superclass visible here.
-  using WebGLContext::GetFramebufferAttachmentParameter;
-
   void InvalidateFramebuffer(GLenum target,
                              const nsTArray<GLenum>& attachments);
   void InvalidateSubFramebuffer(GLenum target,
