@@ -78,7 +78,6 @@ class WebGLQuery;
 class WebGLRenderbuffer;
 class WebGLSampler;
 class WebGLShader;
-class WebGLShaderPrecisionFormat;
 class WebGLSync;
 class WebGLTexture;
 class WebGLTransformFeedback;
@@ -515,9 +514,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void BindRenderbuffer(GLenum target, WebGLRenderbuffer* fb);
   void BindVertexArray(WebGLVertexArray* vao);
   void BlendColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a);
-  void BlendEquation(GLenum mode);
   void BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha);
-  void BlendFunc(GLenum sfactor, GLenum dfactor);
   void BlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha,
                          GLenum dstAlpha);
   GLenum CheckFramebufferStatus(GLenum target);
@@ -549,32 +546,11 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void Flush();
   void Finish();
 
- private:
   void FramebufferAttach(GLenum target, GLenum attachEnum,
                          TexTarget reqTexTarget,
                          const webgl::FbAttachInfo& toAttach) const;
 
- public:
-  void FramebufferRenderbuffer(GLenum target, GLenum attachment,
-                               GLenum rbTarget, WebGLRenderbuffer* rb) const;
-  void FramebufferTexture2D(GLenum target, GLenum attachment,
-                            GLenum texImageTarget, WebGLTexture* tex,
-                            GLint level) const;
-  void FramebufferTextureLayer(GLenum target, GLenum attachment,
-                               WebGLTexture* tex, GLint level,
-                               GLint layer) const;
-  void FramebufferTextureMultiview(GLenum target, GLenum attachment,
-                                   WebGLTexture* texture, GLint level,
-                                   GLint baseViewIndex, GLsizei numViews) const;
-
   void FrontFace(GLenum mode);
-
-  Maybe<WebGLActiveInfo> GetActiveAttrib(const WebGLProgram& prog,
-                                         GLuint index);
-  Maybe<WebGLActiveInfo> GetActiveUniform(const WebGLProgram& prog,
-                                          GLuint index);
-
-  MaybeAttachedShaders GetAttachedShaders(const WebGLProgram& prog);
 
   GLint GetAttribLocation(const WebGLProgram& prog, const nsAString& name);
   MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
@@ -589,30 +565,13 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   nsString GetProgramInfoLog(const WebGLProgram& prog);
   MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
 
-  MaybeWebGLVariant GetShaderParameter(const WebGLShader& shader, GLenum pname);
-
-  Maybe<WebGLShaderPrecisionFormat> GetShaderPrecisionFormat(
-      GLenum shadertype, GLenum precisiontype);
-
-  nsString GetShaderInfoLog(const WebGLShader& shader);
-  nsString GetShaderSource(const WebGLShader& shader);
-  nsString GetTranslatedShaderSource(const WebGLShader&) const;
+  Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(
+      GLenum shadertype, GLenum precisiontype) const;
 
   MaybeWebGLVariant GetUniform(const WebGLProgram& prog,
                                const WebGLUniformLocation& loc);
 
-  already_AddRefed<WebGLUniformLocation> GetUniformLocation(
-      const WebGLProgram& prog, const nsAString& name);
-
   void Hint(GLenum target, GLenum mode);
-
-  bool IsBuffer(const WebGLBuffer* obj);
-  bool IsFramebuffer(const WebGLFramebuffer* obj);
-  bool IsProgram(const WebGLProgram* obj);
-  bool IsRenderbuffer(const WebGLRenderbuffer* obj);
-  bool IsShader(const WebGLShader* obj);
-  bool IsTexture(const WebGLTexture* obj);
-  bool IsVertexArray(const WebGLVertexArray* obj);
 
   void LineWidth(GLfloat width);
   void LinkProgram(WebGLProgram& prog);
@@ -654,11 +613,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void SampleCoverage(GLclampf value, WebGLboolean invert);
   void Scissor(GLint x, GLint y, GLsizei width, GLsizei height);
   void ShaderSource(WebGLShader& shader, const nsAString& source);
-  void StencilFunc(GLenum func, GLint ref, GLuint mask);
   void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
-  void StencilMask(GLuint mask);
   void StencilMaskSeparate(GLenum face, GLuint mask);
-  void StencilOp(GLenum sfail, GLenum dpfail, GLenum dppass);
   void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
                          GLenum dppass);
 
@@ -733,13 +689,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                            WebGLintptr offset, WebGLsizeiptr size);
 
  public:
-  void BindBufferBase(GLenum target, GLuint index, WebGLBuffer* buf) {
-    const FuncScope funcScope(*this, "bindBufferBase");
-    if (IsContextLost()) return;
-
-    BindBufferRangeImpl(target, index, buf, 0, 0);
-  }
-
   void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buf,
                        WebGLintptr offset, WebGLsizeiptr size) {
     const FuncScope funcScope(*this, "bindBufferRange");

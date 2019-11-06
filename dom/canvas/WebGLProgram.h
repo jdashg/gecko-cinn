@@ -157,23 +157,7 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
   void AttachShader(WebGLShader* shader);
   void BindAttribLocation(GLuint index, const nsAString& name);
   void DetachShader(const WebGLShader* shader);
-  Maybe<WebGLActiveInfo> GetActiveAttrib(GLuint index) const;
-  Maybe<WebGLActiveInfo> GetActiveUniform(GLuint index) const;
-  MaybeAttachedShaders GetAttachedShaders() const;
-  GLint GetAttribLocation(const nsAString& name) const;
-  GLint GetFragDataLocation(const nsAString& name) const;
-  nsString GetProgramInfoLog() const;
   MaybeWebGLVariant GetProgramParameter(GLenum pname) const;
-  GLuint GetUniformBlockIndex(const nsAString& name) const;
-  nsString GetActiveUniformBlockName(GLuint uniformBlockIndex) const;
-  MaybeWebGLVariant GetActiveUniformBlockParam(GLuint uniformBlockIndex,
-                                               GLenum pname) const;
-  MaybeWebGLVariant GetActiveUniformBlockActiveUniforms(
-      GLuint uniformBlockIndex) const;
-  already_AddRefed<WebGLUniformLocation> GetUniformLocation(
-      const nsAString& name) const;
-  MaybeWebGLVariant GetUniformIndices(
-      const nsTArray<nsString>& uniformNames) const;
   void UniformBlockBinding(GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding) const;
 
@@ -196,7 +180,6 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   void TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
                                  GLenum bufferMode);
-  Maybe<WebGLActiveInfo> GetTransformFeedbackVarying(GLuint index) const;
 
   void EnumerateFragOutputs(
       std::map<nsCString, const nsCString>& out_FragOutputs) const;

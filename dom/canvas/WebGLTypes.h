@@ -18,7 +18,6 @@
 #include "nsTArray.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/ipc/SharedMemoryBasic.h"
-#include "WebGLShaderPrecisionFormat.h"
 //#include "WebGLStrongTypes.h"
 
 // Manual reflection of WebIDL typedefs that are different from their
@@ -301,64 +300,17 @@ enum class AttribBaseType : uint8_t {
 };
 const char* ToString(AttribBaseType);
 
+typedef uint64_t ObjectId;
+
+enum class BufferKind : uint8_t {
+  Undefined,
+  Index,
+  NonIndex,
+};
+
 }  // namespace webgl
 
-// ---
-
-/**
- * ID type used by most WebGL classes.   The Id() is unique for each Client
- * object of a given type.  The IDs start at 1 -- ID 0 is reserved for
- * null objects.  This class is subclassed by ClientWebGL... classes in the
- * client and is used directly as a key in an object ID map in the host.
- */
-template <typename HostType>
-class WebGLId {
- public:
-  using IdType = uint64_t;
-
-  WebGLId() : mId(0){};
-  explicit WebGLId(const IdType aId) : mId(aId){};
-  MOZ_IMPLICIT WebGLId(const WebGLId<HostType>* const aPtr) {
-    mId = aPtr ? aPtr->mId : 0;
-  }
-  MOZ_IMPLICIT WebGLId(HostType* const aPtr) { mId = aPtr ? aPtr->Id() : 0; }
-  MOZ_IMPLICIT WebGLId(const HostType* const aPtr) {
-    mId = aPtr ? aPtr->Id() : 0;
-  }
-
-  IdType Id() const { return mId; }
-
-  explicit operator bool() const { return bool(mId); }
-
-  bool operator<(const WebGLId<HostType>& o) const { return mId < o.mId; }
-  bool operator!=(const WebGLId<HostType>& o) const { return mId != o.mId; }
-
-  static const WebGLId<HostType> Invalid() { return WebGLId<HostType>(); }
-
- protected:
-  friend struct DefaultHasher<WebGLId<HostType>>;
-  IdType mId;
-};
-
-template <typename HostType>
-struct DefaultHasher<WebGLId<HostType>> {
-  using Key = WebGLId<HostType>;
-  using Lookup = Key;
-
-  static HashNumber hash(const Lookup& aLookup) {
-    // This discards the high 32-bits of 64-bit integers!
-    return aLookup.Id();
-  }
-
-  static bool match(const Key& aKey, const Lookup& aLookup) {
-    // Use builtin or overloaded operator==.
-    return aKey.Id() == aLookup.Id();
-  }
-
-  static void rekey(Key& aKey, const Key& aNewKey) { aKey.mId = aNewKey.Id(); }
-};
-
-// ---
+// -
 
 struct FloatOrInt final  // For TexParameter[fi] and friends.
 {
@@ -516,6 +468,23 @@ struct InitContextResult final {
   WebGLContextOptions options;
   ExtensionBits supportedExtensions;
   bool astcHdr = false;
+  uint8_t maxColorDrawBuffers = 0;
+  uint8_t maxTfoBuffers = 0;
+  uint16_t maxTexUnits = 0;
+  uint16_t maxVertexAttribs = 0;
+  uint8_t maxUniformBufferBindings = 0;
+  uint16_t uniformBufferOffsetAlignment = 0;
+};
+
+struct ErrorInfo final {
+  GLenum type;
+  nsCString info;
+};
+
+struct ShaderPrecisionFormat final {
+  GLint rangeMin = 0;
+  GLint rangeMax = 0;
+  GLint precision = 0;
 };
 
 // -
@@ -546,17 +515,9 @@ using Float32Array4 = Array<float, 4>;
 using BoolArray4 = Array<bool, 4>;
 
 // First is vertex shader, second is fragment shader.
-using MaybeAttachedShaders = Maybe<Array<WebGLId<WebGLShader>, 2>>;
-
 using WebGLVariant =
     Variant<int32_t, uint32_t, int64_t, uint64_t, bool, float, double,
-            nsCString, nsString, WebGLId<WebGLBuffer>,
-            WebGLId<WebGLFramebuffer>, WebGLId<WebGLProgram>,
-            WebGLId<WebGLQuery>, WebGLId<WebGLRenderbuffer>,
-            WebGLId<WebGLSampler>, WebGLId<WebGLShader>, WebGLId<WebGLSync>,
-            WebGLId<WebGLTexture>, WebGLId<WebGLTransformFeedback>,
-            WebGLId<WebGLUniformLocation>, WebGLId<WebGLVertexArray>,
-            WebGLShaderPrecisionFormat, Int32Array2, Int32Array4, Uint32Array4,
+            nsCString, nsString, Int32Array2, Int32Array4, Uint32Array4,
             Float32Array2, Float32Array4, BoolArray4, nsTArray<uint32_t>,
             nsTArray<int32_t>, nsTArray<bool>, nsTArray<float>>;
 
@@ -588,21 +549,6 @@ AsSomeVariantT<T> AsSomeVariant(FullType&& aObj) {
 template <typename T, size_t N>
 AsSomeVariantT<Array<T, N>> AsSomeVariant(const Array<T, N>& aObj) {
   return AsSomeVariantT<Array<T, N>>(Some(aObj));
-}
-
-template <typename T>
-AsSomeVariantT<WebGLId<T>> AsSomeVariant(WebGLId<T>* aObj) {
-  return AsSomeVariantT<WebGLId<T>>(aObj ? Some(*aObj) : Nothing());
-}
-
-template <typename T>
-AsSomeVariantT<WebGLId<T>> AsSomeVariant(T* aObj) {
-  return AsSomeVariant(static_cast<WebGLId<T>*>(aObj));
-}
-
-template <typename T>
-AsSomeVariantT<WebGLId<T>> AsSomeVariant(WebGLRefPtr<T> aObj) {
-  return AsSomeVariant(static_cast<WebGLId<T>*>(aObj.get()));
 }
 
 template <typename T>

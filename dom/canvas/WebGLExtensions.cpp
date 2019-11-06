@@ -114,15 +114,4 @@ bool WebGLExtensionMultiview::IsSupported(const WebGLContext* const webgl) {
   return gl->IsSupported(gl::GLFeature::multiview);
 }
 
-void WebGLExtensionMultiview::FramebufferTextureMultiviewOVR(
-    const GLenum target, const GLenum attachment, WebGLTexture* const texture,
-    const GLint level, const GLint baseViewIndex,
-    const GLsizei numViews) const {
-  if (mIsLost || !mContext) return;
-  const WebGLContext::FuncScope funcScope(*mContext,
-                                          "framebufferTextureMultiviewOVR");
-  mContext->FramebufferTextureMultiview(target, attachment, texture, level,
-                                        baseViewIndex, numViews);
-}
-
 }  // namespace mozilla

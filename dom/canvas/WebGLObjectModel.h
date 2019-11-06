@@ -22,7 +22,7 @@ class WebGLContext;
 // context (which is to say, all of them).  They provide initialization
 // as well as comparison with the current context.
 template <typename Derived>
-class WebGLContextBoundObject : public WebGLId<Derived> {
+class WebGLContextBoundObject {
  public:
   const WeakPtr<WebGLContext> mContext;
 

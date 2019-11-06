@@ -195,11 +195,6 @@ class WebGLExtensionMultiview : public WebGLExtensionBase {
   explicit WebGLExtensionMultiview(WebGLContext*);
   virtual ~WebGLExtensionMultiview();
   static bool IsSupported(const WebGLContext*);
-
-  void FramebufferTextureMultiviewOVR(GLenum target, GLenum attachment,
-                                      WebGLTexture* texture, GLint level,
-                                      GLint baseViewIndex,
-                                      GLsizei numViews) const;
 };
 
 class WebGLExtensionSRGB : public WebGLExtensionBase {

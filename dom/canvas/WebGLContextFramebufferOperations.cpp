@@ -177,16 +177,6 @@ void WebGLContext::DrawBuffers(const nsTArray<GLenum>& buffers) {
   // Don't actually set it.
 }
 
-void WebGLContext::StencilMask(GLuint mask) {
-  const FuncScope funcScope(*this, "stencilMask");
-  if (IsContextLost()) return;
-
-  mStencilWriteMaskFront = mask;
-  mStencilWriteMaskBack = mask;
-
-  gl->fStencilMask(mask);
-}
-
 void WebGLContext::StencilMaskSeparate(GLenum face, GLuint mask) {
   const FuncScope funcScope(*this, "stencilMaskSeparate");
   if (IsContextLost()) return;
