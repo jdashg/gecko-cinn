@@ -12,7 +12,6 @@
 #include "WebGLUniformLocation.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLRenderbuffer.h"
-#include "WebGLShaderPrecisionFormat.h"
 #include "WebGLTexture.h"
 #include "WebGLExtensions.h"
 #include "WebGLVertexArray.h"

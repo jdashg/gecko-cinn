@@ -77,7 +77,7 @@ void ClientWebGLContext::GetExtension(JSContext* cx, const nsAString& wideName,
                                       dom::CallerType callerType,
                                       ErrorResult& rv) {
   retval.set(nullptr);
-  const FuncScope funcScope(this, "getExtension");
+  const FuncScope funcScope(*this, "getExtension");
 
   const auto name = NS_ConvertUTF16toUTF8(wideName);
 

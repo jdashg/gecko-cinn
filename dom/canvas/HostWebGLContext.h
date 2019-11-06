@@ -15,7 +15,6 @@
 #include "WebGL2Context.h"
 #include "mozilla/dom/WebGLTypes.h"
 #include "WebGLActiveInfo.h"
-#include "WebGLShaderPrecisionFormat.h"
 
 #ifndef WEBGL_BRIDGE_LOG_
 #  define WEBGL_BRIDGE_LOG_(lvl, ...) \
@@ -357,17 +356,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void FrontFace(GLenum mode);
 
-  Maybe<WebGLActiveInfo> GetActiveAttrib(const WebGLId<WebGLProgram>& progId,
-                                         GLuint index);
-
-  Maybe<WebGLActiveInfo> GetActiveUniform(const WebGLId<WebGLProgram>& progId,
-                                          GLuint index);
-
-  MaybeAttachedShaders GetAttachedShaders(const WebGLId<WebGLProgram>& progId);
-
-  GLint GetAttribLocation(const WebGLId<WebGLProgram>& progId,
-                          const nsString& name);
-
   MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
@@ -376,28 +364,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                                                       GLenum attachment,
                                                       GLenum pname);
 
-  MaybeWebGLVariant GetProgramParameter(const WebGLId<WebGLProgram>& progId,
-                                        GLenum pname);
-
-  nsString GetProgramInfoLog(const WebGLId<WebGLProgram>& progId);
-
   MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
-
-  MaybeWebGLVariant GetShaderParameter(const WebGLId<WebGLShader>& shaderId,
-                                       GLenum pname);
 
   MaybeWebGLVariant GetShaderPrecisionFormat(GLenum shadertype,
                                              GLenum precisiontype);
-
-  nsString GetShaderInfoLog(const WebGLId<WebGLShader>& shaderId);
-
-  nsString GetShaderSource(const WebGLId<WebGLShader>& shaderId);
-
-  MaybeWebGLVariant GetUniform(const WebGLId<WebGLProgram>& progId,
-                               const WebGLId<WebGLUniformLocation>& locId);
-
-  WebGLId<WebGLUniformLocation> GetUniformLocation(
-      const WebGLId<WebGLProgram>& progId, const nsString& name);
 
   void Hint(GLenum target, GLenum mode);
 
@@ -545,9 +515,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void ValidateProgram(const WebGLId<WebGLProgram>& progId);
 
-  GLint GetFragDataLocation(const WebGLId<WebGLProgram>& progId,
-                            const nsString& name);
-
   // ------------------------ Uniforms and attributes ------------------------
   void UniformNfv(const nsCString& funcName, uint8_t N,
                   const WebGLId<WebGLUniformLocation>& loc,
@@ -589,23 +556,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void VertexAttribDivisor(GLuint index, GLuint divisor);
 
   MaybeWebGLVariant GetIndexedParameter(GLenum target, GLuint index);
-
-  MaybeWebGLVariant GetUniformIndices(const WebGLId<WebGLProgram>& progId,
-                                      const nsTArray<nsString>& uniformNames);
-
-  MaybeWebGLVariant GetActiveUniforms(const WebGLId<WebGLProgram>& progId,
-                                      const nsTArray<GLuint>& uniformIndices,
-                                      GLenum pname);
-
-  GLuint GetUniformBlockIndex(const WebGLId<WebGLProgram>& progId,
-                              const nsString& uniformBlockName);
-
-  MaybeWebGLVariant GetActiveUniformBlockParameter(
-      const WebGLId<WebGLProgram>& progId, GLuint uniformBlockIndex,
-      GLenum pname);
-
-  nsString GetActiveUniformBlockName(const WebGLId<WebGLProgram>& progId,
-                                     GLuint uniformBlockIndex);
 
   void UniformBlockBinding(const WebGLId<WebGLProgram>& progId,
                            GLuint uniformBlockIndex,
@@ -693,9 +643,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                                  const nsTArray<nsString>& varyings,
                                  GLenum bufferMode);
 
-  Maybe<WebGLActiveInfo> GetTransformFeedbackVarying(
-      const WebGLId<WebGLProgram>& prog, GLuint index);
-
   // ------------------------------ WebGL Debug
   // ------------------------------------
   void GenerateError(GLenum error, const std::string&) const;
@@ -712,8 +659,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void DrawBuffers(const nsTArray<GLenum>& buffers);
 
   Maybe<nsTArray<nsString>> GetASTCExtensionSupportedProfiles() const;
-
-  nsString GetTranslatedShaderSource(const WebGLId<WebGLShader>& shader) const;
 
   void LoseContext(webgl::ContextLossReason);
 

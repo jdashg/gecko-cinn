@@ -98,7 +98,7 @@ DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionDebugRendererInfo)
 class ClientWebGLExtensionDebugShaders : public ClientWebGLExtensionBase {
   DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionDebugShaders)
 
-  void GetTranslatedShaderSource(const ClientWebGLShader& shader,
+  void GetTranslatedShaderSource(const WebGLShaderJS& shader,
                                  nsAString& retval) const {
     if (!mContext) return;
     mContext->GetTranslatedShaderSource(shader, retval);
@@ -158,19 +158,19 @@ class ClientWebGLExtensionDrawBuffers : public ClientWebGLExtensionBase {
 class ClientWebGLExtensionVertexArray : public ClientWebGLExtensionBase {
   DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionVertexArray)
 
-  already_AddRefed<ClientWebGLVertexArray> CreateVertexArrayOES() {
+  RefPtr<WebGLVertexArrayJS> CreateVertexArrayOES() {
     if (!mContext) return nullptr;
     return mContext->CreateVertexArray();
   }
-  void DeleteVertexArrayOES(ClientWebGLVertexArray* array) {
+  void DeleteVertexArrayOES(WebGLVertexArrayJS* array) {
     if (!mContext) return;
     mContext->DeleteVertexArray(array);
   }
-  bool IsVertexArrayOES(const ClientWebGLVertexArray* array) {
+  bool IsVertexArrayOES(const WebGLVertexArrayJS* array) {
     if (!mContext) return false;
     return mContext->IsVertexArray(array);
   }
-  void BindVertexArrayOES(ClientWebGLVertexArray* array) {
+  void BindVertexArrayOES(WebGLVertexArrayJS* array) {
     if (!mContext) return;
     mContext->BindVertexArray(array);
   }
@@ -201,19 +201,19 @@ DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionBlendMinMax)
 class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
   DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionDisjointTimerQuery)
 
-  already_AddRefed<ClientWebGLQuery> CreateQueryEXT() const {
+  RefPtr<WebGLQueryJS> CreateQueryEXT() const {
     if (!mContext) return nullptr;
     return mContext->CreateQuery();
   }
-  void DeleteQueryEXT(ClientWebGLQuery* query) const {
+  void DeleteQueryEXT(WebGLQueryJS* query) const {
     if (!mContext) return;
     mContext->DeleteQuery(query);
   }
-  bool IsQueryEXT(const ClientWebGLQuery* query) const {
+  bool IsQueryEXT(const WebGLQueryJS* query) const {
     if (!mContext) return false;
     return mContext->IsQuery(query);
   }
-  void BeginQueryEXT(GLenum target, ClientWebGLQuery& query) const {
+  void BeginQueryEXT(GLenum target, WebGLQueryJS& query) const {
     if (!mContext) return;
     mContext->BeginQuery(target, query);
   }
@@ -221,7 +221,7 @@ class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
     if (!mContext) return;
     mContext->EndQuery(target);
   }
-  void QueryCounterEXT(ClientWebGLQuery& query, GLenum target) const {
+  void QueryCounterEXT(WebGLQueryJS& query, GLenum target) const {
     if (!mContext) return;
     mContext->QueryCounter(query, target);
   }
@@ -230,7 +230,7 @@ class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
     if (!mContext) return;
     mContext->GetQuery(cx, target, pname, retval);
   }
-  void GetQueryObjectEXT(JSContext* cx, const ClientWebGLQuery& query,
+  void GetQueryObjectEXT(JSContext* cx, const WebGLQueryJS& query,
                          GLenum pname, JS::MutableHandleValue retval) const {
     if (!mContext) return;
     mContext->GetQueryParameter(cx, query, pname, retval);
@@ -262,7 +262,7 @@ class ClientWebGLExtensionMultiview : public ClientWebGLExtensionBase {
 
   void FramebufferTextureMultiviewOVR(const GLenum target,
                                       const GLenum attachment,
-                                      ClientWebGLTexture* const texture,
+                                      const WebGLTextureJS* const texture,
                                       const GLint level,
                                       const GLint baseViewIndex,
                                       const GLsizei numViews) const {

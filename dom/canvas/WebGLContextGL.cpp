@@ -17,7 +17,6 @@
 #include "WebGLFramebuffer.h"
 #include "WebGLQuery.h"
 #include "WebGLRenderbuffer.h"
-#include "WebGLShaderPrecisionFormat.h"
 #include "WebGLTexture.h"
 #include "WebGLExtensions.h"
 #include "WebGLVertexArray.h"
@@ -168,15 +167,6 @@ void WebGLContext::BindRenderbuffer(GLenum target, WebGLRenderbuffer* wrb) {
   mBoundRenderbuffer = wrb;
 }
 
-void WebGLContext::BlendEquation(GLenum mode) {
-  const FuncScope funcScope(*this, "blendEquation");
-  if (IsContextLost()) return;
-
-  if (!ValidateBlendEquationEnum(mode, "mode")) return;
-
-  gl->fBlendEquation(mode);
-}
-
 void WebGLContext::BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
   const FuncScope funcScope(*this, "blendEquationSeparate");
   if (IsContextLost()) return;
@@ -238,19 +228,6 @@ static bool ValidateBlendFuncEnums(WebGLContext* webgl, GLenum srcRGB,
   }
 
   return true;
-}
-
-void WebGLContext::BlendFunc(GLenum sfactor, GLenum dfactor) {
-  const FuncScope funcScope(*this, "blendFunc");
-  if (IsContextLost()) return;
-
-  if (!ValidateBlendFuncEnums(this, sfactor, sfactor, dfactor, dfactor)) return;
-
-  if (!ValidateBlendFuncEnumsCompatibility(sfactor, dfactor,
-                                           "srcRGB and dstRGB"))
-    return;
-
-  gl->fBlendFunc(sfactor, dfactor);
 }
 
 void WebGLContext::BlendFuncSeparate(GLenum srcRGB, GLenum dstRGB,
@@ -555,93 +532,6 @@ void WebGLContext::FramebufferAttach(
   fb->FramebufferAttach(attachEnum, toAttach);
 }
 
-void WebGLContext::FramebufferRenderbuffer(const GLenum target,
-                                           const GLenum attachEnum,
-                                           const GLenum rbTarget,
-                                           WebGLRenderbuffer* const rb) const {
-  const FuncScope funcScope(*this, "framebufferRenderbuffer");
-  if (IsContextLost()) return;
-
-  if (rbTarget != LOCAL_GL_RENDERBUFFER) {
-    ErrorInvalidEnumArg("rbTarget", rbTarget);
-    return;
-  }
-
-  const auto toAttach = webgl::FbAttachInfo{rb};
-  FramebufferAttach(target, attachEnum, 0, toAttach);
-}
-
-void WebGLContext::FramebufferTexture2D(const GLenum target,
-                                        const GLenum attachEnum,
-                                        const GLenum imageTarget,
-                                        WebGLTexture* const tex,
-                                        const GLint level) const {
-  const FuncScope funcScope(*this, "framebufferTexture2D");
-  if (IsContextLost()) return;
-
-  TexTarget reqTexTarget = LOCAL_GL_TEXTURE_2D;
-  auto toAttach = webgl::FbAttachInfo{nullptr, tex, level, 0};
-  if (toAttach.tex) {
-    switch (imageTarget) {
-      case LOCAL_GL_TEXTURE_2D:
-        break;
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
-        toAttach.zLayer = imageTarget - LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X;
-        reqTexTarget = LOCAL_GL_TEXTURE_CUBE_MAP;
-        break;
-      default:
-        ErrorInvalidEnumArg("texImageTarget", imageTarget);
-        return;
-    }
-  }
-
-  FramebufferAttach(target, attachEnum, reqTexTarget, toAttach);
-}
-
-void WebGLContext::FramebufferTextureLayer(const GLenum target,
-                                           const GLenum attachEnum,
-                                           WebGLTexture* const tex,
-                                           const GLint mipLevel,
-                                           const GLint zLayer) const {
-  const FuncScope funcScope(*this, "framebufferTextureLayer");
-  if (IsContextLost()) return;
-
-  const auto toAttach = webgl::FbAttachInfo{nullptr, tex, mipLevel, zLayer};
-  if (toAttach.tex) {
-    if (!ValidateObject("tex", *toAttach.tex))
-      return;  // Technically we need to check this first...
-
-    switch (toAttach.tex->Target().get()) {
-      case LOCAL_GL_TEXTURE_3D:
-      case LOCAL_GL_TEXTURE_2D_ARRAY:
-        break;
-      default:
-        ErrorInvalidOperation(
-            "`texture` must be a TEXTURE_3D or"
-            " TEXTURE_2D_ARRAY.");
-        return;
-    }
-  }
-
-  FramebufferAttach(target, attachEnum, 0, toAttach);
-}
-
-void WebGLContext::FramebufferTextureMultiview(
-    const GLenum target, const GLenum attachEnum, WebGLTexture* const tex,
-    const GLint mipLevel, const GLint zLayerBase,
-    const GLsizei numViewLayers) const {
-  if (IsContextLost()) return;
-
-  const auto toAttach = webgl::FbAttachInfo{nullptr,    tex,           mipLevel,
-                                            zLayerBase, numViewLayers, true};
-  FramebufferAttach(target, attachEnum, LOCAL_GL_TEXTURE_2D_ARRAY, toAttach);
-}
-
 // -
 
 void WebGLContext::FrontFace(GLenum mode) {
@@ -657,46 +547,6 @@ void WebGLContext::FrontFace(GLenum mode) {
   }
 
   gl->fFrontFace(mode);
-}
-
-Maybe<WebGLActiveInfo> WebGLContext::GetActiveAttrib(const WebGLProgram& prog,
-                                                     GLuint index) {
-  const FuncScope funcScope(*this, "getActiveAttrib");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObject("program", prog)) return Nothing();
-
-  return prog.GetActiveAttrib(index);
-}
-
-Maybe<WebGLActiveInfo> WebGLContext::GetActiveUniform(const WebGLProgram& prog,
-                                                      GLuint index) {
-  const FuncScope funcScope(*this, "getActiveUniform");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObject("program", prog)) return Nothing();
-
-  return prog.GetActiveUniform(index);
-}
-
-MaybeAttachedShaders WebGLContext::GetAttachedShaders(
-    const WebGLProgram& prog) {
-  const FuncScope funcScope(*this, "getAttachedShaders");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObject("prog", prog)) return Nothing();
-
-  return prog.GetAttachedShaders();
-}
-
-GLint WebGLContext::GetAttribLocation(const WebGLProgram& prog,
-                                      const nsAString& name) {
-  const FuncScope funcScope(*this, "getAttribLocation");
-  if (IsContextLost()) return -1;
-
-  if (!ValidateObject("program", prog)) return -1;
-
-  return prog.GetAttribLocation(name);
 }
 
 MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target,
@@ -977,16 +827,6 @@ MaybeWebGLVariant WebGLContext::GetProgramParameter(const WebGLProgram& prog,
   return prog.GetProgramParameter(pname);
 }
 
-nsString WebGLContext::GetProgramInfoLog(const WebGLProgram& prog) {
-  const FuncScope funcScope(*this, "getProgramInfoLog");
-
-  if (IsContextLost()) return EmptyString();
-
-  if (!ValidateObject("program", prog)) return EmptyString();
-
-  return prog.GetProgramInfoLog();
-}
-
 MaybeWebGLVariant WebGLContext::GetUniform(const WebGLProgram& prog,
                                            const WebGLUniformLocation& loc) {
   const FuncScope funcScope(*this, "getUniform");
@@ -999,16 +839,6 @@ MaybeWebGLVariant WebGLContext::GetUniform(const WebGLProgram& prog,
   if (!loc.ValidateForProgram(&prog)) return Nothing();
 
   return loc.GetUniform();
-}
-
-already_AddRefed<WebGLUniformLocation> WebGLContext::GetUniformLocation(
-    const WebGLProgram& prog, const nsAString& name) {
-  const FuncScope funcScope(*this, "getUniformLocation");
-  if (IsContextLost()) return nullptr;
-
-  if (!ValidateObject("program", prog)) return nullptr;
-
-  return prog.GetUniformLocation(name);
 }
 
 void WebGLContext::Hint(GLenum target, GLenum mode) {
@@ -1038,72 +868,6 @@ void WebGLContext::Hint(GLenum target, GLenum mode) {
   if (!isValid) return ErrorInvalidEnumInfo("target", target);
 
   gl->fHint(target, mode);
-}
-
-// -
-
-bool WebGLContext::IsBuffer(const WebGLBuffer* const obj) {
-  const FuncScope funcScope(*this, "isBuffer");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return obj->Content() != WebGLBuffer::Kind::Undefined;
-}
-
-bool WebGLContext::IsFramebuffer(const WebGLFramebuffer* const obj) {
-  const FuncScope funcScope(*this, "isFramebuffer");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return obj->mHasBeenBound;
-}
-
-bool WebGLContext::IsProgram(const WebGLProgram* const obj) {
-  const FuncScope funcScope(*this, "isProgram");
-  return ValidateIsObject(obj);
-}
-
-bool WebGLContext::IsQuery(const WebGLQuery* const obj) {
-  const FuncScope funcScope(*this, "isQuery");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return bool(obj->Target());
-}
-
-bool WebGLContext::IsRenderbuffer(const WebGLRenderbuffer* const obj) {
-  const FuncScope funcScope(*this, "isRenderbuffer");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return obj->mHasBeenBound;
-}
-
-bool WebGLContext::IsShader(const WebGLShader* const obj) {
-  const FuncScope funcScope(*this, "isShader");
-  return ValidateIsObject(obj);
-}
-
-bool WebGLContext::IsTexture(const WebGLTexture* const obj) {
-  const FuncScope funcScope(*this, "isTexture");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return bool(obj->Target());
-}
-
-bool WebGLContext::IsVertexArray(const WebGLVertexArray* const obj) {
-  const FuncScope funcScope(*this, "isVertexArray");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return obj->mHasBeenBound;
 }
 
 // -
@@ -1635,20 +1399,6 @@ void WebGLContext::Scissor(GLint x, GLint y, GLsizei width, GLsizei height) {
   mScissorRect.Apply(*gl);
 }
 
-void WebGLContext::StencilFunc(GLenum func, GLint ref, GLuint mask) {
-  const FuncScope funcScope(*this, "stencilFunc");
-  if (IsContextLost()) return;
-
-  if (!ValidateComparisonEnum(*this, func)) return;
-
-  mStencilRefFront = ref;
-  mStencilRefBack = ref;
-  mStencilValueMaskFront = mask;
-  mStencilValueMaskBack = mask;
-
-  gl->fStencilFunc(func, ref, mask);
-}
-
 void WebGLContext::StencilFuncSeparate(GLenum face, GLenum func, GLint ref,
                                        GLuint mask) {
   const FuncScope funcScope(*this, "stencilFuncSeparate");
@@ -1676,18 +1426,6 @@ void WebGLContext::StencilFuncSeparate(GLenum face, GLenum func, GLint ref,
   }
 
   gl->fStencilFuncSeparate(face, func, ref, mask);
-}
-
-void WebGLContext::StencilOp(GLenum sfail, GLenum dpfail, GLenum dppass) {
-  const FuncScope funcScope(*this, "stencilOp");
-  if (IsContextLost()) return;
-
-  if (!ValidateStencilOpEnum(sfail, "sfail") ||
-      !ValidateStencilOpEnum(dpfail, "dpfail") ||
-      !ValidateStencilOpEnum(dppass, "dppass"))
-    return;
-
-  gl->fStencilOp(sfail, dpfail, dppass);
 }
 
 void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
@@ -2096,28 +1834,8 @@ void WebGLContext::CompileShader(WebGLShader& shader) {
   shader.CompileShader();
 }
 
-MaybeWebGLVariant WebGLContext::GetShaderParameter(const WebGLShader& shader,
-                                                   GLenum pname) {
-  const FuncScope funcScope(*this, "getShaderParameter");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObjectAllowDeleted("shader", shader)) return Nothing();
-
-  return shader.GetShaderParameter(pname);
-}
-
-nsString WebGLContext::GetShaderInfoLog(const WebGLShader& shader) {
-  const FuncScope funcScope(*this, "getShaderInfoLog");
-
-  if (IsContextLost()) return EmptyString();
-
-  if (!ValidateObject("shader", shader)) return EmptyString();
-
-  return shader.GetShaderInfoLog();
-}
-
-Maybe<WebGLShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
-    GLenum shadertype, GLenum precisiontype) {
+Maybe<webgl::ShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
+    GLenum shadertype, GLenum precisiontype) const {
   const FuncScope funcScope(*this, "getShaderPrecisionFormat");
   if (IsContextLost()) return Nothing();
 
@@ -2155,20 +1873,7 @@ Maybe<WebGLShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
     gl->fGetShaderPrecisionFormat(shadertype, precisiontype, range, &precision);
   }
 
-  return Some(WebGLShaderPrecisionFormat(range[0], range[1], precision));
-}
-
-nsString WebGLContext::GetShaderSource(const WebGLShader& shader) {
-  nsString retVoid;
-  retVoid.SetIsVoid(true);
-
-  const FuncScope funcScope(*this, "getShaderSource");
-
-  if (IsContextLost()) return retVoid;
-
-  if (!ValidateObject("shader", shader)) return retVoid;
-
-  return shader.GetShaderSource();
+  return Some(webgl::ShaderPrecisionFormat{range[0], range[1], precision});
 }
 
 void WebGLContext::ShaderSource(WebGLShader& shader, const nsAString& source) {

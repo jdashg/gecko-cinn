@@ -120,14 +120,4 @@ void WebGL2Context::TransformFeedbackVaryings(
   program.TransformFeedbackVaryings(varyings, bufferMode);
 }
 
-Maybe<WebGLActiveInfo> WebGL2Context::GetTransformFeedbackVarying(
-    const WebGLProgram& program, GLuint index) {
-  const FuncScope funcScope(*this, "getTransformFeedbackVarying");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObject("program", program)) return Nothing();
-
-  return program.GetTransformFeedbackVarying(index);
-}
-
 }  // namespace mozilla
