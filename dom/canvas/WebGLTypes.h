@@ -8,6 +8,8 @@
 
 #include <limits>
 #include <type_traits>
+#include <unordered_map>
+#include <vector>
 
 // Most WebIDL typedefs are identical to their OpenGL counterparts.
 #include "GLTypes.h"
@@ -495,6 +497,56 @@ enum class LossStatus {
   Lost,
   LostForever,
   LostManually,
+};
+
+// -
+
+struct CompileResult final {
+  bool pending = true;
+  bool success = false;
+  std::string log;
+  std::string translatedSource;
+};
+
+// -
+
+struct ActiveInfo {
+  GLenum elemType = 0; // `type`
+  uint32_t elemCount = 0; // `size`
+  std::string name;
+};
+
+struct ActiveAttribInfo final : public ActiveInfo {
+  int32_t location = -1;
+};
+
+struct ActiveUniformInfo final : public ActiveInfo {
+  std::unordered_map<uint32_t, uint32_t> locByIndex; // Uniform array locations are sparse.
+  int32_t block = -1;
+  int32_t block_offset = -1; // In block, offset.
+  int32_t block_arrayStride = -1;
+  int32_t block_matrixStride = -1;
+  bool isRowMajor = false;
+};
+
+struct ActiveUniformBlockInfo final {
+  std::string name;
+  // BLOCK_BINDING is dynamic state
+  uint32_t dataSize = 0;
+  std::vector<uint32_t> activeUniformIndices;
+  bool referencedByVertexShader = false;
+  bool referencedByFragmentShader = false;
+};
+
+struct LinkResult final {
+  bool pending = true;
+  bool success = false;
+  std::vector<ActiveAttribInfo> activeAttribs;
+  std::vector<ActiveUniformInfo> activeUniforms;
+  std::vector<ActiveUniformBlockInfo> activeUniformBlocks;
+  std::vector<ActiveInfo> activeTfVaryings;
+  uint8_t tfBufferNum = 0;
+  std::unordered_map<std::string, uint32_t> fragDataLocByName;
 };
 
 }  // namespace webgl

@@ -3631,11 +3631,21 @@ void ClientWebGLContext::ShaderSource(WebGLShaderJS& shader, const nsAString& so
   Run<RPROC(ShaderSource)>(shader.mId, shader.mSource);
 }
 
-const webgl::ShaderResult& ClientWebGLContext::GetShaderResult(const WebGLShaderJS& shader) const {
+// -
+
+const webgl::CompileResult& ClientWebGLContext::GetShaderResult(const WebGLShaderJS& shader) const {
   if (shader.mResult.pending) {
     shader.mResult = Run<RPROC(GetShaderResult)>(shader.mId);
   }
   return shader.mResult;
+}
+
+const webgl::LinkResult& ClientWebGLContext::GetProgramResult(const WebGLProgramJS& prog) const {
+  if (prog.mResult->pending) {
+    prog.mResult = std::make_shared<webgl::LinkResult>();
+    *prog.mResult = Run<RPROC(GetProgramResult)>(prog.mId);
+  }
+  return *(prog.mResult);
 }
 
 // ---------------------------

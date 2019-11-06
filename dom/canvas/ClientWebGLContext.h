@@ -203,56 +203,6 @@ class ObjectJS : public nsWrapperCache {
   virtual ~ObjectJS() = default;
 };
 
-struct CompileResult final {
-  bool pending = true;
-  bool success = false;
-  nsCString log;
-  nsCString translatedSource;
-};
-
-// -
-
-struct ActiveInfo {
-  GLenum elemType = 0; // `type`
-  uint32_t elemCount = 0; // `size`
-  std::string name;
-};
-
-struct ActiveAttribInfo final : public ActiveInfo {
-  int32_t location = -1;
-};
-
-struct ActiveUniformInfo final : public ActiveInfo {
-  std::unordered_map<uint32_t, uint32_t> locByIndex; // Uniform array locations are sparse.
-  int32_t block = -1;
-  int32_t block_offset = -1; // In block, offset.
-  int32_t block_arrayStride = -1;
-  int32_t block_matrixStride = -1;
-  bool isRowMajor = false;
-};
-
-struct ActiveUniformBlockInfo final {
-  std::string name;
-  // BLOCK_BINDING is dynamic state
-  uint32_t dataSize = 0;
-  std::vector<uint32_t> activeUniformIndices;
-  bool referencedByVertexShader = false;
-  bool referencedByFragmentShader = false;
-};
-
-struct LinkResult final {
-  bool pending = true;
-  bool success = false;
-  std::vector<ActiveAttribInfo> activeAttribs;
-  std::vector<ActiveUniformInfo> activeUniforms;
-  std::vector<ActiveUniformBlockInfo> activeUniformBlocks;
-  std::vector<ActiveInfo> activeTfVaryings;
-  uint8_t tfBufferNum = 0;
-  std::unordered_map<std::string, uint32_t> fragDataLocByName;
-};
-
-// -
-
 } // namespace webgl
 
 // -
@@ -299,7 +249,7 @@ class WebGLProgramJS final : public webgl::ObjectJS {
 
   std::unordered_map<GLenum, std::shared_ptr<WebGLShaderPreventDelete>> mNextLink_Shaders;
   bool mLastValidate = false;
-  std::shared_ptr<webgl::LinkResult> mResult; // Never null, often defaulted.
+  mutable std::shared_ptr<webgl::LinkResult> mResult; // Never null, often defaulted.
   Maybe<std::unordered_map<std::string, RefPtr<WebGLUniformLocationJS>>> mUniformLocs;
 
  public:
@@ -1063,13 +1013,14 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
  private:
-  void ClearBufferv(GLenum buffer, GLint drawBuffer, webgl::AttribBaseType,
-      const Range<const uint8_t>& view, GLuint srcElemOffset) const;
+  void ClearBufferTv(GLenum buffer, GLint drawBuffer, webgl::AttribBaseType,
+      const Range<const uint8_t>& view) const;
 
   template<typename T>
   void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::AttribBaseType type,
         const Range<T>& view, GLuint srcElemOffset) const {
     static_assert(sizeof(T) == 4);
+    #error subrange
     ClearBufferv(buffer, drawBuffer, type, Range<const uint8_t>{view}, srcElemOffset);
   }
 
