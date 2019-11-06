@@ -507,8 +507,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // This is the entrypoint. Don't test against it directly.
   bool IsContextLost() const { return mIsContextLost; }
 
-  void AttachShader(WebGLProgram& prog, WebGLShader& shader);
-  void BindAttribLocation(WebGLProgram& prog, GLuint location,
+  void AttachShader(WebGLProgram* prog, WebGLShader* shader);
+  void BindAttribLocation(WebGLProgram* prog, GLuint location,
                           const nsAString& name);
   void BindFramebuffer(GLenum target, WebGLFramebuffer* fb);
   void BindRenderbuffer(GLenum target, WebGLRenderbuffer* fb);
@@ -524,9 +524,11 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void ClearStencil(GLint v);
   void ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b,
                  WebGLboolean a);
-  void CompileShader(WebGLShader& shader);
+  void CompileShader(WebGLShader* shader);
+  private:
   void CompileShaderANGLE(WebGLShader* shader);
   void CompileShaderBypass(WebGLShader* shader, const nsCString& shaderSource);
+  public:
   already_AddRefed<WebGLFramebuffer> CreateFramebuffer();
   already_AddRefed<WebGLProgram> CreateProgram();
   already_AddRefed<WebGLRenderbuffer> CreateRenderbuffer();
@@ -541,7 +543,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DepthFunc(GLenum func);
   void DepthMask(WebGLboolean b);
   void DepthRange(GLclampf zNear, GLclampf zFar);
-  void DetachShader(WebGLProgram& prog, const WebGLShader& shader);
+  void DetachShader(WebGLProgram* prog, const WebGLShader* shader);
   void DrawBuffers(const nsTArray<GLenum>& buffers);
   void Flush();
   void Finish();
@@ -552,7 +554,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void FrontFace(GLenum mode);
 
-  GLint GetAttribLocation(const WebGLProgram& prog, const nsAString& name);
+  GLint GetAttribLocation(const WebGLProgram* prog, const nsAString& name);
   MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
@@ -560,21 +562,21 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                                       GLenum attachment,
                                                       GLenum pname);
 
-  MaybeWebGLVariant GetProgramParameter(const WebGLProgram& prog, GLenum pname);
+  MaybeWebGLVariant GetProgramParameter(const WebGLProgram* prog, GLenum pname);
 
-  nsString GetProgramInfoLog(const WebGLProgram& prog);
+  nsString GetProgramInfoLog(const WebGLProgram* prog);
   MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(
       GLenum shadertype, GLenum precisiontype) const;
 
-  MaybeWebGLVariant GetUniform(const WebGLProgram& prog,
-                               const WebGLUniformLocation& loc);
+  MaybeWebGLVariant GetUniform(const WebGLProgram* prog,
+                               const WebGLUniformLocation* loc);
 
   void Hint(GLenum target, GLenum mode);
 
   void LineWidth(GLfloat width);
-  void LinkProgram(WebGLProgram& prog);
+  void LinkProgram(WebGLProgram* prog);
   WebGLPixelStore PixelStorei(GLenum pname, GLint param);
   void PolygonOffset(GLfloat factor, GLfloat units);
 
@@ -612,7 +614,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   void SampleCoverage(GLclampf value, WebGLboolean invert);
   void Scissor(GLint x, GLint y, GLsizei width, GLsizei height);
-  void ShaderSource(WebGLShader& shader, const nsAString& source);
+  void ShaderSource(WebGLShader* shader, const nsAString& source);
   void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
   void StencilMaskSeparate(GLenum face, GLuint mask);
   void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
@@ -674,7 +676,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                         uint32_t setterArraySize,
                                         bool setterTranspose,
                                         uint32_t* out_numElementsToUpload);
-  void ValidateProgram(const WebGLProgram& prog);
+  void ValidateProgram(const WebGLProgram* prog);
   bool ValidateUniformLocation(const char* info, WebGLUniformLocation* loc);
   bool ValidateSamplerUniformSetter(const char* info, WebGLUniformLocation* loc,
                                     GLint value);
@@ -779,14 +781,14 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   already_AddRefed<WebGLQuery> CreateQuery();
   void DeleteQuery(WebGLQuery* query);
   bool IsQuery(const WebGLQuery* query);
-  void BeginQuery(GLenum target, WebGLQuery& query);
+  void BeginQuery(GLenum target, WebGLQuery* query);
   void EndQuery(GLenum target);
   MaybeWebGLVariant GetQuery(GLenum target, GLenum pname);
-  MaybeWebGLVariant GetQueryParameter(const WebGLQuery& query, GLenum pname);
+  MaybeWebGLVariant GetQueryParameter(const WebGLQuery* query, GLenum pname);
 
   MaybeWebGLVariant MOZDebugGetParameter(GLenum pname) const;
 
-  void QueryCounter(WebGLQuery&, const GLenum target) const;
+  void QueryCounter(WebGLQuery*, const GLenum target) const;
 
   // -----------------------------------------------------------------------------
   // State and State Requests (WebGLContextState.cpp)
@@ -1262,6 +1264,18 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       }
     }
 
+    return true;
+  }
+
+  template<typename T>
+  bool ValidateObject(const char* const argName, const T* const object) const {
+    if (!object) {
+      ErrorInvalidOperation(
+          "%s: Object argument cannot have been marked for"
+          " deletion.",
+          argName);
+      return false;
+    }
     return true;
   }
 

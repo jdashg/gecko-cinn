@@ -193,28 +193,28 @@ MaybeWebGLVariant HostWebGLContext::GetParameter(GLenum pname) {
   return mContext->GetParameter(pname);
 }
 
-void HostWebGLContext::AttachShader(const WebGLId<WebGLProgram>& progId,
-                                    const WebGLId<WebGLShader>& shaderId) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  RefPtr<WebGLShader> shader = MustFind(shaderId);
-  mContext->AttachShader(*prog, *shader);
+void HostWebGLContext::AttachShader(const ObjectId progId,
+                                    const ObjectId shaderId) {
+  const auto prog = Find(mProgramMap, progId);
+  const auto shader = Find(mShaderMap, shaderId);
+  mContext->AttachShader(prog, shader);
 }
 
-void HostWebGLContext::BindAttribLocation(const WebGLId<WebGLProgram>& progId,
+void HostWebGLContext::BindAttribLocation(const ObjectId id,
                                           GLuint location,
-                                          const nsString& name) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  mContext->BindAttribLocation(*prog, location, name);
+                                          const std::string& name) {
+  mContext->BindAttribLocation(ById(id), location, name);
 }
 
 void HostWebGLContext::BindFramebuffer(GLenum target,
-                                       const WebGLId<WebGLFramebuffer>& fb) {
-  mContext->BindFramebuffer(target, Find(fb));
+                                       const ObjectId id) {
+  mContext->BindFramebuffer(target, ById(fb));
 }
 
 void HostWebGLContext::BindRenderbuffer(GLenum target,
-                                        const WebGLId<WebGLRenderbuffer>& fb) {
-  mContext->BindRenderbuffer(target, Find(fb));
+                                        const ObjectId id) {
+  const auto obj = ObjectById<WebGLProgram>(id);
+  mContext->BindRenderbuffer(target, obj);
 }
 
 void HostWebGLContext::BlendColor(GLclampf r, GLclampf g, GLclampf b,
