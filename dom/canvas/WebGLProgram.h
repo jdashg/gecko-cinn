@@ -120,6 +120,8 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
 
   bool attrib0Active;
 
+  std::map<std::string, std::string> nameMap;
+
   //////
 
   mutable CacheWeakMap<const WebGLVertexArray*, CachedDrawFetchLimits>
@@ -157,7 +159,6 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
   void AttachShader(WebGLShader* shader);
   void BindAttribLocation(GLuint index, const nsAString& name);
   void DetachShader(const WebGLShader* shader);
-  MaybeWebGLVariant GetProgramParameter(GLenum pname) const;
   void UniformBlockBinding(GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding) const;
 

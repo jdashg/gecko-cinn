@@ -39,10 +39,6 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
  public:
   // GL funcs
   void CompileShader();
-  MaybeWebGLVariant GetShaderParameter(GLenum pname) const;
-  nsString GetShaderInfoLog() const;
-  nsString GetShaderSource() const;
-  nsString GetShaderTranslatedSource() const;
   void ShaderSource(const nsAString& source);
 
   // Util funcs

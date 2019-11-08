@@ -153,6 +153,19 @@ public:
 
   bool mTfActiveAndNotPaused = false;
 
+  struct GenericVertexAttrib final {
+    webgl::AttribBaseType type = webgl::AttribBaseType::Float;
+    uint8_t data[4*sizeof(float)] = {};
+  };
+  std::vector<GenericVertexAttrib> mGenericVertexAttribs;
+
+  bool mColorWriteMask[4] = {true, true, true, true};
+  int32_t mScissor[4] = {};
+  int32_t mViewport[4] = {};
+  float mClearColor[4] = {1, 1, 1, 1};
+  float mBlendColor[4] = {1, 1, 1, 1};
+  float mDepthRange[2] = {0, 1};
+
 public:
   explicit ContextGenerationInfo(ClientWebGLContext& context) : mContext(context), mLastId(0) {}
 
@@ -313,6 +326,8 @@ private:
 
 class WebGLSyncJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
+
+  bool mSignaled = false;
 
  public:
   explicit WebGLSyncJS(ClientWebGLContext&);
@@ -692,17 +707,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                size_t* const out_byteLen) const;
 
  protected:
-  bool ValidateAttribArraySetter(uint32_t setterElemSize,
-                                 uint32_t arrayLength) const {
-    if (arrayLength < setterElemSize) {
-      EnqueueError(LOCAL_GL_INVALID_VALUE, "Array must have >= %d elements.",
-                   setterElemSize);
-      return false;
-    }
-
-    return true;
-  }
-
   template <typename T>
   bool ValidateNonNull(const char* const argName,
                        const dom::Nullable<T>& maybe) const {
@@ -926,7 +930,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // WebGLProgramJS
 
  private:
-  const webgl::LinkResult& GetProgramResult(const WebGLProgramJS&) const;
+  const webgl::LinkResult& GetLinkResult(const WebGLProgramJS&) const;
 
  public:
   void AttachShader(WebGLProgramJS&, const WebGLShaderJS&) const;
@@ -1227,17 +1231,17 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   void TexStorage(uint8_t funcDims, GLenum target, GLsizei levels, GLenum internalFormat,
-                    GLsizei width, GLsizei height, GLsizei depth) const;
+                    ivec3 size) const;
 
  public:
   void TexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat,
                     GLsizei width, GLsizei height) const {
-    TexStorage(2, target, levels, internalFormat, width, height, 1);
+    TexStorage(2, target, levels, internalFormat, {width, height, 1});
   }
 
   void TexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat,
                     GLsizei width, GLsizei height, GLsizei depth) const {
-    TexStorage(3, target, levels, internalFormat, width, height, depth);
+    TexStorage(3, target, levels, internalFormat, {width, height, depth});
   }
 
   ////////////////////////////////////
@@ -1249,7 +1253,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     GLsizei width = 0;
     GLsizei height = 0;
     GLint border = 0;
-    TexImage(2, target, level, internalFormat, width, height, 1, border,
+    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
                unpackFormat, unpackType, src, out_error);
   }
 
@@ -1259,7 +1263,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                   GLenum unpackFormat, GLenum unpackType, const T& anySrc,
                   ErrorResult& out_error) {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexImage(2, target, level, internalFormat, width, height, 1, border,
+    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
                unpackFormat, unpackType, src);
   }
 
@@ -1269,7 +1273,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                   const dom::ArrayBufferView& view, GLuint viewElemOffset,
                   ErrorResult&) {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexImage(2, target, level, internalFormat, width, height, 1, border,
+    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
                unpackFormat, unpackType, src);
   }
 
@@ -1282,7 +1286,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                      ErrorResult& out_error) {
     GLsizei width = 0;
     GLsizei height = 0;
-    TexSubImage(2, target, level, xOffset, yOffset, 0, width, height, 1, unpackFormat,
+    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
                   unpackType, src, out_error);
   }
 
@@ -1292,7 +1296,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                      GLenum unpackType, const T& anySrc,
                      ErrorResult& out_error) {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexSubImage(2, target, level, xOffset, yOffset, 0, width, height, 1, unpackFormat,
+    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
                   unpackType, src);
   }
 
@@ -1301,7 +1305,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                      GLenum unpackType, const dom::ArrayBufferView& view,
                      GLuint viewElemOffset, ErrorResult&) {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexSubImage(2, target, level, xOffset, yOffset, 0, width, height, 1, unpackFormat,
+    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
                   unpackType, src);
   }
 
@@ -1314,7 +1318,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                   GLenum unpackFormat, GLenum unpackType, const T& anySrc,
                   ErrorResult& out_error) {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexImage(3, target, level, internalFormat, width, height, depth, border,
+    TexImage(3, target, level, internalFormat, {width, height, depth}, border,
                unpackFormat, unpackType, src);
   }
 
@@ -1324,7 +1328,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                   const dom::ArrayBufferView& view, GLuint viewElemOffset,
                   ErrorResult&) {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexImage(3, target, level, internalFormat, width, height, depth, border,
+    TexImage(3, target, level, internalFormat, {width, height, depth}, border,
                unpackFormat, unpackType, src);
   }
 
@@ -1337,8 +1341,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                      GLsizei depth, GLenum unpackFormat, GLenum unpackType,
                      const T& anySrc, ErrorResult& out_error) {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexSubImage(3, target, level, xOffset, yOffset, zOffset, width, height,
-                  depth, unpackFormat, unpackType, src);
+    TexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {width, height,
+                  depth}, unpackFormat, unpackType, src);
   }
 
   void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
@@ -1347,8 +1351,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                      const dom::Nullable<dom::ArrayBufferView>& maybeSrcView,
                      GLuint srcElemOffset, ErrorResult&) {
     const TexImageSourceAdapter src(&maybeSrcView, srcElemOffset);
-    TexSubImage(3, target, level, xOffset, yOffset, zOffset, width, height,
-                  depth, unpackFormat, unpackType, src);
+    TexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {width, height,
+                  depth}, unpackFormat, unpackType, src);
   }
 
   ////////////////////////////////////
@@ -1361,8 +1365,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const uint8_t funcDims = 2;
     const GLsizei depth = 1;
     const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexImage(funcDims, target, level, internalFormat, width, height,
-                       depth, border, src, Some(imageSize));
+    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
+                       depth}, border, src, Some(imageSize));
   }
 
   template <typename T>
@@ -1375,8 +1379,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const GLsizei depth = 1;
     const TexImageSourceAdapter src(&anySrc, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(funcDims, target, level, internalFormat, width, height,
-                       depth, border, src, Nothing());
+    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
+                       depth}, border, src, Nothing());
   }
 
   void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
@@ -1388,8 +1392,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const GLint zOffset = 0;
     const GLsizei depth = 1;
     const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, src,
+    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, unpackFormat, src,
                           Some(imageSize));
   }
 
@@ -1405,8 +1409,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const GLsizei depth = 1;
     const TexImageSourceAdapter src(&anySrc, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, src, Nothing());
+    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, unpackFormat, src, Nothing());
   }
 
   ////////////////////////////////////
@@ -1419,8 +1423,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const FuncScope scope(this, FuncScopeId::compressedTexImage3D);
     const uint8_t funcDims = 3;
     const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexImage(funcDims, target, level, internalFormat, width, height,
-                       depth, border, src, Some(imageSize));
+    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
+                       depth}, border, src, Some(imageSize));
   }
 
   template <typename T>
@@ -1433,8 +1437,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const uint8_t funcDims = 3;
     const TexImageSourceAdapter src(&anySrc, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(funcDims, target, level, internalFormat, width, height,
-                       depth, border, src, Nothing());
+    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
+                       depth}, border, src, Nothing());
   }
 
   void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset,
@@ -1445,8 +1449,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const FuncScope scope(this, FuncScopeId::compressedTexSubImage3D);
     const uint8_t funcDims = 3;
     const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, src,
+    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, unpackFormat, src,
                           Some(imageSize));
   }
 
@@ -1461,8 +1465,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     const uint8_t funcDims = 3;
     const TexImageSourceAdapter src(&anySrc, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, src, Nothing());
+    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, unpackFormat, src, Nothing());
   }
 
   // -
@@ -1470,41 +1474,35 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void CopyTexSubImage2D(GLenum target, GLint level, GLint xOffset,
                          GLint yOffset, GLint x, GLint y, GLsizei width,
                          GLsizei height) const {
-    CopyTexSubImage(2, target, level, xOffset, yOffset, 0, x, y, width, height);
+    CopyTexSubImage(2, target, level, {xOffset, yOffset, 0}, {x, y}, {width, height});
   }
 
   void CopyTexSubImage3D(GLenum target, GLint level, GLint xOffset,
                          GLint yOffset, GLint zOffset, GLint x, GLint y,
                          GLsizei width, GLsizei height) const {
-    CopyTexSubImage(3, target, level, xOffset, yOffset, zOffset, x, y, width, height);
+    CopyTexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {x, y}, {width, height});
   }
 
  protected:
   // Primitive tex upload functions
   void TexImage(uint8_t funcDims, GLenum target, GLint level,
-                GLenum internalFormat, GLsizei width, GLsizei height,
-                GLsizei depth, GLint border, GLenum unpackFormat,
+                GLenum internalFormat, ivec3 size, GLint border, GLenum unpackFormat,
                 GLenum unpackType, const TexImageSource& src) const;
-  void TexSubImage(uint8_t funcDims, GLenum target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, GLsizei width, GLsizei height,
-                   GLsizei depth, GLenum unpackFormat, GLenum unpackType,
+  void TexSubImage(uint8_t funcDims, GLenum target, GLint level, ivec3 offset, ivec3 size,
+                   GLenum unpackFormat, GLenum unpackType,
                    const TexImageSource& src) const;
   void CompressedTexImage(uint8_t funcDims, GLenum target, GLint level,
-                          GLenum internalFormat, GLsizei width, GLsizei height,
-                          GLsizei depth, GLint border,
+                          GLenum internalFormat, ivec3 size, GLint border,
                           const TexImageSource& src,
                           const Maybe<GLsizei>& expectedImageSize) const;
   void CompressedTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                             GLint xOffset, GLint yOffset, GLint zOffset,
-                             GLsizei width, GLsizei height, GLsizei depth,
+                             ivec3 offset, ivec3 size,
                              GLenum unpackFormat, const TexImageSource& src,
                              const Maybe<GLsizei>& expectedImageSize) const;
   void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat,
-                      GLint x, GLint y, GLsizei width, GLsizei height,
-                      GLint border) const;
-  void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level, GLint xOffset,
-                         GLint yOffset, GLint zOffset, GLint x, GLint y,
-                         GLsizei width, GLsizei height) const;
+                      ivec2 srcOffset, ivec2 size, GLint border) const;
+  void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level, ivec3 dstOffset,
+                       ivec2 srcOffset, ivec2 size) const;
 
   // ------------------------ Uniforms and attributes ------------------------
  public:
@@ -1512,13 +1510,13 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
 
  private:
-  void UniformNTV(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t, bool v,
+  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t,
     const Range<const uint8_t>& bytes) const;
 
   template<typename T>
-  void UniformNTV(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t, bool v,
+  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t,
           const Range<T>& range) const {
-    UniformNTV(loc, n, t, v, Range<const uint8_t>(range));
+    UniformNTV(loc, n, t, Range<const uint8_t>(range));
   }
 
   template<typename T, size_t N>
@@ -1552,22 +1550,22 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   #define _(T,Type,BaseType) \
     void Uniform1 ## T(const WebGLUniformLocationJS* const loc, Type x) const { \
       const Type arr[] = { x }; \
-      UniformNTV(loc, 1, BaseType, false, MakeRange(arr)); \
+      UniformNTv(loc, 1, BaseType, MakeRange(arr)); \
     } \
     void Uniform2 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y) const { \
       const Type arr[] = { x, y }; \
-      UniformNTV(loc, 2, BaseType, false, MakeRange(arr)); \
+      UniformNTv(loc, 2, BaseType, MakeRange(arr)); \
     } \
     void Uniform3 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y, Type z) const { \
       const Type arr[] = { x, y, z }; \
-      UniformNTV(loc, 3, BaseType, false, MakeRange(arr)); \
+      UniformNTv(loc, 3, BaseType, MakeRange(arr)); \
     } \
     void Uniform4 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y, Type z, Type w) const { \
       const Type arr[] = { x, y, z, w }; \
-      UniformNTV(loc, 4, BaseType, false, MakeRange(arr)); \
+      UniformNTv(loc, 4, BaseType, MakeRange(arr)); \
     }
 
   _(f,float,webgl::AttribBaseType::Float)
@@ -1580,7 +1578,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   #define _(N,T,BaseType,TypeListU) \
     void Uniform ## N ## T ## v(const WebGLUniformLocationJS* const loc, const TypeListU& list) const { \
-      UniformNTV(loc, N, BaseType, true, MakeRange(list)); \
+      UniformNTv(loc, N, BaseType, MakeRange(list)); \
     }
 
   _(1,f,webgl::AttribBaseType::Float,Float32ListU)
@@ -1634,6 +1632,13 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   WebGLsizeiptr GetVertexAttribOffset(GLuint index, GLenum pname);
 
+  // -
+
+private:
+  void VertexAttribNTv(GLuint index, uint8_t n, webgl::AttribBaseType,
+      const Range<const uint8_t>&);
+
+public:
   void VertexAttrib1f(GLuint index, GLfloat x) {
     VertexAttrib4f(index, x, 0, 0, 1);
   }
@@ -1643,6 +1648,12 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void VertexAttrib3f(GLuint index, GLfloat x, GLfloat y, GLfloat z) {
     VertexAttrib4f(index, x, y, z, 1);
   }
+  void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w) {
+    const float arr[4] = {x, y, z, w};
+    VertexAttribNT(index, 4, webgl::AttribBaseType::Float, arr);
+  }
+
+  // -
 
   void VertexAttrib1fv(const GLuint index, const Float32ListU& list) {
     VertexAttrib4fv(index, list, 1);
@@ -1656,13 +1667,24 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     VertexAttrib4fv(index, list, 3);
   }
 
-  void VertexAttrib4fv(GLuint index, const Float32ListU& list, uint8_t n = 4);
-  void VertexAttribI4iv(GLuint index, const Int32ListU& list);
-  void VertexAttribI4uiv(GLuint index, const Uint32ListU& list);
+  void VertexAttrib4fv(GLuint index, const Float32ListU& list, uint8_t n = 4) {
+    VertexAttribNTv(index, n, webgl::AttribBaseType::Float, MakeByteRange(list));
+  }
+  void VertexAttribI4iv(GLuint index, const Int32ListU& list) {
+    VertexAttribNTv(index, 4, webgl::AttribBaseType::Int, MakeByteRange(list));
+  }
+  void VertexAttribI4uiv(GLuint index, const Uint32ListU& list) {
+    VertexAttribNTv(index, 4, webgl::AttribBaseType::UInt, MakeByteRange(list));
+  }
 
-  void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-  void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w);
-  void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w);
+  void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w) {
+    const int32_t arr[4] = {x, y, z, w};
+    VertexAttribNT(index, 4, webgl::AttribBaseType::Int, MakeByteRange(arr));
+  }
+  void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w) {
+    const uint32_t arr[4] = {x, y, z, w};
+    VertexAttribNT(index, 4, webgl::AttribBaseType::UInt, MakeByteRange(arr));
+  }
 
   void VertexAttribIPointer(GLuint index, GLint size, GLenum type,
                             GLsizei stride, WebGLintptr byteOffset) const;
@@ -1797,7 +1819,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   void MOZDebugGetParameter(JSContext* cx, GLenum pname,
                             JS::MutableHandle<JS::Value> retval,
-                            ErrorResult& rv) const;
+                            ErrorResult& rv) const {
+    GetParameter(cx, pname, retval, rv, true);
+  }
 
   // -------------------------------------------------------------------------
   // Client-side methods.  Calls in the Host are forwarded to the client.

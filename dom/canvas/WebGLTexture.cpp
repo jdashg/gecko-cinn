@@ -819,23 +819,23 @@ void WebGLTexture::GenerateMipmap() {
   PopulateMipChain(maxLevel);
 }
 
-MaybeWebGLVariant WebGLTexture::GetTexParameter(TexTarget texTarget,
-                                                GLenum pname) {
+Maybe<double> WebGLTexture::GetTexParameter(TexTarget texTarget,
+                                                GLenum pname) const {
   GLint i = 0;
   GLfloat f = 0.0f;
 
   switch (pname) {
     case LOCAL_GL_TEXTURE_BASE_LEVEL:
-      return AsSomeVariant(mBaseMipmapLevel);
+      return Some(mBaseMipmapLevel);
 
     case LOCAL_GL_TEXTURE_MAX_LEVEL:
-      return AsSomeVariant(mMaxMipmapLevel);
+      return Some(mMaxMipmapLevel);
 
     case LOCAL_GL_TEXTURE_IMMUTABLE_FORMAT:
-      return AsSomeVariant(mImmutable);
+      return Some(mImmutable);
 
     case LOCAL_GL_TEXTURE_IMMUTABLE_LEVELS:
-      return AsSomeVariant(uint32_t(mImmutableLevelCount));
+      return Some(uint32_t(mImmutableLevelCount));
 
     case LOCAL_GL_TEXTURE_MIN_FILTER:
     case LOCAL_GL_TEXTURE_MAG_FILTER:
@@ -845,13 +845,13 @@ MaybeWebGLVariant WebGLTexture::GetTexParameter(TexTarget texTarget,
     case LOCAL_GL_TEXTURE_COMPARE_MODE:
     case LOCAL_GL_TEXTURE_COMPARE_FUNC:
       mContext->gl->fGetTexParameteriv(texTarget.get(), pname, &i);
-      return AsSomeVariant(uint32_t(i));
+      return Some(uint32_t(i));
 
     case LOCAL_GL_TEXTURE_MAX_ANISOTROPY_EXT:
     case LOCAL_GL_TEXTURE_MAX_LOD:
     case LOCAL_GL_TEXTURE_MIN_LOD:
       mContext->gl->fGetTexParameterfv(texTarget.get(), pname, &f);
-      return AsSomeVariant(float(f));
+      return Some(float(f));
 
     default:
       MOZ_CRASH("GFX: Unhandled pname.");

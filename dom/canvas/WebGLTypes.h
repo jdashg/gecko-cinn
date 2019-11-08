@@ -404,8 +404,37 @@ struct avec2 {
   bool operator!=(const avec2& rhs) const { return !(*this == rhs); }
 };
 
+template <typename T>
+struct avec3 {
+  T x = T();
+  T y = T();
+  T z = T();
+
+  template <typename U, typename V>
+  static Maybe<avec3> From(const U _x, const V _y, const V _z) {
+    const auto x = CheckedInt<T>(_x);
+    const auto y = CheckedInt<T>(_y);
+    const auto z = CheckedInt<T>(_z);
+    if (!x.isValid() || !y.isValid() || !z.isValid()) return {};
+    return Some(avec3(x.value(), y.value(), z.value()));
+  }
+
+  template <typename U>
+  static auto From(const U& val) {
+    return From(val.x, val.y, val.z);
+  }
+
+  avec3() = default;
+  avec3(const T _x, const T _y, const T _z) : x(_x), y(_y), z(_z) {}
+
+  bool operator==(const avec3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+  bool operator!=(const avec3& rhs) const { return !(*this == rhs); }
+};
+
 typedef avec2<int32_t> ivec2;
+typedef avec3<int32_t> ivec3;
 typedef avec2<uint32_t> uvec2;
+typedef avec3<uint32_t> uvec3;
 
 // -
 
@@ -476,6 +505,11 @@ struct InitContextResult final {
   uint16_t maxVertexAttribs = 0;
   uint8_t maxUniformBufferBindings = 0;
   uint16_t uniformBufferOffsetAlignment = 0;
+  GLsizei maxViewportDims[2] = {};
+  float pointSizeRange[2] = {};
+  float lineWidthRange[2] = {};
+  uint64_t queryCounterBitsTimeElapsed = 0;
+  uint64_t queryCounterBitsTimestamp = 0;
 };
 
 struct ErrorInfo final {
@@ -522,11 +556,11 @@ struct ActiveAttribInfo final : public ActiveInfo {
 
 struct ActiveUniformInfo final : public ActiveInfo {
   std::unordered_map<uint32_t, uint32_t> locByIndex; // Uniform array locations are sparse.
-  int32_t block = -1;
+  int32_t block_index = -1;
   int32_t block_offset = -1; // In block, offset.
   int32_t block_arrayStride = -1;
   int32_t block_matrixStride = -1;
-  bool isRowMajor = false;
+  bool block_isRowMajor = false;
 };
 
 struct ActiveUniformBlockInfo final {
@@ -538,15 +572,25 @@ struct ActiveUniformBlockInfo final {
   bool referencedByFragmentShader = false;
 };
 
-struct LinkResult final {
-  bool pending = true;
-  bool success = false;
+struct LinkActiveInfo final {
   std::vector<ActiveAttribInfo> activeAttribs;
   std::vector<ActiveUniformInfo> activeUniforms;
   std::vector<ActiveUniformBlockInfo> activeUniformBlocks;
   std::vector<ActiveInfo> activeTfVaryings;
-  uint8_t tfBufferNum = 0;
-  std::unordered_map<std::string, uint32_t> fragDataLocByName;
+};
+
+struct LinkResult final {
+  bool pending = true;
+  bool success = false;
+  LinkActiveInfo active;
+  uint8_t numTfBuffers = 0;
+};
+
+// -
+
+struct GetUniformData final {
+  GLenum type = 0;
+  uint8_t data[4*4*sizeof(float)] = {};
 };
 
 }  // namespace webgl
@@ -558,60 +602,6 @@ struct ICRData {
   bool supportsAlpha;
   bool isPremultAlpha;
 };
-
-using Int32Array2 = Array<int32_t, 2>;
-using Int32Array4 = Array<int32_t, 4>;
-using Uint32Array4 = Array<uint32_t, 4>;
-using Float32Array2 = Array<float, 2>;
-using Float32Array4 = Array<float, 4>;
-using BoolArray4 = Array<bool, 4>;
-
-// First is vertex shader, second is fragment shader.
-using WebGLVariant =
-    Variant<int32_t, uint32_t, int64_t, uint64_t, bool, float, double,
-            nsCString, nsString, Int32Array2, Int32Array4, Uint32Array4,
-            Float32Array2, Float32Array4, BoolArray4, nsTArray<uint32_t>,
-            nsTArray<int32_t>, nsTArray<bool>, nsTArray<float>>;
-
-using MaybeWebGLVariant = Maybe<WebGLVariant>;
-
-template <typename T>
-class AsSomeVariantT {
-  Maybe<T> mMaybeObj;
-
- public:
-  explicit AsSomeVariantT(Maybe<T>&& aObj) : mMaybeObj(std::move(aObj)) {}
-
-  template <typename... As>
-  MOZ_IMPLICIT operator Maybe<Variant<As...>>() {
-    if (mMaybeObj.isNothing()) {
-      return {};
-    }
-    return Some(Variant<As...>(std::forward<T>(mMaybeObj.ref())));
-  }
-};
-
-template <typename FullType,
-          typename T = typename RemoveReference<FullType>::Type>
-AsSomeVariantT<T> AsSomeVariant(FullType&& aObj) {
-  return AsSomeVariantT<T>(Some(std::forward<T>(aObj)));
-}
-
-// Stack-based arrays can't be moved
-template <typename T, size_t N>
-AsSomeVariantT<Array<T, N>> AsSomeVariant(const Array<T, N>& aObj) {
-  return AsSomeVariantT<Array<T, N>>(Some(aObj));
-}
-
-template <typename T>
-AsSomeVariantT<T> AsSomeVariant(const Maybe<T>& aObj) {
-  return AsSomeVariantT<T>(aObj);
-}
-
-template <typename T>
-AsSomeVariantT<T> AsSomeVariant(Maybe<T>&& aObj) {
-  return AsSomeVariantT<T>(std::move(aObj));
-}
 
 /**
  * Represents a block of memory that it may or may not own.  The

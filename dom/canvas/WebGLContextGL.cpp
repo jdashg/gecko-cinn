@@ -549,7 +549,7 @@ void WebGLContext::FrontFace(GLenum mode) {
   gl->fFrontFace(mode);
 }
 
-MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target,
+Maybe<double> WebGLContext::GetBufferParameter(GLenum target,
                                                    GLenum pname) {
   const FuncScope funcScope(*this, "getBufferParameter");
   if (IsContextLost()) return Nothing();
@@ -565,10 +565,10 @@ MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target,
 
   switch (pname) {
     case LOCAL_GL_BUFFER_SIZE:
-      return AsSomeVariant(buffer->ByteLength());
+      return Some(buffer->ByteLength());
 
     case LOCAL_GL_BUFFER_USAGE:
-      return AsSomeVariant(buffer->Usage());
+      return Some(buffer->Usage());
 
     default:
       ErrorInvalidEnumInfo("pname", pname);
@@ -576,7 +576,7 @@ MaybeWebGLVariant WebGLContext::GetBufferParameter(GLenum target,
   }
 }
 
-MaybeWebGLVariant WebGLContext::GetFramebufferAttachmentParameter(
+Maybe<double> WebGLContext::GetFramebufferAttachmentParameter(
     GLenum target, GLenum attachment, GLenum pname) {
   const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
   if (IsContextLost()) return Nothing();
@@ -629,12 +629,12 @@ MaybeWebGLVariant WebGLContext::GetFramebufferAttachmentParameter(
           break;
         case LOCAL_GL_DEPTH:
           if (!mOptions.depth) {
-            return AsSomeVariant(LOCAL_GL_NONE);
+            return Some(LOCAL_GL_NONE);
           }
           break;
         case LOCAL_GL_STENCIL:
           if (!mOptions.stencil) {
-            return AsSomeVariant(LOCAL_GL_NONE);
+            return Some(LOCAL_GL_NONE);
           }
           break;
         default:
@@ -643,64 +643,64 @@ MaybeWebGLVariant WebGLContext::GetFramebufferAttachmentParameter(
               " or STENCIL for GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE");
           return Nothing();
       }
-      return AsSomeVariant(LOCAL_GL_FRAMEBUFFER_DEFAULT);
+      return Some(LOCAL_GL_FRAMEBUFFER_DEFAULT);
 
       ////////////////
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE:
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE:
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE:
-      if (attachment == LOCAL_GL_BACK) return AsSomeVariant(8);
-      return AsSomeVariant(0);
+      if (attachment == LOCAL_GL_BACK) return Some(8);
+      return Some(0);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE:
       if (attachment == LOCAL_GL_BACK) {
         if (mOptions.alpha) {
-          return AsSomeVariant(8);
+          return Some(8);
         }
         ErrorInvalidOperation(
             "The default framebuffer doesn't contain an alpha buffer");
         return Nothing();
       }
-      return AsSomeVariant(0);
+      return Some(0);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE:
       if (attachment == LOCAL_GL_DEPTH) {
         if (mOptions.depth) {
-          return AsSomeVariant(24);
+          return Some(24);
         }
         ErrorInvalidOperation(
             "The default framebuffer doesn't contain an depth buffer");
         return Nothing();
       }
-      return AsSomeVariant(0);
+      return Some(0);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE:
       if (attachment == LOCAL_GL_STENCIL) {
         if (mOptions.stencil) {
-          return AsSomeVariant(8);
+          return Some(8);
         }
         ErrorInvalidOperation(
             "The default framebuffer doesn't contain an stencil buffer");
         return Nothing();
       }
-      return AsSomeVariant(0);
+      return Some(0);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE:
       if (attachment == LOCAL_GL_STENCIL) {
         if (mOptions.stencil) {
-          return AsSomeVariant(LOCAL_GL_UNSIGNED_INT);
+          return Some(LOCAL_GL_UNSIGNED_INT);
         }
         ErrorInvalidOperation(
             "The default framebuffer doesn't contain an stencil buffer");
       } else if (attachment == LOCAL_GL_DEPTH) {
         if (mOptions.depth) {
-          return AsSomeVariant(LOCAL_GL_UNSIGNED_NORMALIZED);
+          return Some(LOCAL_GL_UNSIGNED_NORMALIZED);
         }
         ErrorInvalidOperation(
             "The default framebuffer doesn't contain an depth buffer");
       } else {  // LOCAL_GL_BACK
-        return AsSomeVariant(LOCAL_GL_UNSIGNED_NORMALIZED);
+        return Some(LOCAL_GL_UNSIGNED_NORMALIZED);
       }
       return Nothing();
 
@@ -718,14 +718,14 @@ MaybeWebGLVariant WebGLContext::GetFramebufferAttachmentParameter(
           return Nothing();
         }
       }
-      return AsSomeVariant(LOCAL_GL_LINEAR);
+      return Some(LOCAL_GL_LINEAR);
   }
 
   ErrorInvalidEnumInfo("pname", pname);
   return Nothing();
 }
 
-MaybeWebGLVariant WebGLContext::GetRenderbufferParameter(GLenum target,
+Maybe<double> WebGLContext::GetRenderbufferParameter(GLenum target,
                                                          GLenum pname) {
   const FuncScope funcScope(*this, "getRenderbufferParameter");
   if (IsContextLost()) return Nothing();
@@ -756,7 +756,7 @@ MaybeWebGLVariant WebGLContext::GetRenderbufferParameter(GLenum target,
     case LOCAL_GL_RENDERBUFFER_INTERNAL_FORMAT: {
       // RB emulation means we have to ask the RB itself.
       GLint i = mBoundRenderbuffer->GetRenderbufferParameter(target, pname);
-      return AsSomeVariant(i);
+      return Some(i);
     }
 
     default:
@@ -1588,11 +1588,9 @@ static bool ValidateArrOffsetAndCount(WebGLContext* webgl, size_t elemsAvail,
   return true;
 }
 
-void WebGLContext::UniformNiv(const char* funcName, uint8_t N,
-                              WebGLUniformLocation* loc,
-                              const RawBuffer<const GLint>& arr,
-                              GLuint elemOffset, GLuint elemCountOverride) {
-  const FuncScope funcScope(*this, funcName);
+void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, webgl::AttribBaseType t,
+                              const RawBuffer<>& data) const {
+  const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
 
   size_t elemCount;
   if (!ValidateArrOffsetAndCount(this, arr.Length(), elemOffset,

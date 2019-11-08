@@ -101,7 +101,7 @@ bool WebGLUniformLocation::ValidateArrayLength(uint8_t setterElemSize,
   return true;
 }
 
-MaybeWebGLVariant WebGLUniformLocation::GetUniform() const {
+UniqueBuffer WebGLUniformLocation::GetUniform() const {
   MOZ_ASSERT(mLinkInfo);
 
   const uint8_t elemSize = mInfo->mActiveInfo.mElemSize;
@@ -136,7 +136,7 @@ MaybeWebGLVariant WebGLUniformLocation::GetUniform() const {
       gl->fGetUniformiv(prog, mLoc, buffer);
       nsTArray<int32_t> ret;
       ret.AppendElements(buffer, elemSize);
-      return AsSomeVariant(ret);
+      return Some(ret);
     }
 
     case LOCAL_GL_BOOL:
@@ -147,7 +147,7 @@ MaybeWebGLVariant WebGLUniformLocation::GetUniform() const {
       gl->fGetUniformiv(prog, mLoc, buffer);
       nsTArray<bool> ret;
       ret.AppendElements(buffer, elemSize);
-      return AsSomeVariant(ret);
+      return Some(ret);
     }
 
     case LOCAL_GL_FLOAT:
@@ -167,7 +167,7 @@ MaybeWebGLVariant WebGLUniformLocation::GetUniform() const {
       gl->fGetUniformfv(prog, mLoc, buffer);
       nsTArray<float> ret;
       ret.AppendElements(buffer, elemSize);
-      return AsSomeVariant(ret);
+      return Some(ret);
     }
 
     case LOCAL_GL_UNSIGNED_INT:
@@ -178,7 +178,7 @@ MaybeWebGLVariant WebGLUniformLocation::GetUniform() const {
       gl->fGetUniformuiv(prog, mLoc, buffer);
       nsTArray<uint32_t> ret;
       ret.AppendElements(buffer, elemSize);
-      return AsSomeVariant(ret);
+      return Some(ret);
     }
 
     default:

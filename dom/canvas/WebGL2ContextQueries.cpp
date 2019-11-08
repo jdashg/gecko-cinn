@@ -98,58 +98,6 @@ void WebGLContext::EndQuery(GLenum target) {
   query->EndQuery();
 }
 
-MaybeWebGLVariant WebGLContext::GetQuery(GLenum target, GLenum pname) {
-  const FuncScope funcScope(*this, "getQuery");
-
-  if (IsContextLost()) return Nothing();
-
-  switch (pname) {
-    case LOCAL_GL_CURRENT_QUERY_EXT: {
-      if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query) &&
-          target == LOCAL_GL_TIMESTAMP) {
-        // Doesn't seem illegal to ask about, but is always null.
-        // TIMESTAMP has no slot, so ValidateQuerySlotByTarget would generate
-        // INVALID_ENUM.
-        return Nothing();
-      }
-
-      const auto& slot = ValidateQuerySlotByTarget(target);
-      if (!slot || !*slot) return Nothing();
-
-      const auto& query = *slot;
-      if (target != query->Target()) return Nothing();
-
-      return AsSomeVariant(std::move(query));
-    }
-
-    case LOCAL_GL_QUERY_COUNTER_BITS_EXT:
-      if (!IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query))
-        break;
-
-      if (target != LOCAL_GL_TIME_ELAPSED_EXT &&
-          target != LOCAL_GL_TIMESTAMP_EXT) {
-        ErrorInvalidEnumInfo("target", target);
-        return Nothing();
-      }
-
-      {
-        GLint bits = 0;
-        gl->fGetQueryiv(target, pname, &bits);
-
-        if (!Has64BitTimestamps() && bits > 32) {
-          bits = 32;
-        }
-        return AsSomeVariant(bits);
-      }
-
-    default:
-      break;
-  }
-
-  ErrorInvalidEnumInfo("pname", pname);
-  return Nothing();
-}
-
 MaybeWebGLVariant WebGLContext::GetQueryParameter(const WebGLQuery* query,
                                                   GLenum pname) {
   const FuncScope funcScope(*this, "getQueryParameter");
