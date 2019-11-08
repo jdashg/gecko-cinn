@@ -555,23 +555,24 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void FrontFace(GLenum mode);
 
   GLint GetAttribLocation(const WebGLProgram* prog, const nsAString& name);
-  MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
+  Maybe<double> GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
-  MaybeWebGLVariant GetFramebufferAttachmentParameter(GLenum target,
+
+  GLint GetFragDataLocation(const WebGLProgram*, const std::string& name) const;
+
+  Maybe<double> GetFramebufferAttachmentParameter(GLenum target,
                                                       GLenum attachment,
                                                       GLenum pname);
 
-  MaybeWebGLVariant GetProgramParameter(const WebGLProgram* prog, GLenum pname);
+  Maybe<double> GetRenderbufferParameter(GLenum target, GLenum pname);
 
-  nsString GetProgramInfoLog(const WebGLProgram* prog);
-  MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
+  webgl::LinkResult GetLinkResult(const WebGLProgram*) const;
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(
       GLenum shadertype, GLenum precisiontype) const;
 
-  MaybeWebGLVariant GetUniform(const WebGLProgram* prog,
-                               const WebGLUniformLocation* loc);
+  webgl::GetUniformData GetUniform(const WebGLProgram*, uint32_t loc) const;
 
   void Hint(GLenum target, GLenum mode);
 
@@ -641,15 +642,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   //////////////////////////
 
-  void UniformNfv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
-                  const RawBuffer<const GLfloat>& arr, GLuint elemOffset,
-                  GLuint elemCountOverride);
-  void UniformNiv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
-                  const RawBuffer<const GLint>& arr, GLuint elemOffset,
-                  GLuint elemCountOverride);
-  void UniformNuiv(const char* funcName, uint8_t N, WebGLUniformLocation* loc,
-                   const RawBuffer<const GLuint>& arr, GLuint elemOffset,
-                   GLuint elemCountOverride);
+  void UniformNTv(uint32_t loc, uint8_t n, webgl::AttribBaseType t,
+                  const RawBuffer<>& data) const;
 
   void UniformMatrixAxBfv(const char* funcName, uint8_t A, uint8_t B,
                           WebGLUniformLocation* loc, bool transpose,
@@ -783,10 +777,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool IsQuery(const WebGLQuery* query);
   void BeginQuery(GLenum target, WebGLQuery* query);
   void EndQuery(GLenum target);
-  MaybeWebGLVariant GetQuery(GLenum target, GLenum pname);
-  MaybeWebGLVariant GetQueryParameter(const WebGLQuery* query, GLenum pname);
-
-  MaybeWebGLVariant MOZDebugGetParameter(GLenum pname) const;
+  Maybe<double> GetQueryParameter(const WebGLQuery* query, GLenum pname);
 
   void QueryCounter(WebGLQuery*, const GLenum target) const;
 
@@ -799,7 +790,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void Disable(GLenum cap) { SetEnabled("disabled", cap, false); }
   void Enable(GLenum cap) { SetEnabled("enabled", cap, true); }
   bool GetStencilBits(GLint* const out_stencilBits) const;
-  virtual MaybeWebGLVariant GetParameter(GLenum pname);
+
+  virtual Maybe<double> GetParameter(GLenum pname) const;
+  Maybe<std::string> GetString(GLenum pname) const;
 
   bool IsEnabled(GLenum cap);
 
@@ -844,7 +837,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DeleteTexture(WebGLTexture* tex);
   void GenerateMipmap(GLenum texTarget);
 
-  MaybeWebGLVariant GetTexParameter(GLenum texTarget, GLenum pname);
+  Maybe<double> GetTexParameter(GLenum texTarget, GLenum pname);
   void TexParameter_base(GLenum texTarget, GLenum pname,
                          const FloatOrInt& param);
 
@@ -938,9 +931,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void EnableVertexAttribArray(GLuint index);
   void DisableVertexAttribArray(GLuint index);
 
-  MaybeWebGLVariant GetVertexAttrib(GLuint index, GLenum pname);
-
-  WebGLsizeiptr GetVertexAttribOffset(GLuint index, GLenum pname);
+  Maybe<double> GetVertexAttrib(GLuint index, GLenum pname);
 
   ////
 

@@ -234,7 +234,7 @@ void WebGLContext::GenerateMipmap(GLenum rawTexTarget) {
   tex->GenerateMipmap();
 }
 
-MaybeWebGLVariant WebGLContext::GetTexParameter(GLenum rawTexTarget,
+Maybe<double> WebGLContext::GetTexParameter(GLenum rawTexTarget,
                                                 GLenum pname) {
   const FuncScope funcScope(*this, "getTexParameter");
   const uint8_t funcDims = 0;

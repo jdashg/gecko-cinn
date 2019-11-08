@@ -189,10 +189,6 @@ bool HostWebGLContext::IsEnabled(GLenum cap) {
   return mContext->IsEnabled(cap);
 }
 
-MaybeWebGLVariant HostWebGLContext::GetParameter(GLenum pname) {
-  return mContext->GetParameter(pname);
-}
-
 void HostWebGLContext::AttachShader(const ObjectId progId,
                                     const ObjectId shaderId) {
   const auto prog = Find(mProgramMap, progId);
@@ -350,45 +346,12 @@ GLint HostWebGLContext::GetAttribLocation(const WebGLId<WebGLProgram>& progId,
   return mContext->GetAttribLocation(*prog, name);
 }
 
-MaybeWebGLVariant HostWebGLContext::GetBufferParameter(GLenum target,
-                                                       GLenum pname) {
-  return mContext->GetBufferParameter(target, pname);
-}
-
 GLenum HostWebGLContext::GetError() { return mContext->GetError(); }
-
-MaybeWebGLVariant HostWebGLContext::GetFramebufferAttachmentParameter(
-    GLenum target, GLenum attachment, GLenum pname) {
-  return mContext->GetFramebufferAttachmentParameter(target, attachment, pname);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetProgramParameter(
-    const WebGLId<WebGLProgram>& progId, GLenum pname) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return mContext->GetProgramParameter(*prog, pname);
-}
 
 nsString HostWebGLContext::GetProgramInfoLog(
     const WebGLId<WebGLProgram>& progId) {
   RefPtr<WebGLProgram> prog = MustFind(progId);
   return mContext->GetProgramInfoLog(*prog);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetRenderbufferParameter(GLenum target,
-                                                             GLenum pname) {
-  return mContext->GetRenderbufferParameter(target, pname);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetShaderParameter(
-    const WebGLId<WebGLShader>& shaderId, GLenum pname) {
-  RefPtr<WebGLShader> shader = MustFind(shaderId);
-  return mContext->GetShaderParameter(*shader, pname);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetShaderPrecisionFormat(
-    GLenum shadertype, GLenum precisiontype) {
-  return AsSomeVariant(
-      mContext->GetShaderPrecisionFormat(shadertype, precisiontype));
 }
 
 nsString HostWebGLContext::GetShaderInfoLog(
@@ -401,14 +364,6 @@ nsString HostWebGLContext::GetShaderSource(
     const WebGLId<WebGLShader>& shaderId) {
   RefPtr<WebGLShader> shader = MustFind(shaderId);
   return mContext->GetShaderSource(*shader);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetUniform(
-    const WebGLId<WebGLProgram>& progId,
-    const WebGLId<WebGLUniformLocation>& locId) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  RefPtr<WebGLUniformLocation> loc = MustFind(locId);
-  return mContext->GetUniform(*prog, *loc);
 }
 
 void HostWebGLContext::Hint(GLenum target, GLenum mode) {
@@ -700,11 +655,6 @@ void HostWebGLContext::CopyTexSubImage(uint8_t funcDims, GLenum target,
                             x, y, width, height, depth);
 }
 
-MaybeWebGLVariant HostWebGLContext::GetTexParameter(GLenum texTarget,
-                                                    GLenum pname) {
-  return mContext->GetTexParameter(texTarget, pname);
-}
-
 void HostWebGLContext::TexParameter_base(GLenum texTarget, GLenum pname,
                                          const FloatOrInt& param) {
   mContext->TexParameter_base(texTarget, pname, param);
@@ -841,50 +791,6 @@ void HostWebGLContext::VertexAttribI4ui(GLuint index, GLuint x, GLuint y,
   GetWebGL2Context()->VertexAttribI4ui(index, x, y, z, w);
 }
 
-void HostWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor) {
-  GetWebGL2Context()->VertexAttribDivisor(index, divisor);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetIndexedParameter(GLenum target,
-                                                        GLuint index) {
-  return GetWebGL2Context()->GetIndexedParameter(target, index);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetUniformIndices(
-    const WebGLId<WebGLProgram>& progId,
-    const nsTArray<nsString>& uniformNames) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return GetWebGL2Context()->GetUniformIndices(*prog, uniformNames);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetActiveUniforms(
-    const WebGLId<WebGLProgram>& progId, const nsTArray<GLuint>& uniformIndices,
-    GLenum pname) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return GetWebGL2Context()->GetActiveUniforms(*prog, uniformIndices, pname);
-}
-
-GLuint HostWebGLContext::GetUniformBlockIndex(
-    const WebGLId<WebGLProgram>& progId, const nsString& uniformBlockName) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return GetWebGL2Context()->GetUniformBlockIndex(*prog, uniformBlockName);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetActiveUniformBlockParameter(
-    const WebGLId<WebGLProgram>& progId, GLuint uniformBlockIndex,
-    GLenum pname) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return GetWebGL2Context()->GetActiveUniformBlockParameter(
-      *prog, uniformBlockIndex, pname);
-}
-
-nsString HostWebGLContext::GetActiveUniformBlockName(
-    const WebGLId<WebGLProgram>& progId, GLuint uniformBlockIndex) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return GetWebGL2Context()->GetActiveUniformBlockName(*prog,
-                                                       uniformBlockIndex);
-}
-
 void HostWebGLContext::UniformBlockBinding(const WebGLId<WebGLProgram>& progId,
                                            GLuint uniformBlockIndex,
                                            GLuint uniformBlockBinding) {
@@ -899,16 +805,6 @@ void HostWebGLContext::EnableVertexAttribArray(GLuint index) {
 
 void HostWebGLContext::DisableVertexAttribArray(GLuint index) {
   mContext->DisableVertexAttribArray(index);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetVertexAttrib(GLuint index,
-                                                    GLenum pname) {
-  return mContext->GetVertexAttrib(index, pname);
-}
-
-WebGLsizeiptr HostWebGLContext::GetVertexAttribOffset(GLuint index,
-                                                      GLenum pname) {
-  return mContext->GetVertexAttribOffset(index, pname);
 }
 
 void HostWebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
@@ -980,12 +876,6 @@ void HostWebGLContext::SamplerParameterf(const WebGLId<WebGLSampler>& samplerId,
   GetWebGL2Context()->SamplerParameterf(*sampler, pname, param);
 }
 
-MaybeWebGLVariant HostWebGLContext::GetSamplerParameter(
-    const WebGLId<WebGLSampler>& samplerId, GLenum pname) {
-  RefPtr<WebGLSampler> sampler = MustFind(samplerId);
-  return GetWebGL2Context()->GetSamplerParameter(*sampler, pname);
-}
-
 // ------------------------------- GL Sync ---------------------------------
 void HostWebGLContext::DeleteSync(const WebGLId<WebGLSync>& sync) {
   GetWebGL2Context()->DeleteSync(Find(sync));
@@ -999,11 +889,6 @@ GLenum HostWebGLContext::ClientWaitSync(const WebGLId<WebGLSync>& sync,
 void HostWebGLContext::WaitSync(const WebGLId<WebGLSync>& sync,
                                 GLbitfield flags, GLint64 timeout) {
   GetWebGL2Context()->WaitSync(*MustFind(sync), flags, timeout);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetSyncParameter(
-    const WebGLId<WebGLSync>& sync, GLenum pname) {
-  return GetWebGL2Context()->GetSyncParameter(*MustFind(sync), pname);
 }
 
 // -------------------------- Transform Feedback ---------------------------
@@ -1080,10 +965,6 @@ void HostWebGLContext::LoseContext(const webgl::ContextLossReason reason) {
   mContext->LoseContext(reason);
 }
 
-MaybeWebGLVariant HostWebGLContext::MOZDebugGetParameter(GLenum pname) const {
-  return mContext->MOZDebugGetParameter(pname);
-}
-
 // VertexArrayObjectEXT
 void HostWebGLContext::BindVertexArray(const WebGLId<WebGLVertexArray>& array) {
   GetWebGL2Context()->BindVertexArray(Find(array));
@@ -1129,18 +1010,6 @@ void HostWebGLContext::EndQuery(GLenum target) const {
 void HostWebGLContext::QueryCounter(const WebGLId<WebGLQuery>& query,
                                     GLenum target) const {
   return mContext->QueryCounter(*MustFind(query), target);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetQuery(GLenum target,
-                                             GLenum pname) const {
-  return const_cast<WebGL2Context*>(GetWebGL2Context())
-      ->GetQuery(target, pname);
-}
-
-MaybeWebGLVariant HostWebGLContext::GetQueryParameter(
-    const WebGLId<WebGLQuery>& query, GLenum pname) const {
-  return const_cast<WebGL2Context*>(GetWebGL2Context())
-      ->GetQueryParameter(*MustFind(query), pname);
 }
 
 already_AddRefed<layers::SharedSurfaceTextureClient>

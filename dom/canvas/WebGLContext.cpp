@@ -2136,67 +2136,406 @@ void WebGLContext::GenerateErrorImpl(const GLenum err,
 
 // -
 
-MaybeWebGLVariant WebGLContext::MOZDebugGetParameter(const GLenum pname) const {
-  const WebGLContext::FuncScope funcScope(*this, "MOZ_debug.getParameter");
-  if (IsContextLost()) {
-    return {};
-  }
+Maybe<std::string> WebGLContext::GetString(const GLenum pname) const {
+  const WebGLContext::FuncScope funcScope(*this, "getParameter");
+  if (IsContextLost()) return {};
 
   switch (pname) {
     case LOCAL_GL_EXTENSIONS: {
-      nsString ret;
       if (!gl->IsCoreProfile()) {
-        const auto rawExts = (const char*)gl->fGetString(LOCAL_GL_EXTENSIONS);
-        ret = NS_ConvertUTF8toUTF16(rawExts);
-      } else {
-        const auto& numExts = gl->GetIntAs<GLuint>(LOCAL_GL_NUM_EXTENSIONS);
-        for (GLuint i = 0; i < numExts; i++) {
-          const auto rawExt =
-              (const char*)gl->fGetStringi(LOCAL_GL_EXTENSIONS, i);
-          if (i > 0) {
-            ret.AppendLiteral(" ");
-          }
-          ret.Append(NS_ConvertUTF8toUTF16(rawExt));
-        }
+        const auto rawExt = (const char*)gl->fGetString(LOCAL_GL_EXTENSIONS);
+        return Some(std::string(rawExt));
       }
-      return AsSomeVariant(ret);
+      std::string ret;
+      const auto& numExts = gl->GetIntAs<GLuint>(LOCAL_GL_NUM_EXTENSIONS);
+      for (GLuint i = 0; i < numExts; i++) {
+        const auto rawExt =
+            (const char*)gl->fGetStringi(LOCAL_GL_EXTENSIONS, i);
+        if (i > 0) {
+          ret += " ";
+        }
+        ret += rawExt;
+      }
+      return Some(std::move(ret));
     }
 
     case LOCAL_GL_RENDERER:
     case LOCAL_GL_VENDOR:
     case LOCAL_GL_VERSION: {
       const auto raw = (const char*)gl->fGetString(pname);
-      nsString ret = NS_ConvertUTF8toUTF16(raw);
-      return AsSomeVariant(ret);
+      return Some(std::string(raw));
     }
 
     case dom::MOZ_debug_Binding::WSI_INFO: {
       nsCString info;
       gl->GetWSIInfo(&info);
-      nsString ret = NS_ConvertUTF8toUTF16(info);
-      return AsSomeVariant(ret);
+      return Some(std::string(info.BeginReading()));
     }
 
-    case dom::MOZ_debug_Binding::DOES_INDEX_VALIDATION:
-      return AsSomeVariant(std::move(mNeedsIndexValidation));
-
     default:
-      ErrorInvalidEnumInfo("pname", pname);
-      return Nothing();
+      ErrorInvalidEnumArg("pname", pname);
+      return {};
   }
 }
 
-// If no source has been defined, compileShader() has not been called, or the
-// translation has failed for shader, an empty string is returned; otherwise,
-// return the translated source.
-nsString WebGLContext::GetTranslatedShaderSource(
-    const WebGLShader& shader) const {
-  const WebGLContext::FuncScope funcScope(*this, "getShaderTranslatedSource");
-  if (IsContextLost()) return {};
+webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
+        const uint32_t loc) const {
+  webgl::GetUniformData ret;
+  [&]() {
+    if (!prog) return;
 
-  if (!ValidateObject("shader", shader)) return {};
+    const auto& uniform = prog->GetUniformInfo(loc);
+    if (!uniform) return;
+    const auto iloc = static_cast<int32_t>(loc);
 
-  return shader.GetShaderTranslatedSource();
+    switch (uniform->baseType) {
+      case webgl::AttribBaseType::Boolean: {
+        const auto ptr = reinterpret_cast<bool*>(ret.data);
+        gl->fGetUniformfv(prog->mGLName, iloc, ptr);
+        break;
+      }
+      case webgl::AttribBaseType::Float: {
+        const auto ptr = reinterpret_cast<float*>(ret.data);
+        gl->fGetUniformfv(prog->mGLName, iloc, ptr);
+        break;
+      }
+      case webgl::AttribBaseType::Int: {
+        const auto ptr = reinterpret_cast<int32_t*>(ret.data);
+        gl->fGetUniformiv(prog->mGLName, iloc, ptr);
+        break;
+      }
+      case webgl::AttribBaseType::UInt: {
+        const auto ptr = reinterpret_cast<uint32_t*>(ret.data);
+        gl->fGetUniformuiv(prog->mGLName, iloc, ptr);
+        break;
+      }
+    }
+  }();
+  return ret;
+}
+
+// ---------------------------------
+
+struct IndexedName final {
+  std::string name;
+  uint64_t index;
+};
+
+static Maybe<IndexedName> ParseIndexed(const std::string& str) {
+  static const std::regex kRegex("(.*)\\[([0-9]+)\\]");
+
+  std::smatch match;
+  if (!std::regex_match(str, match, kRegex)) return {};
+
+  const auto index = match[2].stoull();
+  return Some({match[1], index});
+}
+
+static std::vector<std::string> ExplodeName(const std::string& str) {
+  std::vector<std::string> ret;
+
+  static const std::regex kSep("[.[\\]]");
+
+  auto itr = std::regex_token_iterator<decltype(str.begin())>(str.begin(), str.end(),
+        kSep, {-1,0});
+  const auto end = decltype(itr)();
+
+  for (; itr != end; ++itr) {
+    const auto& part = itr->str();
+    if (part.size()) {
+      ret.emplace_back(part);
+    }
+  }
+  return ret;
+}
+
+//-
+
+static webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const bool webgl2,
+                                 const std::unordered_map<std::string, std::string>& nameUnmap) {
+  webgl::LinkResult ret;
+  [&]() {
+    const auto fnGetProgramui = [&](const GLenum pname) {
+      GLint ret = 0;
+      gl.fGetProgramiv(prog, pname, &ret);
+      return static_cast<uint32_t>(ret);
+    };
+
+    std::vector<char> stringBuffer(1);
+    const auto fnEnsureCapacity = [&](const GLenum pname) {
+      const auto maxWithNull = fnGetProgramui(pname);
+      if (maxWithNull > stringBuffer.size()) {
+        stringBuffer.resize(maxWithNull);
+      }
+    };
+
+    fnEnsureCapacity(LOCAL_GL_ACTIVE_ATTRIBUTE_MAX_LENGTH);
+    fnEnsureCapacity(LOCAL_GL_ACTIVE_UNIFORM_MAX_LENGTH);
+    if (webgl2) {
+      fnEnsureCapacity(LOCAL_GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH);
+      fnEnsureCapacity(LOCAL_GL_TRANSFORM_FEEDBACK_VARYING_MAX_LENGTH);
+    }
+
+    // -
+
+    const auto fnUnmapName = [&](const std::string& mappedName) {
+      const auto parts = ExplodeName(mappedName);
+
+      ostringstream ret;
+      for (const auto& part : parts) {
+        const auto maybe = MaybeFind(nameUnmap, part);
+        if (maybe) {
+          ret << *maybe;
+        } else {
+          ret << part;
+        }
+      }
+      return ret.str();
+    };
+
+    // -
+
+    {
+      const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_ATTRIBUTES);
+      ret.activeAttribs.reserve(count);
+      for (const auto& i : IntegerRange(count)) {
+        GLsizei lengthWithoutNull = 0;
+        GLint elemCount = 0;  // `size`
+        GLenum elemType = 0;  // `type`
+        gl.fGetActiveAttrib(prog, i, stringBuffer.size(),
+                             &lengthWithoutNull, &elemCount, &elemType,
+                             stringBuffer.data());
+        if (!elemType) {
+          const auto error = gl.fGetError();
+          if (error != LOCAL_GL_CONTEXT_LOST) {
+            gfxCriticalError() << "Failed to do glGetActiveAttrib: " << error;
+          }
+          return;
+        }
+        const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
+        const auto userName = fnUnmapName(mappedName);
+
+        const loc = gl.fGetAttribLocation(prog, userName.c_str());
+        if (mappedName.find("gl_") == 0) {
+          // Bug 1328559: Appears problematic on ANGLE and OSX, but not Linux or
+          // Win+GL.
+          loc = -1;
+        }
+
+  #ifdef DUMP_MakeLinkResult
+        printf_stderr("[attrib %u/%u] @%i %s->%s\n", i, count, loc,
+                      userName.c_str(), mappedName.c_str());
+  #endif
+        ret.activeAttribs.emplace_back(elemType, elemCount, userName, loc);
+      }
+    }
+
+    // -
+
+    {
+      const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORMS);
+      ret.activeUniforms.reserve(count);
+
+      std::vector<GLint> blockIndexList(count, -1);
+      std::vector<GLint> blockOffsetList(count, -1);
+      std::vector<GLint> blockArrayStrideList(count, -1);
+      std::vector<GLint> blockMatrixStrideList(count, -1);
+      std::vector<GLint> blockIsRowMajorList(count, 0);
+
+      if (webgl2) {
+        std::vector<GLuint> activeIndices;
+        activeIndices.reserve(count);
+        for (const auto& i : IntegerRange(count)) {
+          activeIndices.push_back(i);
+        }
+
+        gl.fGetActiveUniformsiv(prog, activeIndices.size(), activeIndices.data(),
+                                LOCAL_GL_UNIFORM_BLOCK_INDEX, blockIndexList.data());
+
+        gl.fGetActiveUniformsiv(prog, activeIndices.size(), activeIndices.data(),
+                                LOCAL_GL_UNIFORM_OFFSET, blockOffsetList.data());
+
+        gl.fGetActiveUniformsiv(prog, activeIndices.size(), activeIndices.data(),
+                                LOCAL_GL_UNIFORM_ARRAY_STRIDE, blockArrayStrideList.data());
+
+        gl.fGetActiveUniformsiv(prog, activeIndices.size(), activeIndices.data(),
+                                LOCAL_GL_UNIFORM_MATRIX_STRIDE, blockMatrixStrideList.data());
+
+        gl.fGetActiveUniformsiv(prog, activeIndices.size(), activeIndices.data(),
+                                LOCAL_GL_UNIFORM_IS_ROW_MAJOR, blockIsRowMajorList.data());
+      }
+
+      for (const auto& i : IntegerRange(count)) {
+        GLsizei lengthWithoutNull = 0;
+        GLint elemCount = 0;  // `size`
+        GLenum elemType = 0;  // `type`
+        gl.fGetActiveUniform(prog->mGLName, i, stringBuffer.size(),
+                              &lengthWithoutNull, &elemCount, &elemType,
+                              stringBuffer.data());
+        if (!elemType) {
+          const auto error = gl->fGetError();
+          if (error != LOCAL_GL_CONTEXT_LOST) {
+            gfxCriticalError() << "Failed to do glGetActiveUniform: " << error;
+          }
+          return;
+        }
+        auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
+
+        // Get true name
+
+        auto baseMappedName = mappedName;
+
+        const bool isArray = [&]() {
+          const auto maybe = ParseIndexed(mappedName);
+          if (maybe) {
+            MOZ_ASSERT(maybe->index == 0);
+            baseMappedName = std::move(maybe->name);
+            return true;
+          }
+
+          // Some drivers give us "foo" instead of "foo[0]" for arrays, but they do of course give
+          // back a location for "foo[0]", so use that to double-check.
+          auto probeName = mappedName + "[0]";
+          const auto loc = gl.fGetUniformLocation(prog, probeName.c_str());
+          if (loc != -1) {
+            // Those liars!
+            mappedName = std::move(probeName);
+            return true;
+          }
+
+          return false;
+        }();
+
+        const auto userName = fnUnmapName(mappedName);
+
+        // -
+
+        auto& info = ret.activeUniforms.emplace_back(elemType, elemCount, userName);
+        info.block_index = blockIndexList[i];
+        info.block_offset = blockOffsetList[i];
+        info.block_arrayStride = blockArrayStrideList[i];
+        info.block_matrixStride = blockMatrixStrideList[i];
+        info.block_isRowMajor = bool(blockIsRowMajorList[i]);
+
+#ifdef DUMP_MakeLinkResult
+        printf_stderr("[uniform %u/%u] %s->%s\n", i+1, count,
+                      userName.c_str(), mappedName.c_str());
+#endif
+
+        // Get uniform locations
+        {
+          std::ostringstream locName;
+          for (const auto i : IntegerRange(static_cast<uint32_t>(elemCount)) {
+            locName.str(baseMappedName);
+            if (isArray) {
+              locName << '"' << i << '"';
+            }
+            const auto& str = locName.str();
+            const auto loc = gl.fGetUniformLocation(prog, str.c_str());
+            if (loc != -1) {
+              info.locByIndex[i] = static_cast<uint32_t>(loc);
+#ifdef DUMP_MakeLinkResult
+              printf_stderr("   [%u] @%i\n", i, loc);
+#endif
+            }
+          }
+        } // anon
+      } // for i
+    } // anon
+
+    if (webgl2) {
+      // -------------------------------------
+      // active uniform blocks
+      {
+        const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORM_BLOCKS);
+        ret.activeUniformBlocks.reserve(count);
+
+        for (const auto& i : IntegerRange(count)) {
+          GLsizei lengthWithoutNull = 0;
+          gl.fGetActiveUniformBlockName(prog, i, stringBuffer.size(), &lengthWithoutNull,
+                stringBuffer.data());
+          const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
+          const auto userName = fnUnmapName(mappedName);
+
+          // -
+
+          auto& info = ret.activeUniformBlocks.emplace_back(userName);
+          GLint val = 0;
+
+          gl.fGetActiveUniformBlockiv(prog, i, LOCAL_GL_UNIFORM_BLOCK_DATA_SIZE, &val);
+          info.dataSize = static_cast<uint32_t>(val);
+
+          gl.fGetActiveUniformBlockiv(prog, i, LOCAL_GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS, &val);
+          info.activeUniformIndices.resize(val);
+          gl.fGetActiveUniformBlockiv(prog, i, LOCAL_GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES,
+              reinterpret_cast<GLint*>(info.activeUniformIndices.data()));
+
+          gl.fGetActiveUniformBlockiv(prog, i,
+              LOCAL_GL_UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER, &val);
+          info.referencedByVertexShader = bool(val);
+
+          gl.fGetActiveUniformBlockiv(prog, i,
+              LOCAL_GL_UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER, &val);
+          info.referencedByFragmentShader = bool(val);
+        } // for i
+      } // anon
+
+      // -------------------------------------
+      // active tf varyings
+      {
+        const auto count = fnGetProgramui(LOCAL_GL_TRANSFORM_FEEDBACK_VARYINGS);
+        ret.activeTfVaryings.reserve(count);
+
+        for (const auto& i : IntegerRange(count)) {
+          GLsizei lengthWithoutNull = 0;
+          GLsizei elemCount = 0;  // `size`
+          GLenum elemType = 0;  // `type`
+          gl.fGetTransformFeedbackVarying(prog, i, stringBuffer.size(), &lengthWithoutNull,
+                &elemCount, &elemType, stringBuffer.data());
+          const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
+          const auto userName = fnUnmapName(mappedName);
+
+          ret.activeTfVaryings.emplace_back(elemType, elemCount, userName);
+        }
+      }
+    } // if webgl2
+  }();
+  return ret;
+}
+
+webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram* const prog) const {
+  webgl::LinkResult ret;
+  [&]() {
+    if (!prog) return;
+    const auto& info = prog->LinkInfo();
+    if (!info) return;
+    const auto& nameMap = info->nameMap;
+
+    std::unordered_map<std::string, std::string> nameUnmap;
+    for (const auto& pair : nameMap) {
+      nameUnmap[pair.second] = pair.first;
+    }
+
+    ret.active = std::move(GetLinkActiveInfo(*gl, prog->mGLName, IsWebGL2(), nameUnmap));
+
+    ret.numTfBuffers = 1;
+    if (info->transformFeedbackBufferMode == LOCAL_GL_SEPARATE_ATTRIBS) {
+      ret.numTfBuffers = static_cast<uint8_t>(ret.activeTfVaryings.size());
+    }
+  }();
+  return ret;
+}
+
+// -
+
+GLint WebGLContext::GetFragDataLocation(const WebGLProgram* const prog, const std::string& userName) const {
+  if (!prog) return -1;
+  const auto& info = prog->LinkInfo();
+  if (!info) return -1;
+  const auto& nameMap = info->nameMap;
+
+  const auto mappedName = Find(nameMap, userName, userName);
+  return gl->fGetFragDataLocation(prog->mGLName, mappedName.c_str());
 }
 
 }  // namespace mozilla

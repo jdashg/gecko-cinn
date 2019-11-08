@@ -256,7 +256,7 @@ void WebGLFBAttachPoint::DoAttachment(gl::GLContext* const gl) const {
   }
 }
 
-MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
+Maybe<double> WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
                                                    GLenum target,
                                                    GLenum attachment,
                                                    GLenum pname) const {
@@ -274,7 +274,7 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
     //   queries will generate an INVALID_OPERATION error."
     switch (pname) {
       case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
-        return AsSomeVariant(LOCAL_GL_NONE);
+        return Some(LOCAL_GL_NONE);
 
       case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
         if (webgl->IsWebGL2()) return Nothing();
@@ -299,19 +299,19 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
   bool isPNameValid = false;
   switch (pname) {
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
-      return AsSomeVariant(mTexturePtr ? LOCAL_GL_TEXTURE
+      return Some(mTexturePtr ? LOCAL_GL_TEXTURE
                                        : LOCAL_GL_RENDERBUFFER);
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
       if (mTexturePtr) {
-        return AsSomeVariant(mTexturePtr);
+        return Some(mTexturePtr);
       }
-      return AsSomeVariant(mRenderbufferPtr);
+      return Some(mRenderbufferPtr);
 
       //////
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL:
-      if (mTexturePtr) return AsSomeVariant(AssertedCast<uint32_t>(MipLevel()));
+      if (mTexturePtr) return Some(AssertedCast<uint32_t>(MipLevel()));
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE:
@@ -320,7 +320,7 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
         if (mTexturePtr->Target() == LOCAL_GL_TEXTURE_CUBE_MAP) {
           face = LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X + Layer();
         }
-        return AsSomeVariant(face);
+        return Some(face);
       }
       break;
 
@@ -328,19 +328,19 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER:
       if (webgl->IsWebGL2()) {
-        return AsSomeVariant(AssertedCast<int32_t>(Layer()));
+        return Some(AssertedCast<int32_t>(Layer()));
       }
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_BASE_VIEW_INDEX_OVR:
       if (webgl->IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return AsSomeVariant(AssertedCast<int32_t>(Layer()));
+        return Some(AssertedCast<int32_t>(Layer()));
       }
       break;
 
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_NUM_VIEWS_OVR:
       if (webgl->IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return AsSomeVariant(AssertedCast<uint32_t>(ZLayerCount()));
+        return Some(AssertedCast<uint32_t>(ZLayerCount()));
       }
       break;
 
@@ -371,7 +371,7 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
   const auto& usage = imageInfo.mFormat;
   if (!usage) {
     if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING)
-      return AsSomeVariant(LOCAL_GL_LINEAR);
+      return Some(LOCAL_GL_LINEAR);
 
     return Nothing();
   }
@@ -461,7 +461,7 @@ MaybeWebGLVariant WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
       break;
   }
 
-  return AsSomeVariant(ret);
+  return Some(ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1167,7 +1167,7 @@ void WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
   InvalidateCaches();
 }
 
-MaybeWebGLVariant WebGLFramebuffer::GetAttachmentParameter(GLenum target,
+Maybe<double> WebGLFramebuffer::GetAttachmentParameter(GLenum target,
                                                            GLenum attachEnum,
                                                            GLenum pname) {
   const auto maybeAttach = GetAttachPoint(attachEnum);

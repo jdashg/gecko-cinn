@@ -228,7 +228,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     return mContext->IsEnabled(cap);
   }
 
-  MaybeWebGLVariant GetParameter(GLenum pname);
+  Maybe<double> GetParameter(GLenum pname, bool debug) const {
+    return mContext->GetParameter(pname, debug);
+  }
+
+  Maybe<std::string> GetString(GLenum pname, bool debug) const {
+    return mContext->GetString(pname, debug);
+  }
 
   void AttachShader(ObjectId prog, ObjectId shader) const {
     mContext->AttachShader(ById(prog), ById(shader));
@@ -326,20 +332,41 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->FrontFace(mode);
   }
 
-  MaybeWebGLVariant GetBufferParameter(GLenum target, GLenum pname);
+  Maybe<double> GetBufferParameter(GLenum target, GLenum pname) const {
+    return mContext->GetBufferParameter(target, pname);
+  }
 
   GLenum GetError() const {
     return mContext->GetError();
   }
 
-  MaybeWebGLVariant GetFramebufferAttachmentParameter(GLenum target,
+  GLint GetFragDataLocation(ObjectId id, const std::string& name) const {
+    return mContext->GetFragDataLocation(ById(id), name);
+  }
+
+  Maybe<double> GetFramebufferAttachmentParameter(ObjectId id,
                                                       GLenum attachment,
-                                                      GLenum pname);
+                                                      GLenum pname) const {
+    return mContext->GetFramebufferAttachmentParameter(ById(id), attachment,
+      pname);
+  }
 
-  MaybeWebGLVariant GetRenderbufferParameter(GLenum target, GLenum pname);
+  webgl::LinkResult GetLinkResult(ObjectId id) const {
+    return mContext->GetLinkResult(ById(id));
+  }
 
-  MaybeWebGLVariant GetShaderPrecisionFormat(GLenum shadertype,
-                                             GLenum precisiontype);
+  Maybe<double> GetRenderbufferParameter(ObjectId id, GLenum pname) const {
+    return mContext->GetRenderbufferParameter(ById(id), pname);
+  }
+
+  Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(GLenum shaderType,
+                                             GLenum precisionType) const {
+    return mContext->GetShaderPrecisionFormat(shadertype, prescisionType);
+  }
+
+  GetUniformData GetUniform(ObjectId prog, uint32_t loc) const {
+    return mContext->GetUniform(ById(prog), loc);
+  }
 
   void Hint(GLenum target, GLenum mode) const {
     mContext->Hint(target, mode);
@@ -519,7 +546,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     x, y, width, height);
   }
 
-  MaybeWebGLVariant GetTexParameter(GLenum texTarget, GLenum pname);
+  Maybe<double> GetTexParameter(ObjectId id, GLenum pname) const {
+    return GetTexParameter(ById(id), pname);
+  }
 
   void TexParameter_base(GLenum texTarget, GLenum pname,
                          const FloatOrInt& param) const {
@@ -537,10 +566,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // ------------------------ Uniforms and attributes ------------------------
 
-  void UniformNTV(ObjectId id, const uint8_t n,
-              const webgl::AttribBaseType t, const bool v,
-              const RawBuffer<>& bytes) const {
-    mContext->UniformNTV(ById(id), n, t, v, bytes);
+  void UniformNTv(ObjectId id, const uint8_t n,
+              const webgl::AttribBaseType t, const RawBuffer<>& bytes) const {
+    mContext->UniformNTv(ById(id), n, t, bytes);
   }
 
   Run<RPROC(UniformMatrixAxBfv)>(a, b, loc->mId, transpose, n, t, v, bytes);
@@ -549,15 +577,17 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->UniformMatrixAxBfv(A, B, ById(id), transpose, data);
   }
 
-  void VertexAttrib4T(GLuint index, const webgl::AttribBaseType t, const RawBuffer<>& data) const {
-    mContext->VertexAttrib4T(index, t, data);
+  void VertexAttrib4Tv(GLuint index, const webgl::AttribBaseType t, const RawBuffer<>& data) const {
+    mContext->VertexAttrib4Tv(index, t, data);
   }
 
   void VertexAttribDivisor(GLuint index, GLuint divisor) const {
     mContext->VertexAttribDivisor(index, divisor);
   }
 
-  MaybeWebGLVariant GetIndexedParameter(GLenum target, GLuint index);
+  uint64_t GetIndexedParameter(GLenum target, GLuint index) const {
+    return mContext->GetIndexedParameter(target, index);
+  }
 
   void UniformBlockBinding(const ObjectId id,
                            GLuint uniformBlockIndex,
@@ -573,10 +603,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->DisableVertexAttribArray(index);
   }
 
-  MaybeWebGLVariant GetVertexAttrib(GLuint index, GLenum pname);
-
-  uint64_t GetVertexAttribOffset(GLuint index, GLenum pname) const {
-    return mContext->GetVertexAttribOffset(index, pname);
+  Maybe<double> GetVertexAttrib(GLuint index, GLenum pname) const {
+    return mContext->GetVertexAttrib(index, pname);
   }
 
   void VertexAttribAnyPointer(bool isFuncInt, GLuint index, GLint size,
@@ -620,8 +648,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->SamplerParameterf(ById(id), pname, param);
   }
 
-  MaybeWebGLVariant GetSamplerParameter(const WebGLId<WebGLSampler>& samplerId,
-                                        GLenum pname);
+  Maybe<double> GetSamplerParameter(ObjectId id,
+                                        GLenum pname) const {
+    return mContext->GetSamplerParameter(ById(id), pname);
+  }
 
   // ------------------------------- GL Sync ---------------------------------
 
@@ -633,11 +663,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void WaitSync(ObjectId id, GLbitfield flags,
                 GLint64 timeout) const {
     mContext->WaitSync(ById(id), flags, timeout);
-  }
-
-  MaybeWebGLVariant GetSyncParameter(ObjectId id,
-                                     GLenum pname) const {
-    return mContext->GetSyncParameter(ById(id), pname);
   }
 
   // -------------------------- Transform Feedback ---------------------------
@@ -684,11 +709,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->DrawBuffers(buffers);
   }
 
-  Maybe<nsTArray<nsString>> GetASTCExtensionSupportedProfiles() const;
-
   void LoseContext(webgl::ContextLossReason);
-
-  MaybeWebGLVariant MOZDebugGetParameter(GLenum pname) const;
 
   // VertexArrayObjectEXT
   void BindVertexArray(ObjectId id) const {
@@ -719,10 +740,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->QueryCounter(ById(Id), target);
   }
 
-  MaybeWebGLVariant GetQuery(GLenum target, GLenum pname) const;
-
-  MaybeWebGLVariant GetQueryParameter(const WebGLId<WebGLQuery>& query,
-                                      GLenum pname) const;
+  Maybe<double> GetQueryParameter(ObjectId id,
+                                      GLenum pname) const {
+    return mContext->GetQueryParameter(ById(id), pname);
+  }
 
   // -------------------------------------------------------------------------
   // Client-side methods.  Calls in the Host are forwarded to the client.

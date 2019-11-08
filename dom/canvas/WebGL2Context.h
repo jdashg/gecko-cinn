@@ -119,11 +119,10 @@ class WebGL2Context final : public WebGLContext {
 
   already_AddRefed<WebGLSampler> CreateSampler();
   void DeleteSampler(WebGLSampler* sampler);
-  bool IsSampler(const WebGLSampler* sampler);
   void BindSampler(GLuint unit, WebGLSampler* sampler);
   void SamplerParameteri(WebGLSampler& sampler, GLenum pname, GLint param);
   void SamplerParameterf(WebGLSampler& sampler, GLenum pname, GLfloat param);
-  MaybeWebGLVariant GetSamplerParameter(const WebGLSampler& sampler,
+  Maybe<double> GetSamplerParameter(const WebGLSampler& sampler,
                                         GLenum pname);
 
   // -------------------------------------------------------------------------
@@ -133,19 +132,15 @@ class WebGL2Context final : public WebGLContext {
       1000 * 1000 * 1000;  // 1000ms in ns.
 
   already_AddRefed<WebGLSync> FenceSync(GLenum condition, GLbitfield flags);
-  bool IsSync(const WebGLSync* sync);
   void DeleteSync(WebGLSync* sync);
   GLenum ClientWaitSync(const WebGLSync& sync, GLbitfield flags,
                         GLuint64 timeout);
-  void WaitSync(const WebGLSync& sync, GLbitfield flags, GLint64 timeout);
-  MaybeWebGLVariant GetSyncParameter(const WebGLSync& sync, GLenum pname);
 
   // -------------------------------------------------------------------------
   // Transform Feedback - WebGL2ContextTransformFeedback.cpp
 
   already_AddRefed<WebGLTransformFeedback> CreateTransformFeedback();
   void DeleteTransformFeedback(WebGLTransformFeedback* tf);
-  bool IsTransformFeedback(const WebGLTransformFeedback* tf);
   void BindTransformFeedback(GLenum target, WebGLTransformFeedback* tf);
   void BeginTransformFeedback(GLenum primitiveMode);
   void EndTransformFeedback();
@@ -154,8 +149,6 @@ class WebGL2Context final : public WebGLContext {
   void TransformFeedbackVaryings(WebGLProgram& program,
                                  const nsTArray<nsString>& varyings,
                                  GLenum bufferMode);
-  Maybe<WebGLActiveInfo> GetTransformFeedbackVarying(
-      const WebGLProgram& program, GLuint index);
 
   // -------------------------------------------------------------------------
   // Uniform Buffer Objects and Transform Feedback Buffers -
@@ -166,36 +159,13 @@ class WebGL2Context final : public WebGLContext {
       void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buffer,
                            WebGLintptr offset, WebGLsizeiptr size);
   */
-  MaybeWebGLVariant GetParameter(GLenum pname) override;
+  Maybe<double> GetParameter(GLenum pname) const override;
 
   // Make the inline version from the superclass visible here.
   using WebGLContext::GetParameter;
-  MaybeWebGLVariant GetIndexedParameter(GLenum target, GLuint index);
-  MaybeWebGLVariant GetUniformIndices(const WebGLProgram& program,
-                                      const nsTArray<nsString>& uniformNames);
-  MaybeWebGLVariant GetActiveUniforms(const WebGLProgram& program,
-                                      const nsTArray<GLuint>& uniformIndices,
-                                      GLenum pname);
 
-  GLuint GetUniformBlockIndex(const WebGLProgram& program,
-                              const nsAString& uniformBlockName);
-  MaybeWebGLVariant GetActiveUniformBlockParameter(const WebGLProgram& program,
-                                                   GLuint uniformBlockIndex,
-                                                   GLenum pname);
-  nsString GetActiveUniformBlockName(const WebGLProgram& program,
-                                     GLuint uniformBlockIndex);
   void UniformBlockBinding(WebGLProgram& program, GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding);
-
-  // -------------------------------------------------------------------------
-  // Vertex Array Object - WebGL2ContextVAOs.cpp
-  // TODO(djg): Implemented in WebGLContext
-  /*
-      already_AddRefed<WebGLVertexArrayObject> CreateVertexArray();
-      void DeleteVertexArray(WebGLVertexArrayObject* vertexArray);
-      bool IsVertexArray(WebGLVertexArrayObject* vertexArray);
-      void BindVertexArray(WebGLVertexArrayObject* vertexArray);
-  */
 
  private:
   virtual UniquePtr<webgl::FormatUsageAuthority> CreateFormatUsage(

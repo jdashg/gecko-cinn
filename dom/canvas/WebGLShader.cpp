@@ -144,35 +144,6 @@ void WebGLShader::CompileShader() {
                              &mCompilationLog);
 }
 
-nsString WebGLShader::GetShaderInfoLog() const {
-  return NS_ConvertUTF8toUTF16(mCompilationLog);
-}
-
-MaybeWebGLVariant WebGLShader::GetShaderParameter(GLenum pname) const {
-  switch (pname) {
-    case LOCAL_GL_SHADER_TYPE:
-      return AsSomeVariant(mType);
-
-    case LOCAL_GL_DELETE_STATUS:
-      return AsSomeVariant(IsDeleteRequested());
-
-    case LOCAL_GL_COMPILE_STATUS:
-      return AsSomeVariant(mCompilationSuccessful);
-
-    default:
-      mContext->ErrorInvalidEnumInfo("getShaderParameter: `pname`", pname);
-      return Nothing();
-  }
-}
-
-nsString WebGLShader::GetShaderSource() const { return mSource; }
-
-nsString WebGLShader::GetShaderTranslatedSource() const {
-  const auto& wrapper =
-      nsDependentCString(mCompileResults->mObjectCode.c_str());
-  return NS_ConvertUTF8toUTF16(wrapper);
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 
 size_t WebGLShader::CalcNumSamplerUniforms() const {

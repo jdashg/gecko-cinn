@@ -24,6 +24,14 @@
 
 namespace mozilla {
 
+
+template<typename C, typename K, typename V>
+inline Maybe<V&> MaybeFind(const C& container, const K& key) {
+  const auto itr = container.find(key);
+  if (itr == container.end()) return {};
+  return Some(itr->second);
+}
+
 bool webgl::ObjectJS::IsUsable(const ClientWebGLContext& context) const {
   const auto& notLost = context.mNotLost;
   if (!notLost) return false;
@@ -1357,50 +1365,598 @@ void ClientWebGLContext::GetInternalformatParameter(
 
 void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
                                       JS::MutableHandle<JS::Value> retval,
-                                      ErrorResult& rv) {
-  retval.set(ToJSValue(cx, Run<RPROC(GetParameter)>(pname), rv));
+                                      ErrorResult& rv,
+                                      const bool debug) const {
+  const FuncScope funcScope(*this, "getParameter");
+  if (IsContextLost()) return;
+  const auto& limits = mNotLost->info;
+  const auto& state = *(mNotLost->generation);
+
+  // -
+
+  const auto fnSetRetval_Buffer = [&](const GLenum target) {
+    const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
+    retval.set(ToJSValue(cx, buffer.get(), rv));
+  };
+  const auto fnSetRetval_Tex = [&](const GLenum texTarget) {
+    const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
+    const auto tex = *MaybeFind(texUnit.texByTarget, texTarget);
+    retval.set(ToJSValue(cx, tex.get(), rv));
+  };
+
+  switch (pname) {
+    case LOCAL_GL_ARRAY_BUFFER_BINDING:
+      fnSetRetval_Buffer(LOCAL_GL_ARRAY_BUFFER);
+      return;
+
+    case LOCAL_GL_CURRENT_PROGRAM:
+      retval.set(ToJSValue(cx, state.mCurrentProgram.get(), rv));
+      return;
+
+    case LOCAL_GL_ELEMENT_ARRAY_BUFFER_BINDING:
+      retval.set(ToJSValue(cx, state.mBoundVao->mIndexBuffer.get(), rv));
+      return;
+
+    case LOCAL_GL_FRAMEBUFFER_BINDING:
+      retval.set(ToJSValue(cx, state.mBoundDrawFb.get(), rv));
+      return;
+
+    case LOCAL_GL_RENDERBUFFER_BINDING:
+      retval.set(ToJSValue(cx, state.mBoundRb.get(), rv));
+      return;
+
+    case LOCAL_GL_TEXTURE_BINDING_2D:
+      fnSetRetval_Tex(LOCAL_GL_TEXTURE_2D);
+      return;
+
+    case LOCAL_GL_TEXTURE_BINDING_CUBE_MAP:
+      fnSetRetval_Tex(LOCAL_GL_TEXTURE_CUBE_MAP);
+      return;
+
+    // -
+    // Array returns
+
+    // 2 floats
+    case LOCAL_GL_DEPTH_RANGE: {
+      JSObject* obj = dom::Float32Array::Create(cx, this, 2, state.mDepthRange);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+
+    case LOCAL_GL_ALIASED_POINT_SIZE_RANGE: {
+      JSObject* obj = dom::Float32Array::Create(cx, this, 2, limits.pointSizeRange);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+    case LOCAL_GL_ALIASED_LINE_WIDTH_RANGE: {
+      JSObject* obj = dom::Float32Array::Create(cx, this, 2, limits.lineWidthRange);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+
+    // 4 floats
+    case LOCAL_GL_COLOR_CLEAR_VALUE: {
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mClearColor);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+    case LOCAL_GL_BLEND_COLOR: {
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mBlendColor);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+
+    // 2 ints
+    case LOCAL_GL_MAX_VIEWPORT_DIMS: {
+      JSObject* obj = dom::Int32Array::Create(cx, this, 2, limits.maxViewportDims);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+
+    // 4 ints
+    case LOCAL_GL_SCISSOR_BOX: {
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mScissor);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+    case LOCAL_GL_VIEWPORT: {
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mViewport);
+      if (!obj) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      return JS::ObjectOrNullValue(obj);
+    }
+
+    // 4 bools
+    case LOCAL_GL_COLOR_WRITEMASK: {
+      JS::Rooted<JS::Value> arr(cx);
+      if (!dom::ToJSValue(cx, state.mColorWriteMask, &arr)) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      retval.set(arr);
+      return;
+    }
+  }
+
+  if (IsWebGL2()) {
+    switch (pname) {
+      case LOCAL_GL_COPY_READ_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_COPY_READ_BUFFER);
+        return;
+
+      case LOCAL_GL_COPY_WRITE_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_COPY_WRITE_BUFFER);
+        return;
+
+      case LOCAL_GL_DRAW_FRAMEBUFFER_BINDING:
+        retval.set(ToJSValue(cx, state.mBoundDrawFb.get(), rv));
+        return;
+
+      case LOCAL_GL_PIXEL_PACK_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_PIXEL_PACK_BUFFER);
+        return;
+
+      case LOCAL_GL_PIXEL_UNPACK_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_PIXEL_UNPACK_BUFFER);
+        return;
+
+      case LOCAL_GL_READ_FRAMEBUFFER_BINDING:
+        retval.set(ToJSValue(cx, state.mBoundReadFb.get(), rv));
+        return;
+
+      case LOCAL_GL_SAMPLER_BINDING: {
+        const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
+        retval.set(ToJSValue(cx, texUnit.sampler.get(), rv));
+        return;
+      }
+
+      case LOCAL_GL_TEXTURE_BINDING_2D_ARRAY:
+        fnSetRetval_Tex(LOCAL_GL_TEXTURE_2D_ARRAY);
+        return;
+
+      case LOCAL_GL_TEXTURE_BINDING_3D:
+        fnSetRetval_Tex(LOCAL_GL_TEXTURE_3D);
+        return;
+
+      case LOCAL_GL_TRANSFORM_FEEDBACK_BINDING: {
+        auto ret = state.mBoundTfo;
+        if (ret == state.mDefaultTfo) {
+          ret = nullptr;
+        }
+        retval.set(ToJSValue(cx, ret.get(), rv));
+        return;
+      }
+
+      case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER);
+        return;
+
+      case LOCAL_GL_UNIFORM_BUFFER_BINDING:
+        fnSetRetval_Buffer(LOCAL_GL_UNIFORM_BUFFER);
+        return;
+
+      case LOCAL_GL_VERTEX_ARRAY_BINDING: {
+        auto ret = state.mBoundVao;
+        if (ret == state.mDefaultVao) {
+          ret = nullptr;
+        }
+        retval.set(ToJSValue(cx, ret.get(), rv));
+        return;
+      }
+    } // switch pname
+  } // if webgl2
+
+  // -
+
+  if (!debug) {
+    const char* ret = nullptr;
+
+    switch (pname) {
+      case LOCAL_GL_VENDOR:
+      case LOCAL_GL_RENDERER:
+        ret = "Mozilla";
+        break;
+
+      case LOCAL_GL_VERSION:
+        if (IsWebGL2()) {
+          ret = "WebGL 2.0";
+        } else {
+          ret = "WebGL 1.0";
+        }
+        break;
+
+      case LOCAL_GL_SHADING_LANGUAGE_VERSION:
+        if (IsWebGL2()) {
+          ret = "WebGL GLSL ES 3.0";
+        } else {
+          ret = "WebGL GLSL ES 1.0";
+        }
+        break;
+
+    switch (pname) {
+      case UNMASKED_VENDOR_WEBGL:
+      case UNMASKED_RENDERER_WEBGL: {
+        if (!IsExtensionEnabled(WebGLExtensionID::WEBGL_debug_renderer_info)) {
+          EnqueueError_ArgEnum("pname", pname);
+          return;
+        }
+
+        const char* overridePref;
+        GLenum driverEnum;
+        switch (pname) {
+          case UNMASKED_RENDERER_WEBGL:
+            overridePref = "webgl.renderer-string-override";
+            driverEnum = LOCAL_GL_RENDERER;
+            break;
+          case UNMASKED_VENDOR_WEBGL:
+            overridePref = "webgl.vendor-string-override";
+            driverEnum = LOCAL_GL_VENDOR;
+            break;
+          default:
+            MOZ_CRASH();
+        }
+
+        nsString overrideStr;
+        const auto res = Preferences::GetString(overridePref, overrideStr);
+        if (NS_SUCCEEDED(res) && ret.Length() > 0) {
+          retval.set(StringValue(cx, overrideStr, rv));
+          return;
+        }
+
+        const auto maybe = Run<RPROC(GetString)>(driverEnum);
+        if (maybe) {
+          retval.set(StringValue(cx, maybe->c_str(), rv));
+        }
+        return;
+      }
+
+      default:
+        break;
+    }
+
+    if (ret) {
+      retval.set(StringValue(cx, ret, rv));
+      return;
+    }
+  }
+
+  // -
+
+  bool debugOnly = false;
+  bool asString = false;
+
+  switch (pname) {
+    case LOCAL_GL_EXTENSIONS:
+    case LOCAL_GL_RENDERER:
+    case LOCAL_GL_VENDOR:
+    case LOCAL_GL_VERSION:
+    case dom::MOZ_debug_Binding::WSI_INFO:
+      debugOnly = true;
+      asString = true;
+      break;
+
+
+    case dom::MOZ_debug_Binding::DOES_INDEX_VALIDATION:
+      debugOnly = true;
+      break;
+
+    default:
+      break;
+  }
+
+  if (debugOnly && !debug) {
+    EnqueueError_ArgEnum("pname", pname);
+    return;
+  }
+
+  // -
+
+  if (asString) {
+    const auto maybe = Run<RPROC(GetString)>(pname);
+    if (maybe) {
+      retval.set(StringValue(cx, maybe->c_str(), rv));
+    }
+  } else {
+    const auto maybe = Run<RPROC(GetParameter)>(pname);
+    if (maybe) {
+      retval.set(JS::NumberValue(*maybe));
+    }
+  }
 }
 
 void ClientWebGLContext::GetBufferParameter(
     JSContext* cx, GLenum target, GLenum pname,
-    JS::MutableHandle<JS::Value> retval) {
-  ErrorResult unused;
-  retval.set(
-      ToJSValue(cx, Run<RPROC(GetBufferParameter)>(target, pname), unused));
+    JS::MutableHandle<JS::Value> retval) const {
+  const auto maybe = Run<RPROC(GetBufferParameter)>(target, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::GetFramebufferAttachmentParameter(
     JSContext* cx, GLenum target, GLenum attachment, GLenum pname,
-    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) {
-  retval.set(ToJSValue(
-      cx,
-      Run<RPROC(GetFramebufferAttachmentParameter)>(target, attachment, pname),
-      rv));
+    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) const {
+  const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
+  if (IsContextLost()) return;
+
+  const auto& state = *(mNotLost->generation);
+
+  if (!IsFramebufferTarget(IsWebGL2(), target)) {
+    EnqueueError_ArgEnum("target", target);
+    return;
+  }
+  auto fb = state.mBoundDrawFb;
+  if (target == LOCAL_GL_READ_FRAMEBUFFER) {
+    fb = state.mBoundReadFb;
+  }
+
+  if (!fb) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION, "No framebuffer bound.");
+    return;
+  }
+
+  const auto& attachments = fb->mAttachments;
+  const auto itr = attachments.find(attachment);
+  if (itr == attachments.end()) {
+    EnqueueError_ArgEnum("attachment", attachment);
+    return;
+  }
+  const auto& attached = itr->second;
+
+  if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
+    if (attached.rb) {
+      retval.set(ToJSValue(cx, attached.rb.get(), rv));
+    } else {
+      retval.set(ToJSValue(cx, attached.tex.get(), rv));
+    }
+    return;
+  }
+
+  const auto maybe = Run<RPROC(GetFramebufferAttachmentParameter)>(fb->mId, attachment, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::GetRenderbufferParameter(
     JSContext* cx, GLenum target, GLenum pname,
-    JS::MutableHandle<JS::Value> retval) {
-  ErrorResult unused;
-  retval.set(ToJSValue(cx, Run<RPROC(GetRenderbufferParameter)>(target, pname),
-                       unused));
+    JS::MutableHandle<JS::Value> retval) const {
+  const FuncScope funcScope(*this, "getRenderbufferParameter");
+  if (IsContextLost()) return;
+
+  if (target != LOCAL_GL_RENDERBUFFER) {
+    EnqueueError_ArgEnum("target", target);
+    return;
+  }
+
+  const auto& state = *(mNotLost->generation);
+  const auto& rb = state.mBoundRb;
+
+  const auto maybe = Run<RPROC(GetRenderbufferParameter)>(rb ? rb->mId : 0, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::GetIndexedParameter(JSContext* cx, GLenum target,
                                              GLuint index,
                                              JS::MutableHandleValue retval,
-                                             ErrorResult& rv) {
-  ErrorResult unused;
-  retval.set(
-      ToJSValue(cx, Run<RPROC(GetIndexedParameter)>(target, index), unused));
+                                             ErrorResult& rv) const {
+  const FuncScope funcScope(*this, "getIndexedParameter");
+  if (IsContextLost()) return;
+
+  const auto& state = *(mNotLost->generation);
+
+  switch (target) {
+  case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING: {
+    const auto& list = state.mBoundTfo->mAttribBuffers;
+    if (index >= list.size()) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE,
+        "`index` (%u) >= MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS", index);
+      return;
+    }
+    retval.set(ToJSValue(cx, list[index], rv));
+    return;
+
+  case LOCAL_GL_UNIFORM_BUFFER_BINDING: {
+    const auto& list = state.mUniformBuffers;
+    if (index >= list.size()) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE,
+        "`index` (%u) >= MAX_UNIFORM_BUFFER_BINDINGS", index);
+      return;
+    }
+    retval.set(ToJSValue(cx, list[index], rv));
+    return;
+  }
+
+  const auto maybe = Run<RPROC(GetIndexedParameter)>(target, index);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
+}
+
+static uint8_t UniformElemCount(const GLenum type) {
+  switch (type) {
+    case LOCAL_GL_BOOL:
+    case LOCAL_GL_FLOAT:
+    case LOCAL_GL_INT:
+    case LOCAL_GL_UNSIGNED_INT:
+    case LOCAL_GL_SAMPLER_2D:
+    case LOCAL_GL_SAMPLER_3D:
+    case LOCAL_GL_SAMPLER_CUBE:
+    case LOCAL_GL_SAMPLER_2D_SHADOW:
+    case LOCAL_GL_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+    case LOCAL_GL_INT_SAMPLER_2D:
+    case LOCAL_GL_INT_SAMPLER_3D:
+    case LOCAL_GL_INT_SAMPLER_CUBE:
+    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
+      return 1;
+
+    case LOCAL_GL_BOOL_VEC2:
+    case LOCAL_GL_FLOAT_VEC2:
+    case LOCAL_GL_INT_VEC2:
+    case LOCAL_GL_UNSIGNED_INT_VEC2:
+      return 2;
+
+    case LOCAL_GL_BOOL_VEC3:
+    case LOCAL_GL_FLOAT_VEC3:
+    case LOCAL_GL_INT_VEC3:
+    case LOCAL_GL_UNSIGNED_INT_VEC3:
+      return 3;
+
+    case LOCAL_GL_BOOL_VEC4:
+    case LOCAL_GL_FLOAT_VEC4:
+    case LOCAL_GL_INT_VEC4:
+    case LOCAL_GL_UNSIGNED_INT_VEC4:
+    case LOCAL_GL_FLOAT_MAT2:
+      return 4;
+
+    case LOCAL_GL_FLOAT_MAT2x3:
+    case LOCAL_GL_FLOAT_MAT3x2:
+      return 2*3;
+
+    case LOCAL_GL_FLOAT_MAT2x4:
+    case LOCAL_GL_FLOAT_MAT4x2:
+      return 2*4;
+
+    case LOCAL_GL_FLOAT_MAT3:
+      return 3*3;
+
+    case LOCAL_GL_FLOAT_MAT3x4:
+    case LOCAL_GL_FLOAT_MAT4x3:
+      return 3*4;
+
+    case LOCAL_GL_FLOAT_MAT4:
+      return 4*4;
+
+    default:
+      return 0;
+  }
 }
 
 void ClientWebGLContext::GetUniform(JSContext* const cx,
                                     const WebGLProgramJS& prog,
                                     const WebGLUniformLocationJS& loc,
                                     JS::MutableHandle<JS::Value> retval) const {
-  ErrorResult ignored;
-  retval.set(ToJSValue(cx, Run<RPROC(GetUniform)>(prog.mId, loc.mLoc), ignored));
+  const FuncScope funcScope(*this, "getUniform");
+  if (IsContextLost()) return;
+  if (prog.ValidateUsable(*this, "prog")) return;
+  if (loc.ValidateUsable(*this, "loc")) return;
+
+  const auto res = Run<RPROC(GetUniform)>(prog.mId, loc.mLoc);
+  if (!res.type) return;
+
+  const auto elemCount = UniformElemCount(res.type);
+  MOZ_ASSERT(elemCount);
+
+  JS::Rooted<JS::Value> jsval(cx);
+  switch (res.type) {
+    case LOCAL_GL_BOOL:
+      MOZ_ALWAYS_TRUE( dom::ToJSValue(cx, bool(res.data[0]), &jsval) );
+      break;
+    }
+    case LOCAL_GL_FLOAT: {
+      const auto ptr = reinterpret_cast<const float*>(res.data);
+      MOZ_ALWAYS_TRUE( dom::ToJSValue(cx, *ptr, &jsval) );
+      break;
+    }
+    case LOCAL_GL_INT: {
+      const auto ptr = reinterpret_cast<const int32_t*>(res.data);
+      MOZ_ALWAYS_TRUE( dom::ToJSValue(cx, *ptr, &jsval) );
+      break;
+    }
+    case LOCAL_GL_UNSIGNED_INT:
+    case LOCAL_GL_SAMPLER_2D:
+    case LOCAL_GL_SAMPLER_3D:
+    case LOCAL_GL_SAMPLER_CUBE:
+    case LOCAL_GL_SAMPLER_2D_SHADOW:
+    case LOCAL_GL_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+    case LOCAL_GL_INT_SAMPLER_2D:
+    case LOCAL_GL_INT_SAMPLER_3D:
+    case LOCAL_GL_INT_SAMPLER_CUBE:
+    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY: {
+      const auto ptr = reinterpret_cast<const uint32_t*>(res.data);
+      MOZ_ALWAYS_TRUE( dom::ToJSValue(cx, *ptr, &jsval) );
+      break;
+    }
+
+    // -
+
+    case LOCAL_GL_BOOL_VEC2:
+    case LOCAL_GL_BOOL_VEC3:
+    case LOCAL_GL_BOOL_VEC4: {
+      const auto ptr = reinterpret_cast<const bool*>(res.data);
+      MOZ_ALWAYS_TRUE( dom::ToJSValue(cx, ptr, elemCount, &arr) );
+      break;
+    }
+
+    case LOCAL_GL_FLOAT_VEC2:
+    case LOCAL_GL_FLOAT_VEC3:
+    case LOCAL_GL_FLOAT_VEC4:
+    case LOCAL_GL_FLOAT_MAT2:
+    case LOCAL_GL_FLOAT_MAT3:
+    case LOCAL_GL_FLOAT_MAT4:
+    case LOCAL_GL_FLOAT_MAT2x3:
+    case LOCAL_GL_FLOAT_MAT2x4:
+    case LOCAL_GL_FLOAT_MAT3x2:
+    case LOCAL_GL_FLOAT_MAT3x4:
+    case LOCAL_GL_FLOAT_MAT4x2:
+    case LOCAL_GL_FLOAT_MAT4x3: {
+      const auto ptr = reinterpret_cast<const float*>(res.data);
+      JSObject* obj = dom::Float32Array::Create(cx, this, elemCount, ptr);
+      MOZ_ASSERT(obj);
+      jsval = JS::ObjectOrNullValue(obj);
+    }
+
+    case LOCAL_GL_INT_VEC2:
+    case LOCAL_GL_INT_VEC3:
+    case LOCAL_GL_INT_VEC4: {
+      const auto ptr = reinterpret_cast<const int32_t*>(res.data);
+      JSObject* obj = dom::Int32Array::Create(cx, this, elemCount, ptr);
+      MOZ_ASSERT(obj);
+      jsval = JS::ObjectOrNullValue(obj);
+    }
+
+    case LOCAL_GL_UNSIGNED_INT_VEC2:
+    case LOCAL_GL_UNSIGNED_INT_VEC3:
+    case LOCAL_GL_UNSIGNED_INT_VEC4: {
+      const auto ptr = reinterpret_cast<const uint32_t*>(res.data);
+      JSObject* obj = dom::Uint32Array::Create(cx, this, elemCount, ptr);
+      MOZ_ASSERT(obj);
+      jsval = JS::ObjectOrNullValue(obj);
+    }
+
+    default:
+      MOZ_CRASH("GFX: Invalid elemType.");
+  }
+
+  retval.set(jsval);
 }
 
 RefPtr<WebGLShaderPrecisionFormatJS>
@@ -1408,11 +1964,21 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
                                              const GLenum precisiontype) const {
   const auto info = Run<RPROC(GetShaderPrecisionFormat)>(shadertype, precisiontype);
   if (!info) return nullptr;
-  return new WebGLShaderPrecisionFormatJS(*this, info);
+  return new WebGLShaderPrecisionFormatJS(*this, *info);
 }
 
 void ClientWebGLContext::BlendColor(GLclampf r, GLclampf g, GLclampf b,
                                     GLclampf a) {
+  const FuncScope funcScope(*this, "blendColor");
+  if (IsContextLost()) return;
+  auto& state = *(mNotLost->generation);
+
+  auto& cache = state.mBlendColor;
+  cache[0] = r;
+  cache[1] = g;
+  cache[2] = b;
+  cache[3] = a;
+
   Run<RPROC(BlendColor)>(r, g, b, a);
 }
 
@@ -1466,6 +2032,16 @@ void ClientWebGLContext::ClearBufferfi(GLenum buffer, GLint drawBuffer,
 
 void ClientWebGLContext::ClearColor(GLclampf r, GLclampf g, GLclampf b,
                                     GLclampf a) {
+  const FuncScope funcScope(*this, "clearColor");
+  if (IsContextLost()) return;
+  auto& state = *(mNotLost->generation);
+
+  auto& cache = state.mClearColor;
+  cache[0] = r;
+  cache[1] = g;
+  cache[2] = b;
+  cache[3] = a;
+
   Run<RPROC(ClearColor)>(r, g, b, a);
 }
 
@@ -1475,6 +2051,10 @@ void ClientWebGLContext::ClearStencil(GLint v) { Run<RPROC(ClearStencil)>(v); }
 
 void ClientWebGLContext::ColorMask(WebGLboolean r, WebGLboolean g,
                                    WebGLboolean b, WebGLboolean a) {
+  mColorWriteMask[0] = r;
+  mColorWriteMask[1] = g;
+  mColorWriteMask[2] = b;
+  mColorWriteMask[3] = a;
   Run<RPROC(ColorMask)>(r, g, b, a);
 }
 
@@ -1485,6 +2065,14 @@ void ClientWebGLContext::DepthFunc(GLenum func) { Run<RPROC(DepthFunc)>(func); }
 void ClientWebGLContext::DepthMask(WebGLboolean b) { Run<RPROC(DepthMask)>(b); }
 
 void ClientWebGLContext::DepthRange(GLclampf zNear, GLclampf zFar) {
+  const FuncScope funcScope(*this, "depthRange");
+  if (IsContextLost()) return;
+  auto& state = *(mNotLost->generation);
+
+  auto& cache = state.mDepthRange;
+  cache[0] = zNear;
+  cache[1] = zFar;
+
   Run<RPROC(DepthRange)>(zNear, zFar);
 }
 
@@ -1518,6 +2106,21 @@ void ClientWebGLContext::SampleCoverage(GLclampf value, WebGLboolean invert) {
 
 void ClientWebGLContext::Scissor(GLint x, GLint y, GLsizei width,
                                  GLsizei height) {
+  const FuncScope funcScope(*this, "scissor");
+  if (IsContextLost()) return;
+  auto& state = *(mNotLost->generation);
+
+  if (!ValidateNonNegative("width", width) ||
+      !ValidateNonNegative("height", height)) {
+    return;
+  }
+
+  auto& cache = state.mScissor;
+  cache[0] = x;
+  cache[1] = y;
+  cache[2] = width;
+  cache[3] = height;
+
   Run<RPROC(Scissor)>(x, y, width, height);
 }
 
@@ -1537,6 +2140,21 @@ void ClientWebGLContext::StencilOpSeparate(GLenum face, GLenum sfail,
 
 void ClientWebGLContext::Viewport(GLint x, GLint y, GLsizei width,
                                   GLsizei height) {
+  const FuncScope funcScope(*this, "viewport");
+  if (IsContextLost()) return;
+  auto& state = *(mNotLost->generation);
+
+  if (!ValidateNonNegative("width", width) ||
+      !ValidateNonNegative("height", height)) {
+    return;
+  }
+
+  auto& cache = state.mViewport;
+  cache[0] = x;
+  cache[1] = y;
+  cache[2] = width;
+  cache[3] = height;
+
   Run<RPROC(Viewport)>(x, y, width, height);
 }
 
@@ -1839,21 +2457,18 @@ void ClientWebGLContext::CopyBufferSubData(GLenum readTarget,
 // -------------------------- Framebuffer Objects --------------------------
 
 
-Maybe<const webgl::ErrorInfo> ValidateBindFramebuffer(const bool isWebgl2, const GLenum target) {
+bool IsFramebufferTarget(const bool isWebgl2, const GLenum target) {
   switch (target) {
     case LOCAL_GL_FRAMEBUFFER:
-      return {};
+      return true;
 
     case LOCAL_GL_DRAW_FRAMEBUFFER:
     case LOCAL_GL_READ_FRAMEBUFFER:
-      if (isWebgl2) return {};
-      break;
+      return isWebgl2;
 
     default:
-      break;
+      return false;
   }
-  const auto info = nsPrintfCString("Bad `target`: 0x%04x", target)};
-  return Some({LOCAL_GL_INVALID_ENUM, info});
 }
 
 void ClientWebGLContext::BindFramebuffer(const GLenum target,
@@ -1862,9 +2477,8 @@ void ClientWebGLContext::BindFramebuffer(const GLenum target,
   if (IsContextLost()) return;
   if (fb && !fb->ValidateUsable(*this, "fb")) return;
 
-  const auto err = ValidateBindFramebuffer(IsWebGL2(), target);
-  if (err) {
-    EnqueueError(err.type, err.info);
+  if (!IsFramebufferTarget(IsWebGL2(), target)) {
+    EnqueueError_ArgEnum("target", target);
     return;
   }
 
@@ -2102,10 +2716,24 @@ void ClientWebGLContext::CopyTexImage2D(GLenum target, GLint level,
 
 void ClientWebGLContext::GetTexParameter(JSContext* cx, GLenum texTarget,
                                          GLenum pname,
-                                         JS::MutableHandle<JS::Value> retval) {
-  ErrorResult ignored;
-  retval.set(
-      ToJSValue(cx, Run<RPROC(GetTexParameter)>(texTarget, pname), ignored));
+                                         JS::MutableHandle<JS::Value> retval) const {
+  const FuncScope funcScope(*this, "getTexParameter");
+  if (IsContextLost()) return;
+  const auto& state = *(mNotLost->generation);
+
+  const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
+
+  const auto maybeTex = MaybeFind(texUnit.texByTarget, texTarget);
+  if (!maybeTex) {
+    EnqueueError_ArgEnum("texTarget", texTarget);
+    return;
+  }
+  const auto& tex = *maybeTex;
+
+  const auto maybe = Run<RPROC(GetTexParameter)>(tex ? tex->mId : tex, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::TexParameterf(GLenum texTarget, GLenum pname,
@@ -2392,7 +3020,7 @@ void ClientWebGLContext::UseProgram(const WebGLProgramJS* const prog) {
   }
 
   if (prog) {
-    const auto& res = GetProgramResult(*prog);
+    const auto& res = GetLinkResult(*prog);
     if (!res.success) {
       EnqueueError(LOCAL_GL_INVALID_OPERATION, "Program be linked successfully.");
       return;
@@ -2416,13 +3044,68 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
                                          GLenum pname,
                                          JS::MutableHandle<JS::Value> retval,
                                          ErrorResult& rv) {
-  retval.set(ToJSValue(cx, Run<RPROC(GetVertexAttrib)>(index, pname), rv));
+  const FuncScope funcScope(*this, "bindVertexArray");
+  if (IsContextLost()) return;
+  const auto& state = *(mNotLost->generation);
+
+  const auto& genericAttribs = state.mGenericVertexAttribs;
+  if (index >= genericAttribs.size()) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` (%u) >= MAX_VERTEX_ATTRIBS", index);
+    return;
+  }
+
+  switch (pname) {
+    case LOCAL_GL_CURRENT_VERTEX_ATTRIB: {
+      JS::RootedObject obj(cx);
+
+      const auto& attrib = genericAttribs[index];
+      switch (attrib.type) {
+        case webgl::AttribBaseType::Float:
+          obj = dom::Float32Array::Create(cx, this, 4, reinterpret_cast<const float*>(attrib.data));
+          break;
+        case webgl::AttribBaseType::Int:
+          obj = dom::Int32Array::Create(cx, this, 4, reinterpret_cast<const int32_t*>(attrib.data));
+          break;
+        case webgl::AttribBaseType::UInt:
+          obj = dom::Uint32Array::Create(cx, this, 4, reinterpret_cast<const uint32_t*>(attrib.data));
+          break;
+        case webgl::AttribBaseType::Boolean:
+          MOZ_CRASH("impossible");
+      }
+
+      if (!obj) {
+        rv.Throw(NS_ERROR_OUT_OF_MEMORY);
+        return;
+      }
+      retval.set(JS::ObjectValue(*obj));
+    }
+
+    case LOCAL_GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING: {
+      const auto& buffers = state.mBoundVao->mAttribBuffers;
+      const auto& buffer = buffers[index];
+      retval.set(ToJSValue(cx, buffer.get(), rv));
+      return;
+    }
+
+    case LOCAL_GL_VERTEX_ATTRIB_ARRAY_POINTER:
+      // Disallowed from JS, but allowed in Host.
+      EnqueueError_ArgEnum("pname", pname);
+      return;
+
+    default:
+      break;
+  }
+
+  const auto maybe = Run<RPROC(GetVertexAttrib)>(index, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
-void ClientWebGLContext::UniformNTV(const WebGLUniformLocation* const loc, const uint8_t n,
-              const webgl::AttribBaseType t, const bool v, const Range<const uint8_t>& bytes) const {
+void ClientWebGLContext::UniformNTv(const WebGLUniformLocation* const loc, const uint8_t n,
+              const webgl::AttribBaseType t, const Range<const uint8_t>& bytes) const {
   if (!loc) return;
-  Run<RPROC(UniformNTV)>(loc->mId, n, t, v, bytes);
+  Run<RPROC(UniformNTv)>(loc->mLoc, n, t, bytes);
 }
 
 void ClientWebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
@@ -2469,14 +3152,17 @@ WebGLsizeiptr ClientWebGLContext::GetVertexAttribOffset(GLuint index,
   return Run<RPROC(GetVertexAttribOffset)>(index, pname);
 }
 
-void ClientWebGLContext::VertexAttrib1fv(GLuint index,
-                                         const Float32ListU& list) {
-  const FuncScope funcScope(this, FuncScopeId::vertexAttrib1fv);
-  const auto& arr = Float32Arr::From(list);
-  if (!ValidateAttribArraySetter(1, arr.elemCount)) return;
+void ClientWebGLContext::VertexAttribNTv(GLuint index, uint8_t n, webgl::AttribBaseType t,
+                                         const Range<const uint8_t>& data) {
+  const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]{v}");
 
-  Run<RPROC(VertexAttrib4f)>(index, arr.elemBytes[0], 0, 0, 1,
-                             GetFuncScopeId());
+  if (data.length() / sizeof(float) < n) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "Array must have >= %d elements.",
+                 n);
+    return;
+  }
+
+  Run<RPROC(VertexAttrib4Tv)>(index, t, data);
 }
 
 void ClientWebGLContext::VertexAttrib2fv(GLuint index,
@@ -2508,16 +3194,6 @@ void ClientWebGLContext::VertexAttrib4fv(GLuint index,
   Run<RPROC(VertexAttrib4f)>(index, arr.elemBytes[0], arr.elemBytes[1],
                              arr.elemBytes[2], arr.elemBytes[3],
                              GetFuncScopeId());
-}
-
-void ClientWebGLContext::VertexAttribIPointer(GLuint index, GLint size,
-                                              GLenum type, GLsizei stride,
-                                              WebGLintptr byteOffset) {
-  const bool isFuncInt = true;
-  const bool normalized = false;
-  Run<RPROC(VertexAttribAnyPointer)>(isFuncInt, index, size, type, normalized,
-                                     stride, byteOffset,
-                                     FuncScopeId::vertexAttribIPointer);
 }
 
 void ClientWebGLContext::VertexAttrib4f(GLuint index, GLfloat x, GLfloat y,
@@ -2562,8 +3238,22 @@ void ClientWebGLContext::VertexAttribI4uiv(GLuint index,
                                FuncScopeId::vertexAttribI4uiv);
 }
 
+// -
+
 void ClientWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor) {
   Run<RPROC(VertexAttribDivisor)>(index, divisor);
+}
+
+// -
+
+void ClientWebGLContext::VertexAttribIPointer(GLuint index, GLint size,
+                                              GLenum type, GLsizei stride,
+                                              WebGLintptr byteOffset) {
+  const bool isFuncInt = true;
+  const bool normalized = false;
+  Run<RPROC(VertexAttribAnyPointer)>(isFuncInt, index, size, type, normalized,
+                                     stride, byteOffset,
+                                     FuncScopeId::vertexAttribIPointer);
 }
 
 void ClientWebGLContext::VertexAttribPointer(GLuint index, GLint size,
@@ -2666,9 +3356,28 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
                                   JS::MutableHandleValue retval) const {
   const FuncScope funcScope(*this, "getQuery");
   if (IsContextLost()) return;
+  const auto& limits = mNotLost->info;
+
+  if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query)) {
+    if (pname == LOCAL_GL_QUERY_COUNTER_BITS) {
+      switch (target) {
+        case LOCAL_GL_TIME_ELAPSED_EXT:
+          retval.set(JS::NumberValue(limits.queryCounterBitsTimeElapsed));
+          return;
+
+        case LOCAL_GL_TIMESTAMP_EXT:
+          retval.set(JS::NumberValue(limits.queryCounterBitsTimestamp));
+          return;
+
+        default:
+          EnqueueError_ArgEnum("target", target);
+          return;
+      }
+    }
+  }
 
   if (pname != LOCAL_GL_CURRENT_QUERY) {
-    EnqueueError(LOCAL_GL_INVALID_ENUM, "`pname` must be CURRENT_QUERY.");
+    EnqueueError_ArgEnum("pname", pname);
     return;
   }
 
@@ -2690,27 +3399,10 @@ void ClientWebGLContext::GetQueryParameter(
   if (IsContextLost()) return;
   if (!query.ValidateUsable(*this, "query")) return;
 
-  auto& res = query.mResult;
-
-  retval.set([&]() -> JS::Value {
-    switch (pname) {
-      case LOCAL_GL_QUERY_RESULT_AVAILABLE:
-        return JS::BooleanValue(bool{res});
-      case LOCAL_GL_QUERY_RESULT: {
-        if (!res) {
-          res = Run<RPROC(GetQueryResult)>(query);
-        }
-        if (!res) {
-          EnqueueError(LOCAL_GL_INVALID_OPERATION, "Query result not yet available.");
-          return JS::NullValue();
-        }
-        return JS::NumberValue(*res);
-      }
-      default:
-        EnqueueError_ArgEnum("pname", pname);
-        return JS::NullValue();
-    }
-  }());
+  const auto maybe = Run<RPROC(GetQueryParameter)>(query.mId, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::BeginQuery(const GLenum target,
@@ -2780,9 +3472,10 @@ void ClientWebGLContext::GetSamplerParameter(
   if (IsContextLost()) return;
   if (!sampler.ValidateUsable(*this, "sampler")) return;
 
-  ErrorResult ignored;
-  retval.set(
-      ToJSValue(cx, Run<RPROC(GetSamplerParameter)>(sampler.mId, pname), ignored));
+  const auto maybe = Run<RPROC(GetSamplerParameter)>(sampler.mId, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
 void ClientWebGLContext::BindSampler(const GLuint unit,
@@ -2800,7 +3493,7 @@ void ClientWebGLContext::BindSampler(const GLuint unit,
 
   mTexUnits[unit].sampler = sampler;
 
-  Run<RPROC(BindSampler)>(unit, sampler);
+  Run<RPROC(BindSampler)>(unit, sampler ? sampler->mId : 0);
 }
 
 void ClientWebGLContext::SamplerParameteri(
@@ -2839,8 +3532,14 @@ void ClientWebGLContext::GetSyncParameter(JSContext* const cx,
         return JS::NumberValue(LOCAL_GL_SYNC_GPU_COMMANDS_COMPLETE);
       case LOCAL_GL_SYNC_FLAGS:
         return JS::NumberValue(0);
-      case LOCAL_GL_SYNC_STATUS:
-        return JS::NumberValue(sync.mStatus);
+      case LOCAL_GL_SYNC_STATUS: {
+        if (!sync.mSignaled) {
+          const auto res = ClientWaitSync(sync, 0, 0);
+          sync.mSignaled = (res == LOCAL_GL_ALREADY_SIGNALED ||
+                            res == LOCAL_GL_CONDITION_SATISFIED);
+        }
+        return JS::NumberValue(sync.mSignaled ? LOCAL_GL_SIGNALED : LOCAL_GL_UNSIGNALED);
+      }
       default:
         EnqueueError_ArgEnum("pname", pname);
         return JS::NullValue();
@@ -2853,6 +3552,11 @@ GLenum ClientWebGLContext::ClientWaitSync(const WebGLSyncJS& sync,
   const FuncScope funcScope(*this, "clientWaitSync");
   if (IsContextLost()) return;
   if (!sync.ValidateUsable(*this, "sync")) return;
+
+  if (flags != 0) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`flags` must be 0.");
+    return;
+  }
 
   return Run<RPROC(ClientWaitSync)>(sync.mId, flags, timeout);
 }
@@ -3217,7 +3921,7 @@ RefPtr<WebGLActiveInfoJS> ClientWebGLContext::GetActiveAttrib(const WebGLProgram
   if (IsContextLost()) return nullptr;
   if (!prog.ValidateUsable(*this, "program")) return nullptr;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeAttribs;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -3233,7 +3937,7 @@ RefPtr<WebGLActiveInfoJS> ClientWebGLContext::GetActiveUniform(const WebGLProgra
   if (IsContextLost()) return nullptr;
   if (!prog.ValidateUsable(*this, "program")) return nullptr;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeUniforms;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -3249,7 +3953,7 @@ void ClientWebGLContext::GetActiveUniformBlockName(const WebGLProgramJS& prog, c
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeUniformBlocks;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -3269,7 +3973,7 @@ void ClientWebGLContext::GetActiveUniformBlockParameter(JSContext* const cx,
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeUniformBlocks;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -3322,7 +4026,7 @@ void ClientWebGLContext::GetActiveUniforms(JSContext* const cx, const WebGLProgr
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeUniforms;
 
   const auto count = uniformIndices.Length();
@@ -3348,23 +4052,23 @@ void ClientWebGLContext::GetActiveUniforms(JSContext* const cx, const WebGLProgr
         break;
 
       case LOCAL_GL_UNIFORM_BLOCK_INDEX:
-        value = JS::NumberValue(uniform.blockIndex);
+        value = JS::NumberValue(uniform.block_index);
         break;
 
       case LOCAL_GL_UNIFORM_OFFSET:
-        value = JS::NumberValue(uniform.offset);
+        value = JS::NumberValue(uniform.block_offset);
         break;
 
       case LOCAL_GL_UNIFORM_ARRAY_STRIDE:
-        value = JS::NumberValue(uniform.arrayStride);
+        value = JS::NumberValue(uniform.block_arrayStride);
         break;
 
       case LOCAL_GL_UNIFORM_MATRIX_STRIDE:
-        value = JS::NumberValue(uniform.matrixStride);
+        value = JS::NumberValue(uniform.block_matrixStride);
         break;
 
       case LOCAL_GL_UNIFORM_IS_ROW_MAJOR:
-        value = JS::BooleanValue(uniform.isRowMajor);
+        value = JS::BooleanValue(uniform.block_isRowMajor);
         break;
 
       default:
@@ -3383,7 +4087,7 @@ RefPtr<WebGLActiveInfoJS> ClientWebGLContext::GetTransformFeedbackVarying(const 
   if (IsContextLost()) return nullptr;
   if (!prog.ValidateUsable(*this, "program")) return nullptr;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeTfVaryings;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -3400,7 +4104,7 @@ GLint ClientWebGLContext::GetAttribLocation(const WebGLProgramJS& prog,
   if (!prog.ValidateUsable(*this, "program")) return -1;
 
   const nsCString nameU8 = std::move(NS_ConvertUTF16toUTF8(name));
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   for (const auto& cur : res.activeAttribs) {
     if (cur.mName == nameU8) return cur.mLoc;
   }
@@ -3415,10 +4119,8 @@ GLint ClientWebGLContext::GetFragDataLocation(const WebGLProgramJS& prog,
   if (!prog.ValidateUsable(*this, "program")) return -1;
 
   const auto nameU8 = std::string(NS_ConvertUTF16toUTF8(name).BeginReading());
-  const auto& res = GetProgramResult(prog);
-  const auto itr = res.fragDataLocByName.find(nameU8);
-  if (itr == res.fragDataLocByName.end()) return -1;
-  return static_cast<GLint>(itr->second);
+
+  return Run<RPROC(GetFragDataLocation)>(prog.mId, nameU8);
 }
 
 GLuint ClientWebGLContext::GetUniformBlockIndex(
@@ -3429,7 +4131,7 @@ GLuint ClientWebGLContext::GetUniformBlockIndex(
 
   const auto nameU8 = std::string(NS_ConvertUTF16toUTF8(blockName).BeginReading());
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   const auto& list = res.activeUniformBlocks;
   for (const auto& i : IntegerRange(list.size()) {
     const auto& cur = list[i];
@@ -3448,7 +4150,7 @@ void ClientWebGLContext::GetUniformIndices(
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   auto ret = nsTArray<GLuint>(uniformNames.Length());
 
   for (const auto& uniformName : uniformNames) {
@@ -3479,7 +4181,7 @@ ClientWebGLContext::GetUniformLocation(const WebGLProgramJS& prog,
   if (!mUniformLocs) {
     mUniformLocs.emplace();
 
-    const auto& res = GetProgramResult(prog);
+    const auto& res = GetLinkResult(prog);
     ostringstream locName;
     RefPtr<WebGLUniformLocationJS> loc;
     for (const auto& activeUniform : res.activeUniforms) {
@@ -3507,7 +4209,7 @@ void ClientWebGLContext::GetProgramInfoLog(const WebGLProgramJS& prog, nsAString
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& res = GetProgramResult(prog);
+  const auto& res = GetLinkResult(prog);
   retval = NS_ConvertUTF8toUTF16(res.log);
 }
 
@@ -3530,7 +4232,7 @@ void ClientWebGLContext::GetProgramParameter(JSContext* const js, const WebGLPro
         break;
     }
 
-    const auto& res = GetProgramResult(prog);
+    const auto& res = GetLinkResult(prog);
 
     switch (pname) {
       case LOCAL_GL_LINK_STATUS:
@@ -3640,10 +4342,10 @@ const webgl::CompileResult& ClientWebGLContext::GetShaderResult(const WebGLShade
   return shader.mResult;
 }
 
-const webgl::LinkResult& ClientWebGLContext::GetProgramResult(const WebGLProgramJS& prog) const {
+const webgl::LinkResult& ClientWebGLContext::GetLinkResult(const WebGLProgramJS& prog) const {
   if (prog.mResult->pending) {
     prog.mResult = std::make_shared<webgl::LinkResult>();
-    *prog.mResult = Run<RPROC(GetProgramResult)>(prog.mId);
+    *prog.mResult = Run<RPROC(GetLinkResult)>(prog.mId);
   }
   return *(prog.mResult);
 }
