@@ -171,65 +171,6 @@ void WebGLShader::BindAttribLocation(GLuint prog, const std::string& userName,
   }
 }
 
-bool WebGLShader::FindAttribUserNameByMappedName(
-    const nsACString& mappedName, nsCString* const out_userName) const {
-  const std::string mappedNameStr(mappedName.BeginReading());
-
-  for (const auto& cur : mCompileResults->mAttributes) {
-    if (cur.mappedName == mappedNameStr) {
-      *out_userName = cur.name.c_str();
-      return true;
-    }
-  }
-  return false;
-}
-
-bool WebGLShader::FindVaryingByMappedName(const nsACString& mappedName,
-                                          nsCString* const out_userName,
-                                          bool* const out_isArray) const {
-  const std::string mappedNameStr(mappedName.BeginReading());
-
-  for (const auto& cur : mCompileResults->mVaryings) {
-    const sh::ShaderVariable* found;
-    std::string userName;
-    if (!cur.findInfoByMappedName(mappedNameStr, &found, &userName)) continue;
-
-    *out_userName = userName.c_str();
-    *out_isArray = found->isArray();
-    return true;
-  }
-
-  return false;
-}
-
-bool WebGLShader::FindUniformByMappedName(const nsACString& mappedName,
-                                          nsCString* const out_userName,
-                                          bool* const out_isArray) const {
-  const std::string mappedNameStr(mappedName.BeginReading(),
-                                  mappedName.Length());
-  std::string userNameStr;
-  if (!mCompileResults->FindUniformByMappedName(mappedNameStr, &userNameStr,
-                                                out_isArray))
-    return false;
-
-  *out_userName = userNameStr.c_str();
-  return true;
-}
-
-bool WebGLShader::UnmapUniformBlockName(
-    const nsACString& baseMappedName, nsCString* const out_baseUserName) const {
-  for (const auto& interface : mCompileResults->mInterfaceBlocks) {
-    const nsDependentCString interfaceMappedName(interface.mappedName.data(),
-                                                 interface.mappedName.size());
-    if (baseMappedName == interfaceMappedName) {
-      *out_baseUserName = interface.name.data();
-      return true;
-    }
-  }
-
-  return false;
-}
-
 void WebGLShader::MapTransformFeedbackVaryings(
     const std::vector<nsString>& varyings,
     std::vector<std::string>* out_mappedVaryings) const {

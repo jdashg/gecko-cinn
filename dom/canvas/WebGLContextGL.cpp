@@ -146,27 +146,6 @@ void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
   }
 }
 
-void WebGLContext::BindRenderbuffer(GLenum target, WebGLRenderbuffer* wrb) {
-  const FuncScope funcScope(*this, "bindRenderbuffer");
-  if (IsContextLost()) return;
-
-  if (target != LOCAL_GL_RENDERBUFFER)
-    return ErrorInvalidEnumInfo("target", target);
-
-  if (wrb && !ValidateObject("rb", *wrb)) return;
-
-  // Usually, we would now call into glBindRenderbuffer. However, since we have
-  // to potentially emulate packed-depth-stencil, there's not a specific
-  // renderbuffer that we know we should bind here. Instead, we do all
-  // renderbuffer binding lazily.
-
-  if (wrb) {
-    wrb->mHasBeenBound = true;
-  }
-
-  mBoundRenderbuffer = wrb;
-}
-
 void WebGLContext::BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
   const FuncScope funcScope(*this, "blendEquationSeparate");
   if (IsContextLost()) return;
@@ -328,9 +307,6 @@ void WebGLContext::DeleteRenderbuffer(WebGLRenderbuffer* rbuf) {
   if (mBoundDrawFramebuffer) mBoundDrawFramebuffer->DetachRenderbuffer(rbuf);
 
   if (mBoundReadFramebuffer) mBoundReadFramebuffer->DetachRenderbuffer(rbuf);
-
-  if (mBoundRenderbuffer == rbuf)
-    BindRenderbuffer(LOCAL_GL_RENDERBUFFER, nullptr);
 
   rbuf->RequestDelete();
 }
@@ -725,20 +701,11 @@ Maybe<double> WebGLContext::GetFramebufferAttachmentParameter(
   return Nothing();
 }
 
-Maybe<double> WebGLContext::GetRenderbufferParameter(GLenum target,
+Maybe<double> WebGLContext::GetRenderbufferParameter(const WebGLRenderbuffer* const rb,
                                                          GLenum pname) {
   const FuncScope funcScope(*this, "getRenderbufferParameter");
   if (IsContextLost()) return Nothing();
-
-  if (target != LOCAL_GL_RENDERBUFFER) {
-    ErrorInvalidEnumInfo("target", target);
-    return Nothing();
-  }
-
-  if (!mBoundRenderbuffer) {
-    ErrorInvalidOperation("No renderbuffer is bound.");
-    return Nothing();
-  }
+  if (!rb) return {};
 
   switch (pname) {
     case LOCAL_GL_RENDERBUFFER_SAMPLES:
@@ -755,7 +722,7 @@ Maybe<double> WebGLContext::GetRenderbufferParameter(GLenum target,
     case LOCAL_GL_RENDERBUFFER_STENCIL_SIZE:
     case LOCAL_GL_RENDERBUFFER_INTERNAL_FORMAT: {
       // RB emulation means we have to ask the RB itself.
-      GLint i = mBoundRenderbuffer->GetRenderbufferParameter(target, pname);
+      GLint i = rb->GetRenderbufferParameter(target, pname);
       return Some(i);
     }
 
@@ -1361,20 +1328,11 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
   }
 }
 
-void WebGLContext::RenderbufferStorage_base(GLenum target, GLsizei samples,
+void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer* const rb, GLsizei samples,
                                             GLenum internalFormat,
                                             GLsizei width, GLsizei height) {
   if (IsContextLost()) return;
-
-  if (target != LOCAL_GL_RENDERBUFFER) {
-    ErrorInvalidEnumInfo("target", target);
-    return;
-  }
-
-  if (!mBoundRenderbuffer) {
-    ErrorInvalidOperation("Called on renderbuffer 0.");
-    return;
-  }
+  if (!rb) return;
 
   if (!ValidateNonNegative("width", width) ||
       !ValidateNonNegative("height", height) ||
@@ -1382,7 +1340,7 @@ void WebGLContext::RenderbufferStorage_base(GLenum target, GLsizei samples,
     return;
   }
 
-  mBoundRenderbuffer->RenderbufferStorage(uint32_t(samples), internalFormat,
+  rb->RenderbufferStorage(uint32_t(samples), internalFormat,
                                           uint32_t(width), uint32_t(height));
 }
 
@@ -1444,126 +1402,6 @@ void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
 ////////////////////////////////////////////////////////////////////////////////
 // Uniform setters.
 
-class ValidateIfSampler {
-  const WebGLUniformLocation* const mLoc;
-  const size_t mDataCount;
-  const GLint* const mData;
-  bool mIsValidatedSampler;
-
- public:
-  ValidateIfSampler(WebGLContext* webgl, WebGLUniformLocation* loc,
-                    size_t dataCount, const GLint* data, bool* const out_error)
-      : mLoc(loc),
-        mDataCount(dataCount),
-        mData(data),
-        mIsValidatedSampler(false) {
-    if (!mLoc->mInfo->mSamplerTexList) {
-      *out_error = false;
-      return;
-    }
-
-    for (size_t i = 0; i < mDataCount; i++) {
-      const auto& val = mData[i];
-      if (val < 0 || uint32_t(val) >= webgl->GLMaxTextureUnits()) {
-        webgl->ErrorInvalidValue(
-            "This uniform location is a sampler, but %d"
-            " is not a valid texture unit.",
-            val);
-        *out_error = true;
-        return;
-      }
-    }
-
-    mIsValidatedSampler = true;
-    *out_error = false;
-  }
-
-  ~ValidateIfSampler() {
-    if (!mIsValidatedSampler) return;
-
-    auto& samplerValues = mLoc->mInfo->mSamplerValues;
-
-    for (size_t i = 0; i < mDataCount; i++) {
-      const size_t curIndex = mLoc->mArrayIndex + i;
-      if (curIndex >= samplerValues.size()) break;
-
-      samplerValues[curIndex] = mData[i];
-    }
-  }
-};
-
-////////////////////
-
-void WebGLContext::Uniform1i(WebGLUniformLocation* loc, GLint a1) {
-  const FuncScope funcScope(*this, "uniform1i");
-  if (!ValidateUniformSetter(loc, 1, webgl::AttribBaseType::Int)) return;
-
-  bool error;
-  const ValidateIfSampler validate(this, loc, 1, &a1, &error);
-  if (error) return;
-
-  gl->fUniform1i(loc->mLoc, a1);
-}
-
-void WebGLContext::Uniform2i(WebGLUniformLocation* loc, GLint a1, GLint a2) {
-  const FuncScope funcScope(*this, "uniform2i");
-  if (!ValidateUniformSetter(loc, 2, webgl::AttribBaseType::Int)) return;
-
-  gl->fUniform2i(loc->mLoc, a1, a2);
-}
-
-void WebGLContext::Uniform3i(WebGLUniformLocation* loc, GLint a1, GLint a2,
-                             GLint a3) {
-  const FuncScope funcScope(*this, "uniform3i");
-  if (!ValidateUniformSetter(loc, 3, webgl::AttribBaseType::Int)) return;
-
-  gl->fUniform3i(loc->mLoc, a1, a2, a3);
-}
-
-void WebGLContext::Uniform4i(WebGLUniformLocation* loc, GLint a1, GLint a2,
-                             GLint a3, GLint a4) {
-  const FuncScope funcScope(*this, "uniform4i");
-  if (!ValidateUniformSetter(loc, 4, webgl::AttribBaseType::Int)) return;
-
-  gl->fUniform4i(loc->mLoc, a1, a2, a3, a4);
-}
-
-//////////
-
-void WebGLContext::Uniform1f(WebGLUniformLocation* loc, GLfloat a1) {
-  const FuncScope funcScope(*this, "uniform1f");
-  if (!ValidateUniformSetter(loc, 1, webgl::AttribBaseType::Float)) return;
-
-  gl->fUniform1f(loc->mLoc, a1);
-}
-
-void WebGLContext::Uniform2f(WebGLUniformLocation* loc, GLfloat a1,
-                             GLfloat a2) {
-  const FuncScope funcScope(*this, "uniform2f");
-  if (!ValidateUniformSetter(loc, 2, webgl::AttribBaseType::Float)) return;
-
-  gl->fUniform2f(loc->mLoc, a1, a2);
-}
-
-void WebGLContext::Uniform3f(WebGLUniformLocation* loc, GLfloat a1, GLfloat a2,
-                             GLfloat a3) {
-  const FuncScope funcScope(*this, "uniform3f");
-  if (!ValidateUniformSetter(loc, 3, webgl::AttribBaseType::Float)) return;
-
-  gl->fUniform3f(loc->mLoc, a1, a2, a3);
-}
-
-void WebGLContext::Uniform4f(WebGLUniformLocation* loc, GLfloat a1, GLfloat a2,
-                             GLfloat a3, GLfloat a4) {
-  const FuncScope funcScope(*this, "uniform4f");
-  if (!ValidateUniformSetter(loc, 4, webgl::AttribBaseType::Float)) return;
-
-  gl->fUniform4f(loc->mLoc, a1, a2, a3, a4);
-}
-
-////////////////////////////////////////
-// Array
-
 static bool ValidateArrOffsetAndCount(WebGLContext* webgl, size_t elemsAvail,
                                       GLuint elemOffset,
                                       GLuint elemCountOverride,
@@ -1587,91 +1425,118 @@ static bool ValidateArrOffsetAndCount(WebGLContext* webgl, size_t elemsAvail,
   *out_elemCount = elemsAvail;
   return true;
 }
+struct SamplerUniformInfo final {
+  const ActiveUniformInfo& info;
+  const decltype(WebGLContext::mBound2DTextures)& texListForType;
+  const webgl::TextureBaseType texBaseType;
+  const bool isShadowSampler;
+  std::vector<uint32_t> texUnits;
+};
 
-void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, webgl::AttribBaseType t,
-                              const RawBuffer<>& data) const {
+struct SamplerLocationInfo final {
+  const uint32_t indexIntoUniform;
+  SamplerUniformInfo& samplerInfo;
+};
+
+void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::UniformBaseType t,
+                              const Range<const uint8_t>& data) const {
   const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
+  const auto& link = mActiveLinkResult;
+  if (!link) return;
 
-  size_t elemCount;
-  if (!ValidateArrOffsetAndCount(this, arr.Length(), elemOffset,
-                                 elemCountOverride, &elemCount)) {
+  const auto locInfo = MaybeFind(link->locationMap, loc);
+  if (!locInfo) return;
+
+  if (n != locInfo->info.elemSize) {
+    ErrorInvalidOperation(
+        "Size from function (%u) differs from size in shader (%u).",
+        n, locInfo->info.elemSize);
     return;
   }
-  const auto elemBytes = arr.Data() + elemOffset;
 
-  uint32_t numElementsToUpload;
-  if (!ValidateUniformArraySetter(loc, N, webgl::AttribBaseType::Int, elemCount,
-                                  &numElementsToUpload)) {
+  const bool typeOk = [&]() {
+    const auto baseType = ToAttribBaseType(locInfo->info.elemType);
+    switch (baseType) {
+      case webgl::AttribBaseType::Boolean: return true;
+      case webgl::AttribBaseType::Float: return t == webgl::UniformBaseType::Float;
+      case webgl::AttribBaseType::Int: return t == webgl::UniformBaseType::Int;
+      case webgl::AttribBaseType::UInt: return t == webgl::UniformBaseType::Uint;
+    }
+  }();
+  if (!typeOk) {
+    ErrorInvalidOperation(
+        "Type from function (%s) is incompatible with type in shader (%s).",
+        ToString(t), ToString(locInfo->mElemType));
     return;
   }
 
-  bool error;
-  const ValidateIfSampler samplerValidator(this, loc, numElementsToUpload,
-                                           elemBytes, &error);
-  if (error) return;
+  // -
 
-  static const decltype(&gl::GLContext::fUniform1iv) kFuncList[] = {
-      &gl::GLContext::fUniform1iv, &gl::GLContext::fUniform2iv,
-      &gl::GLContext::fUniform3iv, &gl::GLContext::fUniform4iv};
-  const auto func = kFuncList[N - 1];
+  const auto elemCount = data.length() / (sizeof(float) * n); // rounds down
+  if (!elemCount) return;
 
-  (gl->*func)(loc->mLoc, numElementsToUpload, elemBytes);
-}
-
-void WebGLContext::UniformNuiv(const char* funcName, uint8_t N,
-                               WebGLUniformLocation* loc,
-                               const RawBuffer<const GLuint>& arr,
-                               GLuint elemOffset, GLuint elemCountOverride) {
-  const FuncScope funcScope(*this, funcName);
-
-  size_t elemCount;
-  if (!ValidateArrOffsetAndCount(this, arr.Length(), elemOffset,
-                                 elemCountOverride, &elemCount)) {
-    return;
+  const auto samplerInfo = locInfo->samplerInfo;
+  if (samplerInfo) {
+    const auto idata = reinterpret_cast<const uint32_t*>(data.begin());
+    const auto maxTexUnits = GLMaxTextureUnits();
+    for (const auto& val : Range<const uint32_t>(idata, elemCount)) {
+      if (val >= maxTexUnits) {
+        ErrorInvalidValue(
+            "This uniform location is a sampler, but %d"
+            " is not a valid texture unit.",
+            val);
+        return;
+      }
+    }
   }
-  const auto elemBytes = arr.Data() + elemOffset;
 
-  uint32_t numElementsToUpload;
-  if (!ValidateUniformArraySetter(loc, N, webgl::AttribBaseType::UInt,
-                                  elemCount, &numElementsToUpload)) {
-    return;
-  }
-  MOZ_ASSERT(!loc->mInfo->mSamplerTexList, "Should not be a sampler.");
+  // -
 
-  static const decltype(&gl::GLContext::fUniform1uiv) kFuncList[] = {
-      &gl::GLContext::fUniform1uiv, &gl::GLContext::fUniform2uiv,
-      &gl::GLContext::fUniform3uiv, &gl::GLContext::fUniform4uiv};
-  const auto func = kFuncList[N - 1];
-
-  (gl->*func)(loc->mLoc, numElementsToUpload, elemBytes);
-}
-
-void WebGLContext::UniformNfv(const char* funcName, uint8_t N,
-                              WebGLUniformLocation* loc,
-                              const RawBuffer<const GLfloat>& arr,
-                              GLuint elemOffset, GLuint elemCountOverride) {
-  const FuncScope funcScope(*this, funcName);
-
-  size_t elemCount;
-  if (!ValidateArrOffsetAndCount(this, arr.Length(), elemOffset,
-                                 elemCountOverride, &elemCount)) {
-    return;
-  }
-  const auto elemBytes = arr.Data() + elemOffset;
-
-  uint32_t numElementsToUpload;
-  if (!ValidateUniformArraySetter(loc, N, webgl::AttribBaseType::Float,
-                                  elemCount, &numElementsToUpload)) {
-    return;
-  }
-  MOZ_ASSERT(!loc->mInfo->mSamplerTexList, "Should not be a sampler.");
-
-  static const decltype(&gl::GLContext::fUniform1fv) kFuncList[] = {
+  static const decltype(&gl::GLContext::fUniform1fv) kFloatFuncs[] = {
       &gl::GLContext::fUniform1fv, &gl::GLContext::fUniform2fv,
       &gl::GLContext::fUniform3fv, &gl::GLContext::fUniform4fv};
-  const auto func = kFuncList[N - 1];
+  static const decltype(&gl::GLContext::fUniform1iv) kIntFuncs[] = {
+      &gl::GLContext::fUniform1iv, &gl::GLContext::fUniform2iv,
+      &gl::GLContext::fUniform3iv, &gl::GLContext::fUniform4iv};
+  static const decltype(&gl::GLContext::fUniform1uiv) kUintFuncs[] = {
+      &gl::GLContext::fUniform1uiv, &gl::GLContext::fUniform2uiv,
+      &gl::GLContext::fUniform3uiv, &gl::GLContext::fUniform4uiv};
 
-  (gl->*func)(loc->mLoc, numElementsToUpload, elemBytes);
+  switch (t) {
+    case webgl::UniformBaseType::Float: {
+      const auto func = kFloatFuncs[n - 1];
+      (gl->*func)(static_cast<GLint>(loc), elemCount,
+                  reinterpret_cast<const float*>(data.data()));
+      break;
+    }
+    case webgl::UniformBaseType::Int: {
+      const auto func = kIntFuncs[n - 1];
+      (gl->*func)(static_cast<GLint>(loc), elemCount,
+                  reinterpret_cast<const int32_t*>(data.data()));
+      break;
+    }
+    case webgl::UniformBaseType::Uint: {
+      const auto func = kUintFuncs[n - 1];
+      (gl->*func)(static_cast<GLint>(loc), elemCount,
+                  reinterpret_cast<const uint32_t*>(data.data()));
+      break;
+    }
+  }
+
+  // -
+
+  if (samplerInfo) {
+    auto& texUnits = samplerInfo->texUnits;
+
+    const auto srcBegin = reinterpret_cast<const uint32_t*>(data.begin());
+    auto destIndex = locInfo->indexIntoUniform;
+    for (const auto& val : Range<const uint32_t>(srcBegin, elemCount)) {
+      if (destIndex >= texUnits.size())
+        break;
+      texUnits[destIndex] = val;
+      destIndex += 1;
+    }
+  }
 }
 
 static inline void MatrixAxBToRowMajor(const uint8_t width,
@@ -1685,61 +1550,40 @@ static inline void MatrixAxBToRowMajor(const uint8_t width,
   }
 }
 
-void WebGLContext::UniformMatrixAxBfv(const char* funcName, uint8_t A,
-                                      uint8_t B, WebGLUniformLocation* loc,
-                                      const bool transpose,
-                                      const RawBuffer<const float>& arr,
-                                      GLuint elemOffset,
-                                      GLuint elemCountOverride) {
-  const FuncScope funcScope(*this, funcName);
+void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
+                                      const uint8_t b, const bool transpose,
+                                      const Range<const float>& data) const {
+  const FuncScope funcScope(*this, "UniformMatrix[1234]x[1234]fv");
+  const auto& link = mActiveLinkResult;
+  if (!link) return;
 
-  size_t elemCount;
-  if (!ValidateArrOffsetAndCount(this, arr.Length(), elemOffset,
-                                 elemCountOverride, &elemCount)) {
+  const auto locInfo = link->GetUniformByLoc(loc);
+  if (!locInfo) return;
+
+  const bool typeOk = [&]() {
+    switch (locInfo->mElemType) {
+      case LOCAL_GL_FLOAT_MAT2: return a == 2 && b == 2;
+      case LOCAL_GL_FLOAT_MAT3: return a == 3 && b == 3;
+      case LOCAL_GL_FLOAT_MAT4: return a == 4 && b == 4;
+      case LOCAL_GL_FLOAT_MAT2x3: return a == 2 && b == 3;
+      case LOCAL_GL_FLOAT_MAT2x4: return a == 2 && b == 4;
+      case LOCAL_GL_FLOAT_MAT3x2: return a == 3 && b == 2;
+      case LOCAL_GL_FLOAT_MAT3x4: return a == 3 && b == 4;
+      case LOCAL_GL_FLOAT_MAT4x2: return a == 4 && b == 2;
+      case LOCAL_GL_FLOAT_MAT4x3: return a == 4 && b == 3;
+      default: return false;
+    }
+  }();
+  if (!typeOk) {
+    ErrorInvalidOperation(
+        "Type from function (%ux%u matrix) is incompatible with type in shader (%s).",
+        a, b, EnumString(locInfo->mElemType).c_str());
     return;
   }
-  const auto elemBytes = arr.Data() + elemOffset;
 
-  uint32_t numMatsToUpload;
-  if (!ValidateUniformMatrixArraySetter(loc, A, B, webgl::AttribBaseType::Float,
-                                        elemCount, transpose,
-                                        &numMatsToUpload)) {
-    return;
-  }
-  MOZ_ASSERT(!loc->mInfo->mSamplerTexList, "Should not be a sampler.");
+  // -
 
-  ////
-
-  bool uploadTranspose = transpose;
-  const float* uploadBytes = elemBytes;
-
-  UniqueBuffer temp;
-  if (!transpose && gl->WorkAroundDriverBugs() && gl->IsANGLE() &&
-      gl->IsAtLeast(gl::ContextProfile::OpenGLES, 300)) {
-    // ANGLE is really slow at non-GL-transposed matrices.
-    const size_t kElemsPerMat = A * B;
-
-    temp = malloc(numMatsToUpload * kElemsPerMat * sizeof(float));
-    if (!temp) {
-      ErrorOutOfMemory("Failed to alloc temporary buffer for transposition.");
-      return;
-    }
-
-    auto srcItr = (const float*)elemBytes;
-    auto dstItr = (float*)temp.get();
-    const auto srcEnd = srcItr + numMatsToUpload * kElemsPerMat;
-
-    while (srcItr != srcEnd) {
-      MatrixAxBToRowMajor(A, B, srcItr, dstItr);
-      srcItr += kElemsPerMat;
-      dstItr += kElemsPerMat;
-    }
-
-    uploadBytes = (const float*)temp.get();
-    uploadTranspose = true;
-  }
-
-  ////
+  const auto elemCount = data.length() / (sizeof(float) * a * b); // rounds down
 
   static const decltype(&gl::GLContext::fUniformMatrix2fv) kFuncList[] = {
       &gl::GLContext::fUniformMatrix2fv,   &gl::GLContext::fUniformMatrix2x3fv,
@@ -1750,9 +1594,9 @@ void WebGLContext::UniformMatrixAxBfv(const char* funcName, uint8_t A,
 
       &gl::GLContext::fUniformMatrix4x2fv, &gl::GLContext::fUniformMatrix4x3fv,
       &gl::GLContext::fUniformMatrix4fv};
-  const auto func = kFuncList[3 * (A - 2) + (B - 2)];
+  const auto func = kFuncList[3 * (a - 2) + (b - 2)];
 
-  (gl->*func)(loc->mLoc, numMatsToUpload, uploadTranspose, uploadBytes);
+  (gl->*func)(static_cast<GLint>(loc), elemCount, transpose, data.begin());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -42,42 +42,9 @@ namespace webgl {
 
 enum class TextureBaseType : uint8_t;
 
-struct AttribInfo final {
-  const WebGLActiveInfo mActiveInfo;
-  const GLint mLoc;  // -1 for active built-ins
-};
-
-struct UniformInfo final {
-  typedef decltype(WebGLContext::mBound2DTextures) TexListT;
-
-  const WebGLActiveInfo mActiveInfo;
-  const TexListT* const mSamplerTexList;
-  const webgl::TextureBaseType mTexBaseType;
-  const bool mIsShadowSampler;
-
-  std::vector<uint32_t> mSamplerValues;
-
- protected:
-  static const TexListT* GetTexList(const WebGLContext* aWebGL,
-                                    WebGLActiveInfo* activeInfo);
-
- public:
-  explicit UniformInfo(const WebGLContext* aWebGL, WebGLActiveInfo& activeInfo);
-};
-
 struct UniformBlockInfo final {
-  const nsCString mUserName;
-  const nsCString mMappedName;
-  const uint32_t mDataSize;
-
-  const IndexedBufferBinding* mBinding;
-
-  UniformBlockInfo(WebGLContext* webgl, const nsACString& userName,
-                   const nsACString& mappedName, uint32_t dataSize)
-      : mUserName(userName),
-        mMappedName(mappedName),
-        mDataSize(dataSize),
-        mBinding(&webgl->mIndexedUniformBufferBindings[0]) {}
+  const ActiveUniformBlockInfo& info;
+  const IndexedBufferBinding* binding;
 };
 
 struct FragOutputInfo final {
@@ -93,6 +60,23 @@ struct CachedDrawFetchLimits final {
   std::vector<BufferAndIndex> usedBuffers;
 };
 
+// -
+
+struct SamplerUniformInfo final {
+  const decltype(WebGLContext::mBound2DTextures)& texListForType;
+  const webgl::TextureBaseType texBaseType;
+  const bool isShadowSampler;
+  std::vector<uint32_t> texUnits;
+};
+
+struct LocationInfo final {
+  const ActiveUniformInfo& info;
+  const uint32_t indexIntoUniform;
+  SamplerUniformInfo* const samplerInfo;
+};
+
+// -
+
 struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
                                  public SupportsWeakPtr<LinkedProgramInfo>,
                                  public CacheInvalidator {
@@ -106,21 +90,22 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
   WebGLProgram* const prog;
   const GLenum transformFeedbackBufferMode;
 
-  std::vector<AttribInfo> attribs;
-  std::vector<UniformInfo*> uniforms;            // Owns its contents.
-  std::vector<UniformBlockInfo*> uniformBlocks;  // Owns its contents.
-  std::vector<WebGLActiveInfo> transformFeedbackVaryings;
+  std::vector<UniformBlockInfo> uniformBlocks;
   std::unordered_map<uint8_t, const FragOutputInfo> fragOutputs;
   uint8_t zLayerCount = 1;
-
-  // Needed for draw call validation.
-  std::vector<UniformInfo*> uniformSamplers;
 
   mutable std::vector<size_t> componentsPerTFVert;
 
   bool attrib0Active;
 
+  // -
+
   std::map<std::string, std::string> nameMap;
+  webgl::LinkActiveInfo active;
+
+
+  std::vector<std::unique_ptr<SamplerUniformInfo>> samplerUniforms;
+  std::unordered_map<uint32_t, LocationInfo> locationMap;
 
   //////
 
@@ -133,12 +118,6 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
 
   explicit LinkedProgramInfo(WebGLProgram* prog);
   ~LinkedProgramInfo();
-
-  bool FindAttrib(const nsCString& userName,
-                  const AttribInfo** const out_info) const;
-  bool FindUniform(const nsCString& userName, nsCString* const out_mappedName,
-                   size_t* const out_arrayIndex,
-                   UniformInfo** const out_info) const;
 };
 
 }  // namespace webgl
@@ -168,22 +147,8 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   ////////////////
 
-  bool FindAttribUserNameByMappedName(const nsACString& mappedName,
-                                      nsCString* const out_userName) const;
-  bool FindVaryingByMappedName(const nsACString& mappedName,
-                               nsCString* const out_userName,
-                               bool* const out_isArray) const;
-  bool FindUniformByMappedName(const nsACString& mappedName,
-                               nsCString* const out_userName,
-                               bool* const out_isArray) const;
-  bool UnmapUniformBlockName(const nsCString& mappedName,
-                             nsCString* const out_userName) const;
-
   void TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
                                  GLenum bufferMode);
-
-  void EnumerateFragOutputs(
-      std::map<nsCString, const nsCString>& out_FragOutputs) const;
 
   bool IsLinked() const { return mMostRecentLinkInfo; }
 

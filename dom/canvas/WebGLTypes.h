@@ -295,12 +295,20 @@ struct SampleableInfo final {
 };
 
 enum class AttribBaseType : uint8_t {
+  Boolean,  // Can convert from anything.
+  Float,    // Also includes NormU?Int
   Int,
   UInt,
-  Float,    // Also includes NormU?Int
-  Boolean,  // Can convert from anything.
 };
+webgl::AttribBaseType ToAttribBaseType(GLenum);
 const char* ToString(AttribBaseType);
+
+enum class UniformBaseType : uint8_t {
+  Float,
+  Int,
+  Uint,
+};
+const char* ToString(UniformBaseType);
 
 typedef uint64_t ObjectId;
 

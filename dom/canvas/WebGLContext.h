@@ -642,7 +642,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   //////////////////////////
 
-  void UniformNTv(uint32_t loc, uint8_t n, webgl::AttribBaseType t,
+  void UniformNTv(uint32_t loc, uint8_t n, webgl::UniformBaseType t,
                   const RawBuffer<>& data) const;
 
   void UniformMatrixAxBfv(const char* funcName, uint8_t A, uint8_t B,
@@ -1332,7 +1332,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   WebGLRefPtr<WebGLFramebuffer> mBoundDrawFramebuffer;
   WebGLRefPtr<WebGLFramebuffer> mBoundReadFramebuffer;
-  WebGLRefPtr<WebGLRenderbuffer> mBoundRenderbuffer;
   WebGLRefPtr<WebGLTransformFeedback> mBoundTransformFeedback;
   WebGLRefPtr<WebGLVertexArray> mBoundVertexArray;
 

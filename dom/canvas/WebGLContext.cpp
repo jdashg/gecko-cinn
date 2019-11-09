@@ -240,7 +240,6 @@ void WebGLContext::DestroyResourcesAndContext() {
   mActiveProgramLinkInfo = nullptr;
   mBoundDrawFramebuffer = nullptr;
   mBoundReadFramebuffer = nullptr;
-  mBoundRenderbuffer = nullptr;
   mBoundVertexArray = nullptr;
   mDefaultVertexArray = nullptr;
   mBoundTransformFeedback = nullptr;
@@ -2251,7 +2250,7 @@ static std::vector<std::string> ExplodeName(const std::string& str) {
 
 //-
 
-static webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const bool webgl2,
+webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const bool webgl2,
                                  const std::unordered_map<std::string, std::string>& nameUnmap) {
   webgl::LinkResult ret;
   [&]() {
@@ -2509,14 +2508,8 @@ webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram* const prog) co
     if (!prog) return;
     const auto& info = prog->LinkInfo();
     if (!info) return;
-    const auto& nameMap = info->nameMap;
 
-    std::unordered_map<std::string, std::string> nameUnmap;
-    for (const auto& pair : nameMap) {
-      nameUnmap[pair.second] = pair.first;
-    }
-
-    ret.active = std::move(GetLinkActiveInfo(*gl, prog->mGLName, IsWebGL2(), nameUnmap));
+    ret.active = info->active;
 
     ret.numTfBuffers = 1;
     if (info->transformFeedbackBufferMode == LOCAL_GL_SEPARATE_ATTRIBS) {

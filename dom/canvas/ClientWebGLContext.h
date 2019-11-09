@@ -1510,11 +1510,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
 
  private:
-  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t,
+  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
     const Range<const uint8_t>& bytes) const;
 
   template<typename T>
-  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::AttribBaseType t,
+  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
           const Range<T>& range) const {
     UniformNTV(loc, n, t, Range<const uint8_t>(range));
   }
@@ -1568,9 +1568,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
       UniformNTv(loc, 4, BaseType, MakeRange(arr)); \
     }
 
-  _(f,float,webgl::AttribBaseType::Float)
-  _(i,int32_t,webgl::AttribBaseType::Int)
-  _(ui,uint32_t,webgl::AttribBaseType::UInt)
+  _(f,float,webgl::UniformBaseType::Float)
+  _(i,int32_t,webgl::UniformBaseType::Int)
+  _(ui,uint32_t,webgl::UniformBaseType::Uint)
 
   #undef _
 
@@ -1581,18 +1581,18 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
       UniformNTv(loc, N, BaseType, MakeRange(list)); \
     }
 
-  _(1,f,webgl::AttribBaseType::Float,Float32ListU)
-  _(2,f,webgl::AttribBaseType::Float,Float32ListU)
-  _(3,f,webgl::AttribBaseType::Float,Float32ListU)
-  _(4,f,webgl::AttribBaseType::Float,Float32ListU)
-  _(1,i,webgl::AttribBaseType::Int,Int32ListU)
-  _(2,i,webgl::AttribBaseType::Int,Int32ListU)
-  _(3,i,webgl::AttribBaseType::Int,Int32ListU)
-  _(4,i,webgl::AttribBaseType::Int,Int32ListU)
-  _(1,ui,webgl::AttribBaseType::UInt,Uint32ListU)
-  _(2,ui,webgl::AttribBaseType::UInt,Uint32ListU)
-  _(3,ui,webgl::AttribBaseType::UInt,Uint32ListU)
-  _(4,ui,webgl::AttribBaseType::UInt,Uint32ListU)
+  _(1,f,webgl::UniformBaseType::Float,Float32ListU)
+  _(2,f,webgl::UniformBaseType::Float,Float32ListU)
+  _(3,f,webgl::UniformBaseType::Float,Float32ListU)
+  _(4,f,webgl::UniformBaseType::Float,Float32ListU)
+  _(1,i,webgl::UniformBaseType::Int,Int32ListU)
+  _(2,i,webgl::UniformBaseType::Int,Int32ListU)
+  _(3,i,webgl::UniformBaseType::Int,Int32ListU)
+  _(4,i,webgl::UniformBaseType::Int,Int32ListU)
+  _(1,ui,webgl::UniformBaseType::Uint,Uint32ListU)
+  _(2,ui,webgl::UniformBaseType::Uint,Uint32ListU)
+  _(3,ui,webgl::UniformBaseType::Uint,Uint32ListU)
+  _(4,ui,webgl::UniformBaseType::Uint,Uint32ListU)
 
   #undef _
 

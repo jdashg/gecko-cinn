@@ -567,7 +567,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // ------------------------ Uniforms and attributes ------------------------
 
   void UniformNTv(ObjectId id, const uint8_t n,
-              const webgl::AttribBaseType t, const RawBuffer<>& bytes) const {
+              const webgl::UniformBaseType t, const RawBuffer<>& bytes) const {
     mContext->UniformNTv(ById(id), n, t, bytes);
   }
 
