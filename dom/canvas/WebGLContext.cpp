@@ -2202,7 +2202,7 @@ webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
         gl->fGetUniformiv(prog->mGLName, iloc, ptr);
         break;
       }
-      case webgl::AttribBaseType::UInt: {
+      case webgl::AttribBaseType::Uint: {
         const auto ptr = reinterpret_cast<uint32_t*>(ret.data);
         gl->fGetUniformuiv(prog->mGLName, iloc, ptr);
         break;
@@ -2501,11 +2501,10 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
   return ret;
 }
 
-webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram* const prog) const {
+webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram& prog) const {
   webgl::LinkResult ret;
   [&]() {
-    if (!prog) return;
-    const auto& info = prog->LinkInfo();
+    const auto& info = prog.LinkInfo();
     if (!info) return;
 
     ret.active = info->active;
@@ -2520,14 +2519,13 @@ webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram* const prog) co
 
 // -
 
-GLint WebGLContext::GetFragDataLocation(const WebGLProgram* const prog, const std::string& userName) const {
-  if (!prog) return -1;
-  const auto& info = prog->LinkInfo();
+GLint WebGLContext::GetFragDataLocation(const WebGLProgram& prog, const std::string& userName) const {
+  const auto& info = prog.LinkInfo();
   if (!info) return -1;
   const auto& nameMap = info->nameMap;
 
   const auto mappedName = Find(nameMap, userName, userName);
-  return gl->fGetFragDataLocation(prog->mGLName, mappedName.c_str());
+  return gl->fGetFragDataLocation(prog.mGLName, mappedName.c_str());
 }
 
 }  // namespace mozilla

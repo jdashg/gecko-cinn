@@ -507,8 +507,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // This is the entrypoint. Don't test against it directly.
   bool IsContextLost() const { return mIsContextLost; }
 
-  void AttachShader(WebGLProgram* prog, WebGLShader* shader);
-  void BindAttribLocation(WebGLProgram* prog, GLuint location,
+  void AttachShader(WebGLProgram& prog, WebGLShader& shader) const;
+  void BindAttribLocation(WebGLProgram& prog, GLuint location,
                           const nsAString& name);
   void BindFramebuffer(GLenum target, WebGLFramebuffer* fb);
   void BindRenderbuffer(GLenum target, WebGLRenderbuffer* fb);
@@ -524,7 +524,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void ClearStencil(GLint v);
   void ColorMask(WebGLboolean r, WebGLboolean g, WebGLboolean b,
                  WebGLboolean a);
-  void CompileShader(WebGLShader* shader);
+  void CompileShader(WebGLShader& shader);
   private:
   void CompileShaderANGLE(WebGLShader* shader);
   void CompileShaderBypass(WebGLShader* shader, const nsCString& shaderSource);
@@ -543,7 +543,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DepthFunc(GLenum func);
   void DepthMask(WebGLboolean b);
   void DepthRange(GLclampf zNear, GLclampf zFar);
-  void DetachShader(WebGLProgram* prog, const WebGLShader* shader);
+  void DetachShader(WebGLProgram& prog, const WebGLShader& shader) const;
   void DrawBuffers(const nsTArray<GLenum>& buffers);
   void Flush();
   void Finish();
@@ -554,30 +554,29 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void FrontFace(GLenum mode);
 
-  GLint GetAttribLocation(const WebGLProgram* prog, const nsAString& name);
   Maybe<double> GetBufferParameter(GLenum target, GLenum pname);
 
   GLenum GetError();
 
-  GLint GetFragDataLocation(const WebGLProgram*, const std::string& name) const;
+  GLint GetFragDataLocation(const WebGLProgram&, const std::string& name) const;
 
-  Maybe<double> GetFramebufferAttachmentParameter(GLenum target,
+  Maybe<double> GetFramebufferAttachmentParameter(WebGLFramebuffer*,
                                                       GLenum attachment,
-                                                      GLenum pname);
+                                                      GLenum pname) const;
 
-  Maybe<double> GetRenderbufferParameter(GLenum target, GLenum pname);
+  Maybe<double> GetRenderbufferParameter(const WebGLRenderbuffer&, GLenum pname) const;
 
-  webgl::LinkResult GetLinkResult(const WebGLProgram*) const;
+  webgl::LinkResult GetLinkResult(const WebGLProgram&) const;
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(
       GLenum shadertype, GLenum precisiontype) const;
 
-  webgl::GetUniformData GetUniform(const WebGLProgram*, uint32_t loc) const;
+  webgl::GetUniformData GetUniform(const WebGLProgram&, uint32_t loc) const;
 
   void Hint(GLenum target, GLenum mode);
 
   void LineWidth(GLfloat width);
-  void LinkProgram(WebGLProgram* prog);
+  void LinkProgram(WebGLProgram& prog);
   WebGLPixelStore PixelStorei(GLenum pname, GLint param);
   void PolygonOffset(GLfloat factor, GLfloat units);
 
@@ -604,18 +603,18 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   UniqueBuffer ReadPixels(GLint x, GLint y, GLsizei width,
                                            GLsizei height, GLenum format,
-                                           GLenum type, size_t byteLen);
+                                           GLenum type);
 
   ////
 
-  void RenderbufferStorageMultisample(WebGLRenderbuffer*, uint32_t samples,
+  void RenderbufferStorageMultisample(WebGLRenderbuffer&, uint32_t samples,
                                 GLenum internalformat, uint32_t width,
                                 uint32_t height) const;
 
  public:
   void SampleCoverage(GLclampf value, WebGLboolean invert);
   void Scissor(GLint x, GLint y, GLsizei width, GLsizei height);
-  void ShaderSource(WebGLShader* shader, const nsAString& source);
+  void ShaderSource(WebGLShader& shader, const nsAString& source);
   void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
   void StencilMaskSeparate(GLenum face, GLuint mask);
   void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
@@ -627,7 +626,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                   const Range<const uint8_t>& data) const;
 
   void UniformMatrixAxBfv(uint32_t loc, uint8_t A, uint8_t B,
-                          webgl::UniformBaseType t, bool transpose,
+                          bool transpose,
                           const Range<const float>& data) const;
 
   ////////////////////////////////////
@@ -635,7 +634,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void UseProgram(WebGLProgram* prog);
 
   bool ValidateAttribArraySetter(uint32_t count, uint32_t arrayLength);
-  void ValidateProgram(const WebGLProgram* prog);
+  void ValidateProgram(const WebGLProgram& prog);
   void Viewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
   // -----------------------------------------------------------------------------
@@ -736,11 +735,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   already_AddRefed<WebGLQuery> CreateQuery();
   void DeleteQuery(WebGLQuery* query);
-  bool IsQuery(const WebGLQuery* query);
-  void BeginQuery(GLenum target, WebGLQuery* query);
+  void BeginQuery(GLenum target, WebGLQuery& query);
   void EndQuery(GLenum target);
-  Maybe<double> GetQueryParameter(const WebGLQuery* query, GLenum pname) const;
-  void QueryCounter(WebGLQuery*, const GLenum target) const;
+  Maybe<double> GetQueryParameter(const WebGLQuery& query, GLenum pname) const;
+  void QueryCounter(WebGLQuery&, const GLenum target) const;
 
   // -----------------------------------------------------------------------------
   // State and State Requests (WebGLContextState.cpp)
@@ -752,7 +750,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void Enable(GLenum cap) { SetEnabled("enabled", cap, true); }
   bool GetStencilBits(GLint* const out_stencilBits) const;
 
-  virtual Maybe<double> GetParameter(GLenum pname) const;
+  virtual Maybe<double> GetParameter(GLenum pname);
   Maybe<std::string> GetString(GLenum pname) const;
 
   bool IsEnabled(GLenum cap);
@@ -896,7 +894,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
 
-  void VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData&);
+  void VertexAttrib4T(GLuint index, const webgl::TypedQuad&);
 
   ////
 
@@ -1030,8 +1028,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  protected:
   bool IsExtensionSupported(WebGLExtensionID) const;
 
-  nsTArray<GLenum> mCompressedTextureFormats;
-
   // -------------------------------------------------------------------------
   // WebGL 2 specifics (implemented in WebGL2Context.cpp)
  public:
@@ -1126,7 +1122,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       WebGLRefPtr<WebGLBuffer>** const out_genericBinding,
       IndexedBufferBinding** const out_indexedBinding);
 
-  bool ValidateNonNegative(const char* argName, int64_t val) {
+  bool ValidateNonNegative(const char* argName, int64_t val) const {
     if (MOZ_UNLIKELY(val < 0)) {
       ErrorInvalidValue("`%s` must be non-negative.", argName);
       return false;
@@ -1137,7 +1133,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   template <typename T>
   bool ValidateNonNull(const char* const argName,
-                       const dom::Nullable<T>& maybe) {
+                       const dom::Nullable<T>& maybe) const {
     if (maybe.IsNull()) {
       ErrorInvalidValue("%s: Cannot be null.", argName);
       return false;

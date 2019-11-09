@@ -257,7 +257,6 @@ void WebGLFBAttachPoint::DoAttachment(gl::GLContext* const gl) const {
 }
 
 Maybe<double> WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
-                                                   GLenum target,
                                                    GLenum attachment,
                                                    GLenum pname) const {
   if (!HasAttachment()) {
@@ -301,12 +300,6 @@ Maybe<double> WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
     case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE:
       return Some(mTexturePtr ? LOCAL_GL_TEXTURE
                                        : LOCAL_GL_RENDERBUFFER);
-
-    case LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME:
-      if (mTexturePtr) {
-        return Some(mTexturePtr);
-      }
-      return Some(mRenderbufferPtr);
 
       //////
 
@@ -725,7 +718,7 @@ bool WebGLFramebuffer::ValidateAndInitAttachments(
 
 bool WebGLFramebuffer::ValidateClearBufferType(GLenum buffer,
                                                uint32_t drawBuffer,
-                                               GLenum funcType) const {
+                                               const webgl::AttribBaseType funcType) const {
   if (buffer != LOCAL_GL_COLOR) return true;
 
   const auto& attach = mColorAttachments[drawBuffer];
@@ -735,24 +728,23 @@ bool WebGLFramebuffer::ValidateClearBufferType(GLenum buffer,
   if (!count(mColorDrawBuffers.begin(), mColorDrawBuffers.end(), &attach))
     return true;  // DRAW_BUFFERi set to NONE.
 
-  GLenum attachType;
+  auto attachType = webgl::AttribBaseType::Float;
   switch (imageInfo->mFormat->format->componentType) {
     case webgl::ComponentType::Int:
-      attachType = LOCAL_GL_INT;
+      attachType = webgl::AttribBaseType::Int;
       break;
     case webgl::ComponentType::UInt:
-      attachType = LOCAL_GL_UNSIGNED_INT;
+      attachType = webgl::AttribBaseType::Uint;
       break;
     default:
-      attachType = LOCAL_GL_FLOAT;
       break;
   }
 
   if (attachType != funcType) {
     mContext->ErrorInvalidOperation(
-        "This attachment is of type 0x%04x, but"
-        " this function is of type 0x%04x.",
-        attachType, funcType);
+        "This attachment is of type %s, but"
+        " this function is of type %s.",
+        ToString(attachType), ToString(funcType));
     return false;
   }
 
@@ -1167,8 +1159,7 @@ void WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
   InvalidateCaches();
 }
 
-Maybe<double> WebGLFramebuffer::GetAttachmentParameter(GLenum target,
-                                                           GLenum attachEnum,
+Maybe<double> WebGLFramebuffer::GetAttachmentParameter(GLenum attachEnum,
                                                            GLenum pname) {
   const auto maybeAttach = GetAttachPoint(attachEnum);
   if (!maybeAttach || attachEnum == LOCAL_GL_NONE) {
@@ -1203,7 +1194,7 @@ Maybe<double> WebGLFramebuffer::GetAttachmentParameter(GLenum target,
     attach = &mDepthAttachment;
   }
 
-  return attach->GetParameter(mContext, target, attachEnum, pname);
+  return attach->GetParameter(mContext, attachEnum, pname);
 }
 
 ////////////////////

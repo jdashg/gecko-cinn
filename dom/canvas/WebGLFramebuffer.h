@@ -97,7 +97,7 @@ class WebGLFBAttachPoint final {
 
   void DoAttachment(gl::GLContext* gl) const;
 
-  Maybe<double> GetParameter(WebGLContext* webgl, GLenum target,
+  Maybe<double> GetParameter(WebGLContext* webgl,
                                  GLenum attachment, GLenum pname) const;
 
   bool IsEquivalentForFeedback(const WebGLFBAttachPoint& other) const {
@@ -228,7 +228,7 @@ class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
   void DetachRenderbuffer(const WebGLRenderbuffer* rb);
   bool ValidateAndInitAttachments(GLenum incompleteFbError) const;
   bool ValidateClearBufferType(GLenum buffer, uint32_t drawBuffer,
-                               GLenum funcType) const;
+                               webgl::AttribBaseType funcType) const;
 
   bool ValidateForColorRead(const webgl::FormatUsageInfo** out_format,
                             uint32_t* out_width, uint32_t* out_height) const;
@@ -268,7 +268,7 @@ class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
   void DrawBuffers(const nsTArray<GLenum>& buffers);
   void ReadBuffer(GLenum attachPoint);
 
-  Maybe<double> GetAttachmentParameter(GLenum target, GLenum attachment,
+  Maybe<double> GetAttachmentParameter(GLenum attachment,
                                            GLenum pname);
 
   static void BlitFramebuffer(WebGLContext* webgl, GLint srcX0, GLint srcY0,

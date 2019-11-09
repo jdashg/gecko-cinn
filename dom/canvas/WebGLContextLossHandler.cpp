@@ -6,6 +6,8 @@
 #include "WebGLContextLossHandler.h"
 #include "WebGLContext.h"
 
+#include "base/message_loop.h"
+
 namespace mozilla {
 
 WebGLContextLossHandler::WebGLContextLossHandler(WebGLContext* const webgl)

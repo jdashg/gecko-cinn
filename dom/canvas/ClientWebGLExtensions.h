@@ -37,13 +37,6 @@ class ClientWebGLExtensionBase : public nsWrapperCache {
 };
 
 // To be used for implementations of ClientWebGLExtensionBase
-#define DECLARE_WEBGL_EXTENSION_GOOP(_Extension)                           \
- public:                                                                   \
-  virtual JSObject* WrapObject(JSContext* cx,                              \
-                               JS::Handle<JSObject*> givenProto) override; \
-  Client##_Extension(const RefPtr<ClientWebGLContext>&);
-
-// To be used for implementations of ClientWebGLExtensionBase
 #define DEFINE_WEBGL_EXTENSION_GOOP(_WebGLBindingType, _Extension)             \
   JSObject* Client##_Extension::WrapObject(JSContext* cx,                      \
                                            JS::Handle<JSObject*> givenProto) { \
@@ -67,7 +60,10 @@ class ClientWebGLExtensionBase : public nsWrapperCache {
 
 class ClientWebGLExtensionCompressedTextureASTC
     : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionCompressedTextureASTC)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionCompressedTextureASTC(const RefPtr<ClientWebGLContext>&);
 
   void GetSupportedProfiles(dom::Nullable<nsTArray<nsString> >& retval) const {
     if (!mContext) return;
@@ -96,7 +92,10 @@ DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionCompressedTextureS3TC_SRGB)
 DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionDebugRendererInfo)
 
 class ClientWebGLExtensionDebugShaders : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionDebugShaders)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionDebugShaders(const RefPtr<ClientWebGLContext>&);
 
   void GetTranslatedShaderSource(const WebGLShaderJS& shader,
                                  nsAString& retval) const {
@@ -114,7 +113,10 @@ DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionEXTColorBufferFloat)
 DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionFragDepth)
 
 class ClientWebGLExtensionLoseContext : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionLoseContext)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionLoseContext(const RefPtr<ClientWebGLContext>&);
 
   void LoseContext() {
     if (!mContext) return;
@@ -147,7 +149,10 @@ DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionColorBufferFloat)
 DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionColorBufferHalfFloat)
 
 class ClientWebGLExtensionDrawBuffers : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionDrawBuffers)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  WebGLExtensionDrawBuffers(const RefPtr<ClientWebGLContext>&);
 
   void DrawBuffersWEBGL(const dom::Sequence<GLenum>& buffers) {
     if (!mContext) return;
@@ -156,7 +161,10 @@ class ClientWebGLExtensionDrawBuffers : public ClientWebGLExtensionBase {
 };
 
 class ClientWebGLExtensionVertexArray : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionVertexArray)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionVertexArray(const RefPtr<ClientWebGLContext>&);
 
   RefPtr<WebGLVertexArrayJS> CreateVertexArrayOES() {
     if (!mContext) return nullptr;
@@ -177,7 +185,10 @@ class ClientWebGLExtensionVertexArray : public ClientWebGLExtensionBase {
 };
 
 class ClientWebGLExtensionInstancedArrays : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionInstancedArrays)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionInstancedArrays(const RefPtr<ClientWebGLContext>&);
 
   void DrawArraysInstancedANGLE(GLenum mode, GLint first, GLsizei count,
                                 GLsizei primcount) {
@@ -199,7 +210,10 @@ class ClientWebGLExtensionInstancedArrays : public ClientWebGLExtensionBase {
 DECLARE_SIMPLE_WEBGL_EXTENSION(WebGLExtensionBlendMinMax)
 
 class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionDisjointTimerQuery)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionDisjointTimerQuery(const RefPtr<ClientWebGLContext>&);
 
   RefPtr<WebGLQueryJS> CreateQueryEXT() const {
     if (!mContext) return nullptr;
@@ -238,7 +252,10 @@ class ClientWebGLExtensionDisjointTimerQuery : public ClientWebGLExtensionBase {
 };
 
 class ClientWebGLExtensionExplicitPresent : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionExplicitPresent)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionExplicitPresent(const RefPtr<ClientWebGLContext>&);
 
   void Present() const {
     if (!mContext) return;
@@ -247,7 +264,10 @@ class ClientWebGLExtensionExplicitPresent : public ClientWebGLExtensionBase {
 };
 
 class ClientWebGLExtensionMOZDebug : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionMOZDebug)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionMOZDebug(const RefPtr<ClientWebGLContext>&);
 
   void GetParameter(JSContext* cx, GLenum pname,
                     JS::MutableHandle<JS::Value> retval,
@@ -258,7 +278,10 @@ class ClientWebGLExtensionMOZDebug : public ClientWebGLExtensionBase {
 };
 
 class ClientWebGLExtensionMultiview : public ClientWebGLExtensionBase {
-  DECLARE_WEBGL_EXTENSION_GOOP(WebGLExtensionMultiview)
+public:
+  virtual JSObject* WrapObject(JSContext* cx,
+                               JS::Handle<JSObject*> givenProto) override;
+  ClientWebGLExtensionMultiview(const RefPtr<ClientWebGLContext>&);
 
   void FramebufferTextureMultiviewOVR(const GLenum target,
                                       const GLenum attachment,

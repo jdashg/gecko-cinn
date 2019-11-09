@@ -55,16 +55,6 @@
 
 namespace mozilla {
 
-bool WebGLContext::ValidateObject(const char* const argName,
-                                  const WebGLProgram& object) const {
-  return ValidateObject(argName, object, true);
-}
-
-bool WebGLContext::ValidateObject(const char* const argName,
-                                  const WebGLShader& object) const {
-  return ValidateObject(argName, object, true);
-}
-
 using namespace mozilla::dom;
 using namespace mozilla::gfx;
 using namespace mozilla::gl;
@@ -90,24 +80,17 @@ void WebGLContext::ActiveTexture(GLenum texture) {
   gl->fActiveTexture(texture);
 }
 
-void WebGLContext::AttachShader(WebGLProgram& program, WebGLShader& shader) {
+void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) const {
   const FuncScope funcScope(*this, "attachShader");
   if (IsContextLost()) return;
 
-  if (!ValidateObject("program", program) ||
-      !ValidateObject("shader", shader)) {
-    return;
-  }
-
-  program.AttachShader(&shader);
+  prog.AttachShader(shader);
 }
 
 void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
                                       const nsAString& name) {
   const FuncScope funcScope(*this, "bindAttribLocation");
   if (IsContextLost()) return;
-
-  if (!ValidateObject("program", prog)) return;
 
   prog.BindAttribLocation(location, name);
 }
@@ -117,8 +100,6 @@ void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
   if (IsContextLost()) return;
 
   if (!ValidateFramebufferTarget(target)) return;
-
-  if (wfb && !ValidateObject("fb", *wfb)) return;
 
   if (!wfb) {
     gl->fBindFramebuffer(target, 0);
@@ -344,19 +325,12 @@ void WebGLContext::DeleteShader(WebGLShader* shader) {
   shader->RequestDelete();
 }
 
-void WebGLContext::DetachShader(WebGLProgram& program,
-                                const WebGLShader& shader) {
+void WebGLContext::DetachShader(WebGLProgram& prog,
+                                const WebGLShader& shader) const {
   const FuncScope funcScope(*this, "detachShader");
   if (IsContextLost()) return;
 
-  // It's valid to attempt to detach a deleted shader, since it's still a
-  // shader.
-  if (!ValidateObject("program", program) ||
-      !ValidateObjectAllowDeleted("shader", shader)) {
-    return;
-  }
-
-  program.DetachShader(&shader);
+  prog.DetachShader(shader);
 }
 
 static bool ValidateComparisonEnum(WebGLContext& webgl, const GLenum func) {
@@ -551,28 +525,11 @@ Maybe<double> WebGLContext::GetBufferParameter(GLenum target,
 }
 
 Maybe<double> WebGLContext::GetFramebufferAttachmentParameter(
-    GLenum target, GLenum attachment, GLenum pname) {
+    WebGLFramebuffer* const fb, GLenum attachment, GLenum pname) const {
   const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
   if (IsContextLost()) return Nothing();
 
-  if (!ValidateFramebufferTarget(target)) return Nothing();
-
-  WebGLFramebuffer* fb;
-  switch (target) {
-    case LOCAL_GL_FRAMEBUFFER:
-    case LOCAL_GL_DRAW_FRAMEBUFFER:
-      fb = mBoundDrawFramebuffer;
-      break;
-
-    case LOCAL_GL_READ_FRAMEBUFFER:
-      fb = mBoundReadFramebuffer;
-      break;
-
-    default:
-      MOZ_CRASH("GFX: Bad target.");
-  }
-
-  if (fb) return fb->GetAttachmentParameter(target, attachment, pname);
+  if (fb) return fb->GetAttachmentParameter(attachment, pname);
 
   ////////////////////////////////////
 
@@ -699,11 +656,10 @@ Maybe<double> WebGLContext::GetFramebufferAttachmentParameter(
   return Nothing();
 }
 
-Maybe<double> WebGLContext::GetRenderbufferParameter(const WebGLRenderbuffer* const rb,
-                                                         GLenum pname) {
+Maybe<double> WebGLContext::GetRenderbufferParameter(const WebGLRenderbuffer& rb,
+                                                         GLenum pname) const {
   const FuncScope funcScope(*this, "getRenderbufferParameter");
   if (IsContextLost()) return Nothing();
-  if (!rb) return {};
 
   switch (pname) {
     case LOCAL_GL_RENDERBUFFER_SAMPLES:
@@ -720,7 +676,7 @@ Maybe<double> WebGLContext::GetRenderbufferParameter(const WebGLRenderbuffer* co
     case LOCAL_GL_RENDERBUFFER_STENCIL_SIZE:
     case LOCAL_GL_RENDERBUFFER_INTERNAL_FORMAT: {
       // RB emulation means we have to ask the RB itself.
-      GLint i = rb->GetRenderbufferParameter(target, pname);
+      GLint i = rb.GetRenderbufferParameter(pname);
       return Some(i);
     }
 
@@ -782,21 +738,21 @@ GLenum WebGLContext::GetError() {
   return err;
 }
 
-webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
+webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram& prog,
                                                const uint32_t loc) const {
   const FuncScope funcScope(*this, "getUniform");
   webgl::GetUniformData ret;
   [&]() {
     if (IsContextLost()) return;
-    if (!prog) return;
 
-    const auto& info = prog->LinkInfo();
+    const auto& info = prog.LinkInfo();
     if (!info) return;
 
     const auto locInfo = MaybeFind(info->locationMap, loc);
     if (!locInfo) return;
 
-    switch (locInfo->info.elemType) {
+    ret.type = locInfo->info.elemType;
+    switch (ret.type) {
       case LOCAL_GL_FLOAT:
       case LOCAL_GL_FLOAT_VEC2:
       case LOCAL_GL_FLOAT_VEC3:
@@ -810,8 +766,7 @@ webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
       case LOCAL_GL_FLOAT_MAT3x4:
       case LOCAL_GL_FLOAT_MAT4x2:
       case LOCAL_GL_FLOAT_MAT4x3:
-        ret.type = webgl::UniformBaseType::Float;
-        gl->fGetUniformfv(prog, loc, reinterpret_cast<float*>(ret.data));
+        gl->fGetUniformfv(prog.mGLName, loc, reinterpret_cast<float*>(ret.data));
         break;
 
       case LOCAL_GL_INT:
@@ -837,8 +792,7 @@ webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
       case LOCAL_GL_BOOL_VEC2:
       case LOCAL_GL_BOOL_VEC3:
       case LOCAL_GL_BOOL_VEC4:
-        ret.type = webgl::UniformBaseType::Int;
-        gl->fGetUniformiv(prog, loc, reinterpret_cast<int32_t*>(ret.data));
+        gl->fGetUniformiv(prog.mGLName, loc, reinterpret_cast<int32_t*>(ret.data));
         break;
 
 
@@ -846,8 +800,7 @@ webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
       case LOCAL_GL_UNSIGNED_INT_VEC2:
       case LOCAL_GL_UNSIGNED_INT_VEC3:
       case LOCAL_GL_UNSIGNED_INT_VEC4:
-        ret.type = webgl::UniformBaseType::Uint;
-        gl->fGetUniformfv(prog, loc, reinterpret_cast<uint32_t*>(ret.data));
+        gl->fGetUniformuiv(prog.mGLName, loc, reinterpret_cast<uint32_t*>(ret.data));
         break;
 
       default:
@@ -891,8 +844,6 @@ void WebGLContext::Hint(GLenum target, GLenum mode) {
 void WebGLContext::LinkProgram(WebGLProgram& prog) {
   const FuncScope funcScope(*this, "linkProgram");
   if (IsContextLost()) return;
-
-  if (!ValidateObject("prog", prog)) return;
 
   prog.LinkProgram();
 
@@ -1098,26 +1049,31 @@ bool WebGLContext::ValidatePackSize(uint32_t width, uint32_t height,
   return true;
 }
 
-Maybe<UniquePtr<RawBuffer<>>> WebGLContext::ReadPixels(
-    GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type,
-    size_t byteLen) {
+UniqueBuffer WebGLContext::ReadPixels(
+    GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type) {
   const FuncScope funcScope(*this, "readPixels");
-  if (IsContextLost()) return Nothing();
+  if (IsContextLost()) return {};
 
   if (mBoundPixelPackBuffer) {
     ErrorInvalidOperation("PIXEL_PACK_BUFFER must be null.");
-    return Nothing();
+    return {};
   }
 
-  // TODO: Allocate the Shmem earlier so we can use it here instead of copying
-  uint8_t* bytes = new uint8_t[byteLen];
-  if (!bytes) {
-    ErrorOutOfMemory("ReadPixels could not allocate temp memory");
-    return Nothing();
+  const auto bpp = webgl::BytesPerPixel({format, type});
+  const auto checkedByteLen = CheckedInt<size_t>(bpp) * width * height;
+  if (!checkedByteLen.isValid()) {
+    ErrorOutOfMemory("Impossible number of bytes.");
+    return {};
   }
-  UniquePtr<RawBuffer<>> buf = MakeUnique<RawBuffer<>>(byteLen, bytes, true);
-  ReadPixelsImpl(x, y, width, height, format, type, bytes, byteLen);
-  return Some(std::move(buf));
+  const auto byteLen = checkedByteLen.value();
+
+  auto ret = UniqueBuffer(malloc(byteLen));
+  if (!ret) {
+    ErrorOutOfMemory("ReadPixels could not allocate temp memory");
+    return {};
+  }
+  ReadPixelsImpl(x, y, width, height, format, type, ret.get(), byteLen);
+  return ret;
 }
 
 void WebGLContext::ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
@@ -1377,14 +1333,12 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
   }
 }
 
-void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer* const rb, uint32_t samples,
+void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer& rb, uint32_t samples,
                                             GLenum internalFormat,
                                             uint32_t width, uint32_t height) const {
   if (IsContextLost()) return;
-  if (!rb) return;
 
-  rb->RenderbufferStorage(samples, internalFormat,
-                                          uint32_t(width), uint32_t(height));
+  rb.RenderbufferStorage(samples, internalFormat, width, height);
 }
 
 void WebGLContext::Scissor(GLint x, GLint y, GLsizei width, GLsizei height) {
@@ -1445,71 +1399,35 @@ void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
 ////////////////////////////////////////////////////////////////////////////////
 // Uniform setters.
 
-static bool ValidateArrOffsetAndCount(WebGLContext* webgl, size_t elemsAvail,
-                                      GLuint elemOffset,
-                                      GLuint elemCountOverride,
-                                      size_t* const out_elemCount) {
-  if (webgl->IsContextLost()) return false;
-
-  if (elemOffset > elemsAvail) {
-    webgl->ErrorInvalidValue("Bad offset into list.");
-    return false;
-  }
-  elemsAvail -= elemOffset;
-
-  if (elemCountOverride) {
-    if (elemCountOverride > elemsAvail) {
-      webgl->ErrorInvalidValue("Bad count override for sub-list.");
-      return false;
-    }
-    elemsAvail = elemCountOverride;
-  }
-
-  *out_elemCount = elemsAvail;
-  return true;
-}
-struct SamplerUniformInfo final {
-  const ActiveUniformInfo& info;
-  const decltype(WebGLContext::mBound2DTextures)& texListForType;
-  const webgl::TextureBaseType texBaseType;
-  const bool isShadowSampler;
-  std::vector<uint32_t> texUnits;
-};
-
-struct SamplerLocationInfo final {
-  const uint32_t indexIntoUniform;
-  SamplerUniformInfo& samplerInfo;
-};
-
 void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::UniformBaseType t,
                               const Range<const uint8_t>& data) const {
   const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
-  const auto& link = mActiveLinkResult;
+  const auto& link = mActiveProgramLinkInfo;
   if (!link) return;
 
   const auto locInfo = MaybeFind(link->locationMap, loc);
   if (!locInfo) return;
 
-  if (n != locInfo->info.elemSize) {
+  if (n != locInfo->info.elemCount) {
     ErrorInvalidOperation(
         "Size from function (%u) differs from size in shader (%u).",
-        n, locInfo->info.elemSize);
+        n, locInfo->info.elemCount);
     return;
   }
 
   const bool typeOk = [&]() {
-    const auto baseType = ToAttribBaseType(locInfo->info.elemType);
+    const auto baseType = webgl::ToAttribBaseType(locInfo->info.elemType);
     switch (baseType) {
       case webgl::AttribBaseType::Boolean: return true;
       case webgl::AttribBaseType::Float: return t == webgl::UniformBaseType::Float;
       case webgl::AttribBaseType::Int: return t == webgl::UniformBaseType::Int;
-      case webgl::AttribBaseType::UInt: return t == webgl::UniformBaseType::Uint;
+      case webgl::AttribBaseType::Uint: return t == webgl::UniformBaseType::Uint;
     }
   }();
   if (!typeOk) {
     ErrorInvalidOperation(
         "Type from function (%s) is incompatible with type in shader (%s).",
-        ToString(t), ToString(locInfo->mElemType));
+        ToString(t), ToString(locInfo->info.elemType));
     return;
   }
 
@@ -1520,7 +1438,7 @@ void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::
 
   const auto samplerInfo = locInfo->samplerInfo;
   if (samplerInfo) {
-    const auto idata = reinterpret_cast<const uint32_t*>(data.begin());
+    const auto idata = reinterpret_cast<const uint32_t*>(data.begin().get());
     const auto maxTexUnits = GLMaxTextureUnits();
     for (const auto& val : Range<const uint32_t>(idata, elemCount)) {
       if (val >= maxTexUnits) {
@@ -1549,19 +1467,19 @@ void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::
     case webgl::UniformBaseType::Float: {
       const auto func = kFloatFuncs[n - 1];
       (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const float*>(data.data()));
+                  reinterpret_cast<const float*>(data.begin().get()));
       break;
     }
     case webgl::UniformBaseType::Int: {
       const auto func = kIntFuncs[n - 1];
       (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const int32_t*>(data.data()));
+                  reinterpret_cast<const int32_t*>(data.begin().get()));
       break;
     }
     case webgl::UniformBaseType::Uint: {
       const auto func = kUintFuncs[n - 1];
       (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const uint32_t*>(data.data()));
+                  reinterpret_cast<const uint32_t*>(data.begin().get()));
       break;
     }
   }
@@ -1571,7 +1489,7 @@ void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::
   if (samplerInfo) {
     auto& texUnits = samplerInfo->texUnits;
 
-    const auto srcBegin = reinterpret_cast<const uint32_t*>(data.begin());
+    const auto srcBegin = reinterpret_cast<const uint32_t*>(data.begin().get());
     auto destIndex = locInfo->indexIntoUniform;
     for (const auto& val : Range<const uint32_t>(srcBegin, elemCount)) {
       if (destIndex >= texUnits.size())
@@ -1597,7 +1515,7 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
                                       const uint8_t b, const bool transpose,
                                       const Range<const float>& data) const {
   const FuncScope funcScope(*this, "UniformMatrix[1234]x[1234]fv");
-  const auto& link = mActiveLinkResult;
+  const auto& link = mActiveProgramLinkInfo;
   if (!link) return;
 
   const auto locInfo = MaybeFind(link->locationMap, loc);
@@ -1666,8 +1584,6 @@ void WebGLContext::UseProgram(WebGLProgram* prog) {
 void WebGLContext::ValidateProgram(const WebGLProgram& prog) {
   const FuncScope funcScope(*this, "validateProgram");
   if (IsContextLost()) return;
-
-  if (!ValidateObject("prog", prog)) return;
 
   prog.ValidateProgram();
 }
@@ -1765,8 +1681,6 @@ Maybe<webgl::ShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
 void WebGLContext::ShaderSource(WebGLShader& shader, const nsAString& source) {
   const FuncScope funcScope(*this, "shaderSource");
   if (IsContextLost()) return;
-
-  if (!ValidateObject("shader", shader)) return;
 
   shader.ShaderSource(source);
 }

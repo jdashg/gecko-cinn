@@ -24,15 +24,6 @@ WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(
 
 WebGLExtensionDisjointTimerQuery::~WebGLExtensionDisjointTimerQuery() {}
 
-void WebGLContext::QueryCounter(WebGLQuery& query, const GLenum target) const {
-  const WebGLContext::FuncScope funcScope(*this, "queryCounterEXT");
-  if (IsContextLost()) return;
-
-  if (!ValidateObject("query", query)) return;
-
-  query.QueryCounter(target);
-}
-
 bool WebGLExtensionDisjointTimerQuery::IsSupported(
     const WebGLContext* const webgl) {
   if (!StaticPrefs::webgl_enable_privileged_extensions()) return false;

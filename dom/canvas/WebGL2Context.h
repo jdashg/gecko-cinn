@@ -43,7 +43,7 @@ class WebGL2Context final : public WebGLContext {
                          const BufferT& data);
 
  public:
-  Maybe<UniquePtr<RawBuffer<>>> GetBufferSubData(GLenum target,
+  UniqueBuffer GetBufferSubData(GLenum target,
                                                  WebGLintptr srcByteOffset,
                                                  size_t byteLen);
 
@@ -100,19 +100,12 @@ class WebGL2Context final : public WebGLContext {
 
  private:
   bool ValidateClearBuffer(GLenum buffer, GLint drawBuffer,
-                           size_t availElemCount, GLuint elemOffset,
-                           GLenum funcType);
+                           webgl::AttribBaseType funcType);
 
  public:
   void ClearBufferfi(GLenum buffer, GLint drawBuffer, GLfloat depth,
                      GLint stencil);
-  void ClearBufferfv(GLenum buffer, GLint drawBuffer,
-                     const RawBuffer<const float>& src, GLuint srcElemOffset);
-  void ClearBufferiv(GLenum buffer, GLint drawBuffer,
-                     const RawBuffer<const int32_t>& src, GLuint srcElemOffset);
-  void ClearBufferuiv(GLenum buffer, GLint drawBuffer,
-                      const RawBuffer<const uint32_t>& src,
-                      GLuint srcElemOffset);
+  void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::TypedQuad& data);
 
   // -------------------------------------------------------------------------
   // Sampler Objects - WebGL2ContextSamplers.cpp
@@ -159,7 +152,7 @@ class WebGL2Context final : public WebGLContext {
       void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buffer,
                            WebGLintptr offset, WebGLsizeiptr size);
   */
-  Maybe<double> GetParameter(GLenum pname) const override;
+  Maybe<double> GetParameter(GLenum pname) override;
 
   // Make the inline version from the superclass visible here.
   using WebGLContext::GetParameter;

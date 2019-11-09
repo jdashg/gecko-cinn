@@ -69,11 +69,9 @@ void WebGLContext::DeleteQuery(WebGLQuery* query) {
   query->DeleteQuery();
 }
 
-void WebGLContext::BeginQuery(GLenum target, WebGLQuery* const query) {
+void WebGLContext::BeginQuery(GLenum target, WebGLQuery& query) {
   const FuncScope funcScope(*this, "beginQuery");
   if (IsContextLost()) return;
-
-  if (!ValidateObject("query", query)) return;
 
   const auto& slot = ValidateQuerySlotByTarget(target);
   if (!slot) return;
@@ -82,7 +80,7 @@ void WebGLContext::BeginQuery(GLenum target, WebGLQuery* const query) {
 
   ////
 
-  query->BeginQuery(target, *slot);
+  query.BeginQuery(target, *slot);
 }
 
 void WebGLContext::EndQuery(GLenum target) {
@@ -98,14 +96,21 @@ void WebGLContext::EndQuery(GLenum target) {
   query->EndQuery();
 }
 
-Maybe<double> WebGLContext::GetQueryParameter(const WebGLQuery* query,
+Maybe<double> WebGLContext::GetQueryParameter(const WebGLQuery& query,
                                                   GLenum pname) const {
   const FuncScope funcScope(*this, "getQueryParameter");
   if (IsContextLost()) return Nothing();
 
-  if (!ValidateObject("query", query)) return Nothing();
+  return query.GetQueryParameter(pname);
+}
 
-  return query->GetQueryParameter(pname);
+// disjoint_timer_queries
+
+void WebGLContext::QueryCounter(WebGLQuery& query, const GLenum target) const {
+  const WebGLContext::FuncScope funcScope(*this, "queryCounterEXT");
+  if (IsContextLost()) return;
+
+  query.QueryCounter(target);
 }
 
 }  // namespace mozilla

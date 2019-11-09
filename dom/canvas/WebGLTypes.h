@@ -296,7 +296,7 @@ enum class AttribBaseType : uint8_t {
   Boolean,  // Can convert from anything.
   Float,    // Also includes NormU?Int
   Int,
-  UInt,
+  Uint,
 };
 webgl::AttribBaseType ToAttribBaseType(GLenum);
 const char* ToString(AttribBaseType);
@@ -594,14 +594,14 @@ struct LinkResult final {
 
 // -
 
-struct GenericVertexAttribData final {
+struct TypedQuad final {
+  alignas(alignof(float)) uint8_t data[4*sizeof(float)] = {};
   webgl::AttribBaseType type = webgl::AttribBaseType::Float;
-  uint8_t data[4*sizeof(float)] = {};
 };
 
 struct GetUniformData final {
+  alignas(alignof(float)) uint8_t data[4*4*sizeof(float)] = {};
   GLenum type = 0;
-  uint8_t data[4*4*sizeof(float)] = {};
 };
 
 }  // namespace webgl
@@ -763,6 +763,23 @@ static constexpr const char* const FUNCSCOPE_NAME_BY_ID[] = {
 
 inline auto GetFuncScopeName(const FuncScopeId id) {
   return FUNCSCOPE_NAME_BY_ID[static_cast<size_t>(id)];
+}
+
+// -
+
+template<typename C, typename K>
+inline typename C::mapped_type* MaybeFind(const C& container, const K& key) {
+  const auto itr = container.find(key);
+  if (itr == container.end()) return nullptr;
+  return &(itr->second);
+}
+
+template<typename C, typename K>
+inline typename C::mapped_type Find(const C& container, const K& key,
+          const typename C::mapped_type notFound = {}) {
+  const auto itr = container.find(key);
+  if (itr == container.end()) return notFound;
+  return itr->second;
 }
 
 }  // namespace mozilla

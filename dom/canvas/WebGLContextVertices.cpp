@@ -46,7 +46,7 @@ static bool ValidateAttribIndex(WebGLContext& webgl, GLuint index) {
 
 ////////////////////////////////////////
 
-void WebGLContext::VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData& src) {
+void WebGLContext::VertexAttrib4T(GLuint index, const webgl::TypedQuad& src) {
   const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]v?");
   if (IsContextLost()) return;
 

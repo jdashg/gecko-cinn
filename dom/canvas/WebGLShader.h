@@ -49,7 +49,7 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
   const auto& CompileResults() const { return mCompileResults; }
 
  private:
-  void BindAttribLocation(GLuint prog, const std::string& userName,
+  void BindAttribLocation(GLuint prog, const nsAString& userName,
                           GLuint index) const;
   void MapTransformFeedbackVaryings(
       const std::vector<nsString>& varyings,

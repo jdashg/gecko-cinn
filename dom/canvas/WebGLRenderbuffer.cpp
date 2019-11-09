@@ -214,8 +214,7 @@ void WebGLRenderbuffer::DoFramebufferRenderbuffer(
                                LOCAL_GL_RENDERBUFFER, mPrimaryRB);
 }
 
-GLint WebGLRenderbuffer::GetRenderbufferParameter(RBTarget target,
-                                                  RBParam pname) const {
+GLint WebGLRenderbuffer::GetRenderbufferParameter(RBParam pname) const {
   gl::GLContext* gl = mContext->gl;
 
   switch (pname.get()) {
@@ -236,7 +235,7 @@ GLint WebGLRenderbuffer::GetRenderbufferParameter(RBTarget target,
     case LOCAL_GL_RENDERBUFFER_DEPTH_SIZE: {
       gl->fBindRenderbuffer(LOCAL_GL_RENDERBUFFER, mPrimaryRB);
       GLint i = 0;
-      gl->fGetRenderbufferParameteriv(target.get(), pname.get(), &i);
+      gl->fGetRenderbufferParameteriv(LOCAL_GL_RENDERBUFFER, pname.get(), &i);
       gl->fBindRenderbuffer(LOCAL_GL_RENDERBUFFER, 0);
       return i;
     }
