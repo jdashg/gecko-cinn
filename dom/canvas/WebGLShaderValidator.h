@@ -7,6 +7,7 @@
 #define WEBGL_SHADER_VALIDATOR_H_
 
 #include <string>
+#include <unordered_map>
 
 #include "GLDefs.h"
 #include "GLSLANG/ShaderLang.h"

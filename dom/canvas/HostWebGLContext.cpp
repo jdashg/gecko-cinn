@@ -24,7 +24,6 @@
 #include "WebGLTexture.h"
 #include "WebGLTransformFeedback.h"
 #include "WebGLVertexArray.h"
-#include "WebGLUniformLocation.h"
 #include "WebGLQuery.h"
 
 namespace mozilla {
@@ -56,7 +55,6 @@ DEFINE_OBJECT_ID_MAP_FUNCS(TransformFeedback);
 DEFINE_OBJECT_ID_MAP_FUNCS(VertexArray);
 DEFINE_OBJECT_ID_MAP_FUNCS(Buffer);
 DEFINE_OBJECT_ID_MAP_FUNCS(Texture);
-DEFINE_OBJECT_ID_MAP_FUNCS(UniformLocation);
 
 /*static*/
 UniquePtr<HostWebGLContext> HostWebGLContext::Create(
@@ -116,13 +114,6 @@ void HostWebGLContext::CreateRenderbuffer(
 void HostWebGLContext::CreateShader(GLenum aType,
                                     const WebGLId<WebGLShader>& aId) {
   Insert(mContext->CreateShader(aType), aId);
-}
-
-WebGLId<WebGLUniformLocation> HostWebGLContext::GetUniformLocation(
-    const WebGLId<WebGLProgram>& progId, const nsString& name) {
-  RefPtr<WebGLProgram> prog = MustFind(progId);
-  return Insert(
-      RefPtr<WebGLUniformLocation>(mContext->GetUniformLocation(*prog, name)));
 }
 
 WebGLId<WebGLBuffer> HostWebGLContext::CreateBuffer() {

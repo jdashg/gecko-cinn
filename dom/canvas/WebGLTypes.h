@@ -104,7 +104,6 @@ class TexUnpackSurface;
 class ClientWebGLContext;
 struct WebGLTexPboOffset;
 class WebGLTexture;
-class WebGLUniformLocation;
 class WebGLBuffer;
 class WebGLFramebuffer;
 class WebGLProgram;
@@ -115,7 +114,6 @@ class WebGLShader;
 class WebGLSync;
 class WebGLTexture;
 class WebGLTransformFeedback;
-class WebGLUniformLocation;
 class WebGLVertexArray;
 class WebGLVertexArrayObject;
 template <typename T>
@@ -595,6 +593,11 @@ struct LinkResult final {
 };
 
 // -
+
+struct GenericVertexAttribData final {
+  webgl::AttribBaseType type = webgl::AttribBaseType::Float;
+  uint8_t data[4*sizeof(float)] = {};
+};
 
 struct GetUniformData final {
   GLenum type = 0;

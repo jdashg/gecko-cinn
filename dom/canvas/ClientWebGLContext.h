@@ -153,11 +153,7 @@ public:
 
   bool mTfActiveAndNotPaused = false;
 
-  struct GenericVertexAttrib final {
-    webgl::AttribBaseType type = webgl::AttribBaseType::Float;
-    uint8_t data[4*sizeof(float)] = {};
-  };
-  std::vector<GenericVertexAttrib> mGenericVertexAttribs;
+  std::vector<GenericVertexAttribData> mGenericVertexAttribs;
 
   bool mColorWriteMask[4] = {true, true, true, true};
   int32_t mScissor[4] = {};
@@ -861,24 +857,24 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   void Enable(GLenum cap);
 
-  bool IsEnabled(GLenum cap);
+  bool IsEnabled(GLenum cap) const;
 
   void GetParameter(JSContext* cx, GLenum pname,
-                    JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
+                    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) const;
 
   void GetBufferParameter(JSContext* cx, GLenum target, GLenum pname,
-                          JS::MutableHandle<JS::Value> retval);
+                          JS::MutableHandle<JS::Value> retval) const;
 
   void GetFramebufferAttachmentParameter(JSContext* cx, GLenum target,
                                          GLenum attachment, GLenum pname,
                                          JS::MutableHandle<JS::Value> retval,
-                                         ErrorResult& rv);
+                                         ErrorResult& rv) const;
 
   void GetRenderbufferParameter(JSContext* cx, GLenum target, GLenum pname,
-                                JS::MutableHandle<JS::Value> retval);
+                                JS::MutableHandle<JS::Value> retval) const;
 
   void GetIndexedParameter(JSContext* cx, GLenum target, GLuint index,
-                           JS::MutableHandleValue retval, ErrorResult& rv);
+                           JS::MutableHandleValue retval, ErrorResult& rv) const;
 
   RefPtr<WebGLShaderPrecisionFormatJS> GetShaderPrecisionFormat(
       GLenum shadertype, GLenum precisiontype) const;
@@ -1635,7 +1631,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
 private:
-  void VertexAttribNTv(GLuint index, uint8_t n, webgl::AttribBaseType,
+  void VertexAttrib4Tv(GLuint index, uint8_t n, webgl::AttribBaseType,
       const Range<const uint8_t>&);
 
 public:
@@ -1650,40 +1646,67 @@ public:
   }
   void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w) {
     const float arr[4] = {x, y, z, w};
-    VertexAttribNT(index, 4, webgl::AttribBaseType::Float, arr);
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Float, MakeRange(arr));
   }
 
   // -
 
   void VertexAttrib1fv(const GLuint index, const Float32ListU& list) {
-    VertexAttrib4fv(index, list, 1);
+    const FuncScope funcScope(*this, "vertexAttrib1fv");
+    if (IsContextLost()) return;
+
+    const auto range = MakeRange(list);
+    if (range.length() < 1) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "Length of `list` must be >=1.");
+      return;
+    }
+
+    VertexAttrib1f(index, range[0]);
   }
 
   void VertexAttrib2fv(const GLuint index, const Float32ListU& list) {
-    VertexAttrib4fv(index, list, 2);
+    const FuncScope funcScope(*this, "vertexAttrib1fv");
+    if (IsContextLost()) return;
+
+    const auto range = MakeRange(list);
+    if (range.length() < 2) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "Length of `list` must be >=2.");
+      return;
+    }
+
+    VertexAttrib2f(index, range[0], range[1]);
   }
 
   void VertexAttrib3fv(const GLuint index, const Float32ListU& list) {
-    VertexAttrib4fv(index, list, 3);
+    const FuncScope funcScope(*this, "vertexAttrib1fv");
+    if (IsContextLost()) return;
+
+    const auto range = MakeRange(list);
+    if (range.length() < 3) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "Length of `list` must be >=3.");
+      return;
+    }
+
+    VertexAttrib3f(index, range[0], range[1], range[2]);
   }
 
-  void VertexAttrib4fv(GLuint index, const Float32ListU& list, uint8_t n = 4) {
-    VertexAttribNTv(index, n, webgl::AttribBaseType::Float, MakeByteRange(list));
+  void VertexAttrib4fv(GLuint index, const Float32ListU& list) {
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Float, MakeByteRange(list));
   }
   void VertexAttribI4iv(GLuint index, const Int32ListU& list) {
-    VertexAttribNTv(index, 4, webgl::AttribBaseType::Int, MakeByteRange(list));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Int, MakeByteRange(list));
   }
   void VertexAttribI4uiv(GLuint index, const Uint32ListU& list) {
-    VertexAttribNTv(index, 4, webgl::AttribBaseType::UInt, MakeByteRange(list));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::UInt, MakeByteRange(list));
   }
 
   void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w) {
     const int32_t arr[4] = {x, y, z, w};
-    VertexAttribNT(index, 4, webgl::AttribBaseType::Int, MakeByteRange(arr));
+    VertexAttribNTv(index, webgl::AttribBaseType::Int, MakeByteRange(arr));
   }
   void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w) {
     const uint32_t arr[4] = {x, y, z, w};
-    VertexAttribNT(index, 4, webgl::AttribBaseType::UInt, MakeByteRange(arr));
+    VertexAttribNTv(index, webgl::AttribBaseType::UInt, MakeByteRange(arr));
   }
 
   void VertexAttribIPointer(GLuint index, GLint size, GLenum type,

@@ -24,7 +24,6 @@
 #include "WebGLSampler.h"
 #include "WebGLShader.h"
 #include "WebGLTexture.h"
-#include "WebGLUniformLocation.h"
 #include "WebGLValidateStrings.h"
 #include "WebGLVertexArray.h"
 #include "WebGLVertexAttribData.h"
@@ -172,25 +171,6 @@ bool WebGLContext::ValidateFaceEnum(const GLenum face) {
   }
 }
 
-bool WebGLContext::ValidateUniformLocation(
-    const WebGLUniformLocation* const loc) {
-  /* GLES 2.0.25, p38:
-   *   If the value of location is -1, the Uniform* commands will silently
-   *   ignore the data passed in, and the current uniform values will not be
-   *   changed.
-   */
-  if (!loc) return false;
-
-  if (!ValidateObjectAllowDeleted("loc", *loc)) return false;
-
-  if (!mCurrentProgram) {
-    ErrorInvalidOperation("No program is currently bound.");
-    return false;
-  }
-
-  return loc->ValidateForProgram(mCurrentProgram);
-}
-
 bool WebGLContext::ValidateAttribArraySetter(uint32_t setterElemSize,
                                              uint32_t arrayLength) {
   if (IsContextLost()) return false;
@@ -200,68 +180,6 @@ bool WebGLContext::ValidateAttribArraySetter(uint32_t setterElemSize,
     return false;
   }
 
-  return true;
-}
-
-bool WebGLContext::ValidateUniformSetter(
-    const WebGLUniformLocation* const loc, const uint8_t setterElemSize,
-    const webgl::AttribBaseType setterType) {
-  if (IsContextLost()) return false;
-
-  if (!ValidateUniformLocation(loc)) return false;
-
-  if (!loc->ValidateSizeAndType(setterElemSize, setterType)) return false;
-
-  return true;
-}
-
-bool WebGLContext::ValidateUniformArraySetter(
-    const WebGLUniformLocation* const loc, const uint8_t setterElemSize,
-    const webgl::AttribBaseType setterType, const uint32_t setterArraySize,
-    uint32_t* const out_numElementsToUpload) {
-  if (IsContextLost()) return false;
-
-  if (!ValidateUniformLocation(loc)) return false;
-
-  if (!loc->ValidateSizeAndType(setterElemSize, setterType)) return false;
-
-  if (!loc->ValidateArrayLength(setterElemSize, setterArraySize)) return false;
-
-  const auto& elemCount = loc->mInfo->mActiveInfo.mElemCount;
-  MOZ_ASSERT(elemCount > loc->mArrayIndex);
-  const uint32_t uniformElemCount = elemCount - loc->mArrayIndex;
-
-  *out_numElementsToUpload =
-      std::min(uniformElemCount, setterArraySize / setterElemSize);
-  return true;
-}
-
-bool WebGLContext::ValidateUniformMatrixArraySetter(
-    const WebGLUniformLocation* const loc, const uint8_t setterCols,
-    const uint8_t setterRows, const webgl::AttribBaseType setterType,
-    const uint32_t setterArraySize, const bool setterTranspose,
-    uint32_t* const out_numElementsToUpload) {
-  const uint8_t setterElemSize = setterCols * setterRows;
-
-  if (IsContextLost()) return false;
-
-  if (!ValidateUniformLocation(loc)) return false;
-
-  if (!loc->ValidateSizeAndType(setterElemSize, setterType)) return false;
-
-  if (!loc->ValidateArrayLength(setterElemSize, setterArraySize)) return false;
-
-  if (setterTranspose && !IsWebGL2()) {
-    ErrorInvalidValue("`transpose` must be false.");
-    return false;
-  }
-
-  const auto& elemCount = loc->mInfo->mActiveInfo.mElemCount;
-  MOZ_ASSERT(elemCount > loc->mArrayIndex);
-  const uint32_t uniformElemCount = elemCount - loc->mArrayIndex;
-
-  *out_numElementsToUpload =
-      std::min(uniformElemCount, setterArraySize / setterElemSize);
   return true;
 }
 

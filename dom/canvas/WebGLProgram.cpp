@@ -17,7 +17,6 @@
 #include "WebGLShader.h"
 #include "WebGLShaderValidator.h"
 #include "WebGLTransformFeedback.h"
-#include "WebGLUniformLocation.h"
 #include "WebGLValidateStrings.h"
 #include "WebGLVertexArray.h"
 

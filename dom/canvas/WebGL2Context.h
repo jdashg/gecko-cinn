@@ -123,7 +123,7 @@ class WebGL2Context final : public WebGLContext {
   void SamplerParameteri(WebGLSampler& sampler, GLenum pname, GLint param);
   void SamplerParameterf(WebGLSampler& sampler, GLenum pname, GLfloat param);
   Maybe<double> GetSamplerParameter(const WebGLSampler& sampler,
-                                        GLenum pname);
+                                        GLenum pname) const;
 
   // -------------------------------------------------------------------------
   // Sync objects - WebGL2ContextSync.cpp

@@ -91,7 +91,7 @@ void WebGLQuery::EndQuery() {
   availRunnable->mQueries.push_back(this);
 }
 
-MaybeWebGLVariant WebGLQuery::GetQueryParameter(GLenum pname) const {
+Maybe<double> WebGLQuery::GetQueryParameter(GLenum pname) const {
   switch (pname) {
     case LOCAL_GL_QUERY_RESULT_AVAILABLE:
     case LOCAL_GL_QUERY_RESULT:
@@ -120,7 +120,7 @@ MaybeWebGLVariant WebGLQuery::GetQueryParameter(GLenum pname) const {
       (mCanBeAvailable || StaticPrefs::webgl_allow_immediate_queries());
   if (!canBeAvailable) {
     if (pname == LOCAL_GL_QUERY_RESULT_AVAILABLE) {
-      return AsSomeVariant(false);
+      return Some(false);
     }
     return Nothing();
   }
@@ -131,7 +131,7 @@ MaybeWebGLVariant WebGLQuery::GetQueryParameter(GLenum pname) const {
   switch (pname) {
     case LOCAL_GL_QUERY_RESULT_AVAILABLE:
       gl->fGetQueryObjectuiv(mGLName, pname, (GLuint*)&val);
-      return AsSomeVariant(static_cast<bool>(val));
+      return Some(static_cast<bool>(val));
 
     case LOCAL_GL_QUERY_RESULT:
       switch (mTarget) {
@@ -154,7 +154,7 @@ MaybeWebGLVariant WebGLQuery::GetQueryParameter(GLenum pname) const {
         case LOCAL_GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN:
         case LOCAL_GL_TIME_ELAPSED_EXT:
         case LOCAL_GL_TIMESTAMP_EXT:
-          return AsSomeVariant(val);
+          return Some(val);
       }
       MOZ_CRASH("Bad `mTarget`.");
 

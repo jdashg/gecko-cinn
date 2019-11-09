@@ -12,7 +12,6 @@
 #include "WebGLVertexAttribData.h"
 #include "WebGLShader.h"
 #include "WebGLProgram.h"
-#include "WebGLUniformLocation.h"
 #include "WebGLFormats.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLQuery.h"
@@ -784,28 +783,79 @@ GLenum WebGLContext::GetError() {
   return err;
 }
 
-MaybeWebGLVariant WebGLContext::GetProgramParameter(const WebGLProgram& prog,
-                                                    GLenum pname) {
-  const FuncScope funcScope(*this, "getProgramParameter");
-  if (IsContextLost()) return Nothing();
-
-  if (!ValidateObjectAllowDeleted("program", prog)) return Nothing();
-
-  return prog.GetProgramParameter(pname);
-}
-
-MaybeWebGLVariant WebGLContext::GetUniform(const WebGLProgram& prog,
-                                           const WebGLUniformLocation& loc) {
+webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
+                                               const uint32_t loc) const {
   const FuncScope funcScope(*this, "getUniform");
-  if (IsContextLost()) return Nothing();
+  webgl::GetUniformData ret;
+  [&]() {
+    if (IsContextLost()) return;
+    if (!prog) return;
 
-  if (!ValidateObject("program", prog)) return Nothing();
+    const auto& info = prog->LinkInfo();
+    if (!info) return;
 
-  if (!ValidateObjectAllowDeleted("location", loc)) return Nothing();
+    const auto locInfo = MaybeFind(info->locationMap, loc);
+    if (!locInfo) return;
 
-  if (!loc.ValidateForProgram(&prog)) return Nothing();
+    switch (locInfo->info.elemType) {
+      case LOCAL_GL_FLOAT:
+      case LOCAL_GL_FLOAT_VEC2:
+      case LOCAL_GL_FLOAT_VEC3:
+      case LOCAL_GL_FLOAT_VEC4:
+      case LOCAL_GL_FLOAT_MAT2:
+      case LOCAL_GL_FLOAT_MAT3:
+      case LOCAL_GL_FLOAT_MAT4:
+      case LOCAL_GL_FLOAT_MAT2x3:
+      case LOCAL_GL_FLOAT_MAT2x4:
+      case LOCAL_GL_FLOAT_MAT3x2:
+      case LOCAL_GL_FLOAT_MAT3x4:
+      case LOCAL_GL_FLOAT_MAT4x2:
+      case LOCAL_GL_FLOAT_MAT4x3:
+        ret.type = webgl::UniformBaseType::Float;
+        gl->fGetUniformfv(prog, loc, reinterpret_cast<float*>(ret.data));
+        break;
 
-  return loc.GetUniform();
+      case LOCAL_GL_INT:
+      case LOCAL_GL_INT_VEC2:
+      case LOCAL_GL_INT_VEC3:
+      case LOCAL_GL_INT_VEC4:
+      case LOCAL_GL_SAMPLER_2D:
+      case LOCAL_GL_SAMPLER_3D:
+      case LOCAL_GL_SAMPLER_CUBE:
+      case LOCAL_GL_SAMPLER_2D_SHADOW:
+      case LOCAL_GL_SAMPLER_2D_ARRAY:
+      case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+      case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+      case LOCAL_GL_INT_SAMPLER_2D:
+      case LOCAL_GL_INT_SAMPLER_3D:
+      case LOCAL_GL_INT_SAMPLER_CUBE:
+      case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+      case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+      case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+      case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+      case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
+      case LOCAL_GL_BOOL:
+      case LOCAL_GL_BOOL_VEC2:
+      case LOCAL_GL_BOOL_VEC3:
+      case LOCAL_GL_BOOL_VEC4:
+        ret.type = webgl::UniformBaseType::Int;
+        gl->fGetUniformiv(prog, loc, reinterpret_cast<int32_t*>(ret.data));
+        break;
+
+
+      case LOCAL_GL_UNSIGNED_INT:
+      case LOCAL_GL_UNSIGNED_INT_VEC2:
+      case LOCAL_GL_UNSIGNED_INT_VEC3:
+      case LOCAL_GL_UNSIGNED_INT_VEC4:
+        ret.type = webgl::UniformBaseType::Uint;
+        gl->fGetUniformfv(prog, loc, reinterpret_cast<uint32_t*>(ret.data));
+        break;
+
+      default:
+        MOZ_CRASH("GFX: Invalid elemType.");
+    }
+  }();
+  return ret;
 }
 
 void WebGLContext::Hint(GLenum target, GLenum mode) {
@@ -1557,11 +1607,11 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
   const auto& link = mActiveLinkResult;
   if (!link) return;
 
-  const auto locInfo = link->GetUniformByLoc(loc);
+  const auto locInfo = MaybeFind(link->locationMap, loc);
   if (!locInfo) return;
 
   const bool typeOk = [&]() {
-    switch (locInfo->mElemType) {
+    switch (locInfo->info.elemType) {
       case LOCAL_GL_FLOAT_MAT2: return a == 2 && b == 2;
       case LOCAL_GL_FLOAT_MAT3: return a == 3 && b == 3;
       case LOCAL_GL_FLOAT_MAT4: return a == 4 && b == 4;
@@ -1577,13 +1627,14 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
   if (!typeOk) {
     ErrorInvalidOperation(
         "Type from function (%ux%u matrix) is incompatible with type in shader (%s).",
-        a, b, EnumString(locInfo->mElemType).c_str());
+        a, b, EnumString(locInfo->info.elemType).c_str());
     return;
   }
 
   // -
 
   const auto elemCount = data.length() / (sizeof(float) * a * b); // rounds down
+  if (!elemCount) return;
 
   static const decltype(&gl::GLContext::fUniformMatrix2fv) kFuncList[] = {
       &gl::GLContext::fUniformMatrix2fv,   &gl::GLContext::fUniformMatrix2x3fv,

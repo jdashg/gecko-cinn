@@ -37,7 +37,7 @@ class CompositableHost;
 }
 
 template<typename C, typename K, typename V>
-inline V Find(const C& container, const K& key, const V notFound = V()) {
+inline auto Find(const C<K,V>& container, const K& key, const V notFound = V()) -> V {
   const auto itr = container.find(key);
   if (itr == container.end()) return notFound;
   return itr->second;
@@ -364,7 +364,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     return mContext->GetShaderPrecisionFormat(shadertype, prescisionType);
   }
 
-  GetUniformData GetUniform(ObjectId prog, uint32_t loc) const {
+  webgl::GetUniformData GetUniform(ObjectId prog, uint32_t loc) const {
     return mContext->GetUniform(ById(prog), loc);
   }
 
@@ -571,14 +571,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->UniformNTv(ById(id), n, t, bytes);
   }
 
-  Run<RPROC(UniformMatrixAxBfv)>(a, b, loc->mId, transpose, n, t, v, bytes);
   void UniformMatrixAxBfv(uint8_t A, uint8_t B, const ObjectId id,
                           bool transpose, const RawBuffer<const float>& data) const {
     mContext->UniformMatrixAxBfv(A, B, ById(id), transpose, data);
   }
 
-  void VertexAttrib4Tv(GLuint index, const webgl::AttribBaseType t, const RawBuffer<>& data) const {
-    mContext->VertexAttrib4Tv(index, t, data);
+  void VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData& data) const {
+    mContext->VertexAttrib4T(index, data);
   }
 
   void VertexAttribDivisor(GLuint index, GLuint divisor) const {
