@@ -65,7 +65,6 @@
 #include "CanvasUtils.h"
 #include "ClientWebGLContext.h"
 #include "HostWebGLContext.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLBuffer.h"
 #include "WebGLChild.h"
 #include "WebGLContextLossHandler.h"

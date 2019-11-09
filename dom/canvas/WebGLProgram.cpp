@@ -11,7 +11,6 @@
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/RefPtr.h"
 #include "nsPrintfCString.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLBuffer.h"
 #include "WebGLContext.h"
 #include "WebGLShader.h"
@@ -21,92 +20,6 @@
 #include "WebGLVertexArray.h"
 
 namespace mozilla {
-
-/* If `name`: "foo[3]"
- * Then returns true, with
- *     `out_baseName`: "foo"
- *     `out_isArray`: true
- *     `out_index`: 3
- *
- * If `name`: "foo"
- * Then returns true, with
- *     `out_baseName`: "foo"
- *     `out_isArray`: false
- *     `out_index`: 0
- */
-static bool ParseName(const nsCString& name, nsCString* const out_baseName,
-                      bool* const out_isArray, size_t* const out_arrayIndex) {
-  int32_t indexEnd = name.RFind("]");
-  if (indexEnd == -1 || (uint32_t)indexEnd != name.Length() - 1) {
-    *out_baseName = name;
-    *out_isArray = false;
-    *out_arrayIndex = 0;
-    return true;
-  }
-
-  int32_t indexOpenBracket = name.RFind("[");
-  if (indexOpenBracket == -1) return false;
-
-  uint32_t indexStart = indexOpenBracket + 1;
-  uint32_t indexLen = indexEnd - indexStart;
-  if (indexLen == 0) return false;
-
-  const nsAutoCString indexStr(Substring(name, indexStart, indexLen));
-
-  nsresult errorcode;
-  int32_t indexNum = indexStr.ToInteger(&errorcode);
-  if (NS_FAILED(errorcode)) return false;
-
-  if (indexNum < 0) return false;
-
-  *out_baseName = StringHead(name, indexOpenBracket);
-  *out_isArray = true;
-  *out_arrayIndex = indexNum;
-  return true;
-}
-
-static void AssembleName(const nsCString& baseName, bool isArray,
-                         size_t arrayIndex, nsCString* const out_name) {
-  *out_name = baseName;
-  if (isArray) {
-    out_name->Append('[');
-    out_name->AppendInt(uint64_t(arrayIndex));
-    out_name->Append(']');
-  }
-}
-
-////
-
-/*static*/ const webgl::UniformInfo::TexListT& webgl::UniformInfo::GetTexList(
-    const WebGLContext* aWebGL, WebGLActiveInfo* activeInfo) {
-  switch (activeInfo->mElemType) {
-    case LOCAL_GL_SAMPLER_2D:
-    case LOCAL_GL_SAMPLER_2D_SHADOW:
-    case LOCAL_GL_INT_SAMPLER_2D:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
-      return &aWebGL->mBound2DTextures;
-
-    case LOCAL_GL_SAMPLER_CUBE:
-    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
-    case LOCAL_GL_INT_SAMPLER_CUBE:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
-      return &aWebGL->mBoundCubeMapTextures;
-
-    case LOCAL_GL_SAMPLER_3D:
-    case LOCAL_GL_INT_SAMPLER_3D:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
-      return &aWebGL->mBound3DTextures;
-
-    case LOCAL_GL_SAMPLER_2D_ARRAY:
-    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
-    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
-      return &aWebGL->mBound2DArrayTextures;
-
-    default:
-      return nullptr;
-  }
-}
 
 static bool IsShadowSampler(const GLenum elemType) {
   switch (elemType) {
@@ -144,17 +57,6 @@ static Maybe<webgl::TextureBaseType> SamplerBaseType(const GLenum elemType) {
 
     default:
       return {};
-  }
-}
-
-webgl::UniformInfo::UniformInfo(const WebGLContext* webgl,
-                                WebGLActiveInfo& activeInfo)
-    : mActiveInfo(activeInfo),
-      mSamplerTexList(GetTexList(webgl, &activeInfo)),
-      mTexBaseType(SamplerBaseType(mActiveInfo.mElemType)),
-      mIsShadowSampler(IsShadowSampler(mActiveInfo.mElemType)) {
-  if (mSamplerTexList) {
-    mSamplerValues.assign(mActiveInfo.mElemCount, 0);
   }
 }
 

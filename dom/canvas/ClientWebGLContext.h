@@ -12,7 +12,6 @@
 #include "nsICanvasRenderingContextInternal.h"
 #include "nsWeakReference.h"
 #include "nsWrapperCache.h"
-#include "WebGLActiveInfo.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
 #include "WebGLStrongTypes.h"
@@ -545,15 +544,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -------------------------------------------------------------------------
   // Client WebGL Object Tracking
   // -------------------------------------------------------------------------
- public:
-
- public:
-  JS::Value ToJSValue(JSContext* cx, const MaybeWebGLVariant& aVariant,
-                      ErrorResult& rv) const;
-
  protected:
-  friend struct MaybeWebGLVariantMatcher;
-
   template <typename WebGLObjectType>
   JS::Value WebGLObjectAsJSValue(JSContext* cx,
                                  RefPtr<WebGLObjectType>&& object,

@@ -8,7 +8,6 @@
 
 #include "mozilla/ipc/ProducerConsumerQueue.h"
 #include "TexUnpackBlob.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLContext.h"
 #include "WebGLTypes.h"
 
@@ -53,7 +52,7 @@ struct IsTriviallySerializable<avec2<T>> : TrueType {};
 
 template <>
 struct IsTriviallySerializable<webgl::TexUnpackBlob> : TrueType {};
-
+/*
 template <>
 struct PcqParamTraits<WebGLActiveInfo> {
   using ParamType = WebGLActiveInfo;
@@ -89,7 +88,7 @@ struct PcqParamTraits<WebGLActiveInfo> {
            aView.MinSizeParam(aArg ? &aArg->mBaseType : nullptr);
   }
 };
-
+*/
 template <typename T>
 struct PcqParamTraits<RawBuffer<T>> {
   using ParamType = RawBuffer<T>;

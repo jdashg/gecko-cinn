@@ -37,11 +37,6 @@ already_AddRefed<WebGLSync> WebGL2Context::FenceSync(GLenum condition,
   return globj.forget();
 }
 
-bool WebGL2Context::IsSync(const WebGLSync* const sync) {
-  const FuncScope funcScope(*this, "isSync");
-  return ValidateIsObject(sync);
-}
-
 void WebGL2Context::DeleteSync(WebGLSync* sync) {
   const FuncScope funcScope(*this, "deleteSync");
   if (!ValidateDeleteObject(sync)) return;

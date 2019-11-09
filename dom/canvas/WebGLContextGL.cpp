@@ -6,7 +6,6 @@
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
 
-#include "WebGLActiveInfo.h"
 #include "WebGLContextUtils.h"
 #include "WebGLBuffer.h"
 #include "WebGLVertexAttribData.h"
@@ -1121,7 +1120,7 @@ Maybe<UniquePtr<RawBuffer<>>> WebGLContext::ReadPixels(
   return Some(std::move(buf));
 }
 
-void WebGLContext::ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+void WebGLContext::ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
                               GLenum format, GLenum type,
                               WebGLsizeiptr offset) {
   const FuncScope funcScope(*this, "readPixels");
@@ -1378,19 +1377,13 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
   }
 }
 
-void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer* const rb, GLsizei samples,
+void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer* const rb, uint32_t samples,
                                             GLenum internalFormat,
-                                            GLsizei width, GLsizei height) {
+                                            uint32_t width, uint32_t height) const {
   if (IsContextLost()) return;
   if (!rb) return;
 
-  if (!ValidateNonNegative("width", width) ||
-      !ValidateNonNegative("height", height) ||
-      !ValidateNonNegative("samples", samples)) {
-    return;
-  }
-
-  rb->RenderbufferStorage(uint32_t(samples), internalFormat,
+  rb->RenderbufferStorage(samples, internalFormat,
                                           uint32_t(width), uint32_t(height));
 }
 
