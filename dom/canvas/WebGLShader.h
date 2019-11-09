@@ -44,16 +44,6 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
   // Util funcs
   size_t CalcNumSamplerUniforms() const;
   size_t NumAttributes() const;
-  bool FindAttribUserNameByMappedName(const nsACString& mappedName,
-                                      nsCString* const out_userName) const;
-  bool FindVaryingByMappedName(const nsACString& mappedName,
-                               nsCString* const out_userName,
-                               bool* const out_isArray) const;
-  bool FindUniformByMappedName(const nsACString& mappedName,
-                               nsCString* const out_userName,
-                               bool* const out_isArray) const;
-  bool UnmapUniformBlockName(const nsACString& baseMappedName,
-                             nsCString* const out_baseUserName) const;
 
   bool IsCompiled() const { return mCompilationSuccessful; }
   const auto& CompileResults() const { return mCompileResults; }

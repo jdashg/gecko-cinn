@@ -76,7 +76,7 @@ static uint8_t ElemSizeFromType(GLenum elemType) {
 
 ////////////////////
 
-static webgl::AttribBaseType ElemBaseType(const GLenum elemType) {
+webgl::AttribBaseType ToAttribBaseType(const GLenum elemType) {
   switch (elemType) {
     case LOCAL_GL_FLOAT:
     case LOCAL_GL_FLOAT_VEC2:

@@ -3103,7 +3103,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
 }
 
 void ClientWebGLContext::UniformNTv(const WebGLUniformLocation* const loc, const uint8_t n,
-              const webgl::AttribBaseType t, const Range<const uint8_t>& bytes) const {
+              const webgl::UniformBaseType t, const Range<const uint8_t>& bytes) const {
   if (!loc) return;
   Run<RPROC(UniformNTv)>(loc->mLoc, n, t, bytes);
 }
