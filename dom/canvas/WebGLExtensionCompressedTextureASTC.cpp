@@ -24,8 +24,6 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
     auto usage = fua->EditUsage(effFormat);
     usage->isFilterable = true;
     fua->AllowSizedTexFormat(sizedFormat, usage);
-
-    webgl_->mCompressedTextureFormats.AppendElement(sizedFormat);
   };
 
 #define FOO(x) LOCAL_GL_##x, webgl::EffectiveFormat::x

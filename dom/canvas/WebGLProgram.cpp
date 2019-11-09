@@ -269,7 +269,7 @@ const char* webgl::ToString(const webgl::AttribBaseType x) {
       return "FLOAT";
     case webgl::AttribBaseType::Int:
       return "INT";
-    case webgl::AttribBaseType::UInt:
+    case webgl::AttribBaseType::Uint:
       return "UINT";
     case webgl::AttribBaseType::Boolean:
       return "BOOL";
@@ -283,7 +283,7 @@ const char* webgl::ToString(const webgl::UniformBaseType x) {
       return "FLOAT";
     case webgl::UniformBaseType::Int:
       return "INT";
-    case webgl::UniformBaseType::UInt:
+    case webgl::UniformBaseType::Uint:
       return "UINT";
   }
   MOZ_CRASH("pacify gcc6 warning");
@@ -421,9 +421,9 @@ void WebGLProgram::Delete() {
 ////////////////////////////////////////////////////////////////////////////////
 // GL funcs
 
-void WebGLProgram::AttachShader(WebGLShader* shader) {
+void WebGLProgram::AttachShader(WebGLShader& shader) {
   WebGLRefPtr<WebGLShader>* shaderSlot;
-  switch (shader->mType) {
+  switch (shader.mType) {
     case LOCAL_GL_VERTEX_SHADER:
       shaderSlot = &mVertShader;
       break;
@@ -436,7 +436,7 @@ void WebGLProgram::AttachShader(WebGLShader* shader) {
   }
 
   if (*shaderSlot) {
-    if (shader == *shaderSlot) {
+    if (&shader == *shaderSlot) {
       mContext->ErrorInvalidOperation(
           "attachShader: `shader` is already attached.");
     } else {
@@ -447,9 +447,9 @@ void WebGLProgram::AttachShader(WebGLShader* shader) {
     return;
   }
 
-  *shaderSlot = shader;
+  *shaderSlot = &shader;
 
-  mContext->gl->fAttachShader(mGLName, shader->mGLName);
+  mContext->gl->fAttachShader(mGLName, shader.mGLName);
 }
 
 void WebGLProgram::BindAttribLocation(GLuint loc, const nsAString& name) {
@@ -481,9 +481,7 @@ void WebGLProgram::BindAttribLocation(GLuint loc, const nsAString& name) {
   }
 }
 
-void WebGLProgram::DetachShader(const WebGLShader* shader) {
-  MOZ_ASSERT(shader);
-
+void WebGLProgram::DetachShader(const WebGLShader& shader) {
   WebGLRefPtr<WebGLShader>* shaderSlot;
   switch (shader->mType) {
     case LOCAL_GL_VERTEX_SHADER:
@@ -497,14 +495,14 @@ void WebGLProgram::DetachShader(const WebGLShader* shader) {
       return;
   }
 
-  if (*shaderSlot != shader) {
+  if (*shaderSlot != &shader) {
     mContext->ErrorInvalidOperation("detachShader: `shader` is not attached.");
     return;
   }
 
   *shaderSlot = nullptr;
 
-  mContext->gl->fDetachShader(mGLName, shader->mGLName);
+  mContext->gl->fDetachShader(mGLName, shader.mGLName);
 }
 
 static GLint GetProgramiv(gl::GLContext* gl, GLuint program, GLenum pname) {

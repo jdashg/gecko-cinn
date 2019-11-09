@@ -35,13 +35,6 @@ namespace layers {
 class CompositableHost;
 }
 
-template<typename C, typename K, typename V>
-inline auto Find(const C<K,V>& container, const K& key, const V notFound = V()) -> V {
-  const auto itr = container.find(key);
-  if (itr == container.end()) return notFound;
-  return itr->second;
-}
-
 /**
  * Host endpoint of a WebGLContext.  HostWebGLContext owns a WebGLContext
  * that it uses to execute commands sent from its ClientWebGLContext.
@@ -112,7 +105,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     const HostWebGLContext& mParent;
     const ObjectId mId;
 
-    explicit AutoResolveT(const HostWebGLContext& parent, const ObjectId id) : mParent(parent), mId(id) {}
+    AutoResolveT(const HostWebGLContext& parent, const ObjectId id) : mParent(parent), mId(id) {}
 
     MOZ_IMPLICIT operator WebGLBuffer*() const {
       return Find(mParent.mBufferMap, mId).get();
@@ -147,18 +140,29 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     MOZ_IMPLICIT operator WebGLVertexArray*() const {
       return Find(mParent.mVertexArrayMap, mId).get();
     }
+
+    explicit operator bool() const { return static_cast<bool>(mId); }
+
+    class AutoResolveRefT final {
+      const AutoResolveT& mPtr;
+    public:
+      AutoResolveRefT(const AutoResolveT& ptr) : mPtr(ptr) {}
+
+      template<typename T>
+      MOZ_IMPLICIT operator T&() const {
+        const auto ptr = T*{mPtr};
+        return *ptr;
+      }
+    };
+
+    AutoResolveRefT operator*() const {
+      return AutoResolveRefT(*this);
+    }
   };
 
   AutoResolveT ById(const ObjectId id) const {
     return {*this, id};
   }
-
-  // -------------------------------------------------------------------------
-  // RPC Framework
-  // -------------------------------------------------------------------------
-
- public:
-  CommandResult RunCommandsForDuration(TimeDuration aDuration);
 
   // -------------------------------------------------------------------------
   // Host-side methods.  Calls in the client are forwarded to the host.
@@ -229,21 +233,26 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     return mContext->IsEnabled(cap);
   }
 
-  Maybe<double> GetParameter(GLenum pname, bool debug) const {
-    return mContext->GetParameter(pname, debug);
+  Maybe<double> GetParameter(GLenum pname) const {
+    return mContext->GetParameter(pname);
   }
 
-  Maybe<std::string> GetString(GLenum pname, bool debug) const {
-    return mContext->GetString(pname, debug);
+  Maybe<std::string> GetString(GLenum pname) const {
+    return mContext->GetString(pname);
   }
 
   void AttachShader(ObjectId prog, ObjectId shader) const {
-    mContext->AttachShader(ById(prog), ById(shader));
+    const auto pProg = ById(prog);
+    const auto pShader = ById(shader);
+    if (!pProg || !pShader) return;
+    mContext->AttachShader(*pProg, *pShader);
   }
 
   void BindAttribLocation(ObjectId id, GLuint location,
                           const std::string& name) const {
-    mContext->BindAttribLocation(ById(id), location, name);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->BindAttribLocation(*obj, location, name);
   }
 
   void BindFramebuffer(GLenum target, ObjectId id) const {
@@ -289,7 +298,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void CompileShader(const ObjectId id) const {
-    mContext->CompileShader(ById(id));
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->CompileShader(*obj);
   }
 
   void CullFace(GLenum face) const {
@@ -310,7 +321,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void DetachShader(const ObjectId prog,
                     const ObjectId shader) const {
-    mContext->DetachShader(ById(prog), ById(shader));
+    const auto pProg = ById(prog);
+    const auto pShader = ById(shader);
+    if (!pProg || !pShader) return;
+    mContext->DetachShader(*pProg, *pShader);
   }
 
   void Flush() const {
@@ -342,22 +356,29 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   GLint GetFragDataLocation(ObjectId id, const std::string& name) const {
-    return mContext->GetFragDataLocation(ById(id), name);
+    const auto obj = ById(id);
+    if (!obj) return -1;
+    return mContext->GetFragDataLocation(*obj, name);
   }
 
   Maybe<double> GetFramebufferAttachmentParameter(ObjectId id,
                                                       GLenum attachment,
                                                       GLenum pname) const {
-    return mContext->GetFramebufferAttachmentParameter(ById(id), attachment,
+    const auto obj = ById(id);
+    return mContext->GetFramebufferAttachmentParameter(obj, attachment,
       pname);
   }
 
   webgl::LinkResult GetLinkResult(ObjectId id) const {
-    return mContext->GetLinkResult(ById(id));
+    const auto obj = ById(id);
+    if (!obj) return {};
+    return mContext->GetLinkResult(*obj);
   }
 
   Maybe<double> GetRenderbufferParameter(ObjectId id, GLenum pname) const {
-    return mContext->GetRenderbufferParameter(ById(id), pname);
+    const auto obj = ById(id);
+    if (!obj) return {};
+    return mContext->GetRenderbufferParameter(*obj, pname);
   }
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(GLenum shaderType,
@@ -366,7 +387,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   webgl::GetUniformData GetUniform(ObjectId prog, uint32_t loc) const {
-    return mContext->GetUniform(ById(prog), loc);
+    const auto obj = ById(id);
+    if (!obj) return {}
+    return mContext->GetUniform(*obj, loc);
   }
 
   void Hint(GLenum target, GLenum mode) const {
@@ -378,7 +401,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void LinkProgram(const ObjectId id) const {
-    mContext->LinkProgram(ById(id));
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->LinkProgram(*obj);
   }
 
   void PixelStorei(GLenum pname, GLint param) const {
@@ -399,7 +424,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void ShaderSource(const ObjectId id,
                     const std::string& source) const {
-    mContext->ShaderSource(ById(id), source);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->ShaderSource(*obj, source);
   }
 
   void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask) const {
@@ -475,7 +502,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void RenderbufferStorageMultisample(ObjectId id, uint32_t samples,
                                       GLenum internalFormat, uint32_t width,
                                       uint32_t height) const {
-    mContext->RenderbufferStorageMultisample(ById(id), samples, internalFormat,
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->RenderbufferStorageMultisample(*obj, samples, internalFormat,
      width, height);
   }
 
@@ -548,7 +577,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   Maybe<double> GetTexParameter(ObjectId id, GLenum pname) const {
-    return GetTexParameter(ById(id), pname);
+    const auto obj = ById(id);
+    if (!obj) return {};
+    return GetTexParameter(*obj, pname);
   }
 
   void TexParameter_base(GLenum texTarget, GLenum pname,
@@ -562,22 +593,28 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void ValidateProgram(ObjectId id) const {
-    mContext->ValdiateProgram(ById(id));
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->ValdiateProgram(*obj);
   }
 
   // ------------------------ Uniforms and attributes ------------------------
 
   void UniformNTv(ObjectId id, const uint8_t n,
               const webgl::UniformBaseType t, const RawBuffer<>& bytes) const {
-    mContext->UniformNTv(ById(id), n, t, bytes);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->UniformNTv(*obj, n, t, bytes);
   }
 
   void UniformMatrixAxBfv(uint8_t A, uint8_t B, const ObjectId id,
                           bool transpose, const RawBuffer<const float>& data) const {
-    mContext->UniformMatrixAxBfv(A, B, ById(id), transpose, data);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->UniformMatrixAxBfv(A, B, *obj, transpose, data);
   }
 
-  void VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData& data) const {
+  void VertexAttrib4T(GLuint index, const webgl::TypedQuad& data) const {
     mContext->VertexAttrib4T(index, data);
   }
 
@@ -592,7 +629,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void UniformBlockBinding(const ObjectId id,
                            GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding) const {
-    mContext->UniformBlockBinding(ById(id), uniformBlockIndex, uniformBlockBinding);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->UniformBlockBinding(*obj, uniformBlockIndex, uniformBlockBinding);
   }
 
   void EnableVertexAttribArray(GLuint index) const {
@@ -612,9 +651,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                               WebGLintptr byteOffset, FuncScopeId aFuncId);
 
   // --------------------------- Buffer Operations --------------------------
-  void ClearBufferTv(GLenum buffer, GLint drawBuffer, webgl::AttribBaseType t,
-                     const RawBuffer<>& data) const {
-    mContext->ClearBufferTv(buffer, drawBuffer, t, data);
+  void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::TypedQuad& data) const {
+    mContext->ClearBufferTv(buffer, drawBuffer, data);
   }
 
   void ClearBufferfi(GLenum buffer, GLint drawBuffer, GLfloat depth,
@@ -640,29 +678,39 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void SamplerParameteri(ObjectId id, GLenum pname,
                          GLint param) const {
-    mContext->SamplerParameteri(ById(id), pname, param);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->SamplerParameteri(*obj, pname, param);
   }
 
   void SamplerParameterf(ObjectId id, GLenum pname,
                          GLfloat param) const {
-    mContext->SamplerParameterf(ById(id), pname, param);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->SamplerParameterf(*obj, pname, param);
   }
 
   Maybe<double> GetSamplerParameter(ObjectId id,
                                         GLenum pname) const {
-    return mContext->GetSamplerParameter(ById(id), pname);
+    const auto obj = ById(id);
+    if (!obj) return {};
+    return mContext->GetSamplerParameter(*obj, pname);
   }
 
   // ------------------------------- GL Sync ---------------------------------
 
   GLenum ClientWaitSync(ObjectId id, GLbitfield flags,
                         GLuint64 timeout) const {
-    return mContext->ClientWaitSync(ById(Id), flags, timeout);
+    const auto obj = ById(id);
+    if (!obj) return;
+    return mContext->ClientWaitSync(*obj, flags, timeout);
   }
 
   void WaitSync(ObjectId id, GLbitfield flags,
                 GLint64 timeout) const {
-    mContext->WaitSync(ById(id), flags, timeout);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->WaitSync(*obj, flags, timeout);
   }
 
   // -------------------------- Transform Feedback ---------------------------
@@ -689,7 +737,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void TransformFeedbackVaryings(ObjectId id,
                                  const std::vector<std::string>& varyings,
                                  GLenum bufferMode) const {
-    mContext->TransformFeedbackVaryings(ById(id), varyings, bufferMode);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->TransformFeedbackVaryings(*obj, varyings, bufferMode);
   }
 
   // ------------------------------ WebGL Debug
@@ -729,7 +779,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // GLQueryEXT
   void BeginQuery(GLenum target, ObjectId id) const {
-    mContext->BeginQuery(target, ById(id));
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->BeginQuery(target, *obj);
   }
 
   void EndQuery(GLenum target) const {
@@ -737,12 +789,16 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void QueryCounter(ObjectId id, GLenum target) const {
-    mContext->QueryCounter(ById(Id), target);
+    const auto obj = ById(id);
+    if (!obj) return;
+    mContext->QueryCounter(*obj, target);
   }
 
   Maybe<double> GetQueryParameter(ObjectId id,
                                       GLenum pname) const {
-    return mContext->GetQueryParameter(ById(id), pname);
+    const auto obj = ById(id);
+    if (!obj) return;
+    return mContext->GetQueryParameter(*obj, pname);
   }
 
   // -------------------------------------------------------------------------

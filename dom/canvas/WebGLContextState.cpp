@@ -68,7 +68,7 @@ bool WebGLContext::GetStencilBits(GLint* const out_stencilBits) const {
   return true;
 }
 
-Maybe<double> WebGLContext::GetParameter(const GLenum pname, const bool debug) const {
+Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
   const FuncScope funcScope(*this, "getParameter");
   if (IsContextLost()) return {};
 
@@ -349,10 +349,6 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname, const bool debug) c
         return Some(mGLMaxMultiviewViews);
       }
       break;
-
-    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS: {
-      return Some(mCompressedTextureFormats);
-    }
 
     // unsigned int. here we may have to return very large values like 2^32-1
     // that can't be represented as javascript integer values. We just return

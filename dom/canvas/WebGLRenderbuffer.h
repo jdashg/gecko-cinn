@@ -47,7 +47,7 @@ class WebGLRenderbuffer final : public WebGLRefCountedObject<WebGLRenderbuffer>,
   void RenderbufferStorage(uint32_t samples, GLenum internalFormat,
                            uint32_t width, uint32_t height);
   // Only handles a subset of `pname`s.
-  GLint GetRenderbufferParameter(RBTarget target, RBParam pname) const;
+  GLint GetRenderbufferParameter(RBParam pname) const;
 
   auto MemoryUsage() const { return mImageInfo.MemoryUsage(); }
 

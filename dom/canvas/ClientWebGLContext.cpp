@@ -24,14 +24,6 @@
 
 namespace mozilla {
 
-
-template<typename C, typename K, typename V>
-inline Maybe<V&> MaybeFind(const C& container, const K& key) {
-  const auto itr = container.find(key);
-  if (itr == container.end()) return {};
-  return Some(itr->second);
-}
-
 bool webgl::ObjectJS::IsUsable(const ClientWebGLContext& context) const {
   const auto& notLost = context.mNotLost;
   if (!notLost) return false;
@@ -925,16 +917,6 @@ struct MaybeWebGLVariantMatcher {
   ErrorResult* mRv;
 };
 
-JS::Value ClientWebGLContext::ToJSValue(JSContext* cx,
-                                        const MaybeWebGLVariant& aVariant,
-                                        ErrorResult& rv) const {
-  if (!aVariant) {
-    return JS::NullValue();
-  }
-  return aVariant.ref().match(
-      MaybeWebGLVariantMatcher(const_cast<ClientWebGLContext*>(this), cx, &rv));
-}
-
 // ------------------------- Create/Destroy/Is -------------------------
 
 RefPtr<WebGLBufferJS> ClientWebGLContext::CreateBuffer() const {
@@ -1490,6 +1472,18 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       retval.set(arr);
       return;
     }
+
+    // any
+
+    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS: {
+      const auto& formats = state.mCompressedTextureFormats;
+      JS::Rooted<JS::Value> obj(cx);
+      if (!dom::ToJSValue(cx, formats.data(), formats.size(), &obj)) {
+        rv = NS_ERROR_OUT_OF_MEMORY;
+      }
+      retval.set(obj);
+      return;
+    }
   }
 
   if (IsWebGL2()) {
@@ -2004,19 +1998,43 @@ void ClientWebGLContext::Clear(GLbitfield mask) {
 
 // -
 
-void ClientWebGLContext::ClearBufferv(const GLenum buffer, const GLint drawBuffer,
+void ClientWebGLContext::ClearBufferTv(const GLenum buffer, const GLint drawBuffer,
     const webgl::AttribBaseType type, const Range<const uint8_t>& view,
     const GLuint srcElemOffset) const {
   const auto offset = CheckedInt<size_t>(sizeof(float)) * srcElemOffset;
   if (!offset.isValid() || offset.value() >= view.Length()) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`srcElemOffset` larger than ArrayBufferView.");
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`srcOffset` larger than `values`.");
+    return;
+  }
+  webgl::TypedQuad data;
+  data.type = type;
+
+  auto dataSize = sizeof(data.data);
+  switch (buffer) {
+    case LOCAL_GL_COLOR:
+      break;
+
+    case LOCAL_GL_DEPTH:
+      dataSize = sizeof(float);
+      break;
+
+    case LOCAL_GL_STENCIL:
+      dataSize = sizeof(int32_t);
+      break;
+
+    default:
+      EnqueueError_ArgEnum("buffer", buffer);
+      return;
+  }
+
+  const auto required = offset + dataSize;
+  if (!required.isValid()) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`values` offset by `srcOffset` must have length >=4.");
     return;
   }
 
-  const auto rb = RawBuffer<const uint8_t>{view.Length() - offset,
-                                           view.Data() + offset};
-
-  Run<RPROC(ClearBufferv)>(buffer, drawBuffer, rb);
+  memcpy(data.data, view.begin() + offset, dataSize);
+  Run<RPROC(ClearBufferTv)>(buffer, drawBuffer, data);
 
   AfterDrawCall();
 }
@@ -3073,7 +3091,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
         case webgl::AttribBaseType::Int:
           obj = dom::Int32Array::Create(cx, this, 4, reinterpret_cast<const int32_t*>(attrib.data));
           break;
-        case webgl::AttribBaseType::UInt:
+        case webgl::AttribBaseType::Uint:
           obj = dom::Uint32Array::Create(cx, this, 4, reinterpret_cast<const uint32_t*>(attrib.data));
           break;
         case webgl::AttribBaseType::Boolean:
@@ -3180,7 +3198,7 @@ void ClientWebGLContext::VertexAttrib4Tv(GLuint index, webgl::AttribBaseType t,
     return;
   }
 
-  GenericVertexAttribData data;
+  TypedQuad data;
   data.type = t;
   memcpy(data.data, src.begin(), sizeof(data.data));
 

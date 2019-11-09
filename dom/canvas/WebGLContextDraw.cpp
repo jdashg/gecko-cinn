@@ -1000,7 +1000,7 @@ bool WebGLContext::DoFakeVertexAttrib0(const uint64_t vertexCount) {
       gl->fVertexAttribIPointer(0, 4, LOCAL_GL_INT, 0, 0);
       break;
 
-    case webgl::AttribBaseType::UInt:
+    case webgl::AttribBaseType::Uint:
       gl->fVertexAttribIPointer(0, 4, LOCAL_GL_UNSIGNED_INT, 0, 0);
       break;
   }

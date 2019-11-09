@@ -16,7 +16,7 @@
 
 namespace mozilla {
 
-Maybe<double> WebGL2Context::GetParameter(GLenum pname) const {
+Maybe<double> WebGL2Context::GetParameter(GLenum pname) {
   const FuncScope funcScope(*this, "getParameter");
   // The following cases are handled in WebGLContext::GetParameter():
   //     case LOCAL_GL_MAX_COLOR_ATTACHMENTS:

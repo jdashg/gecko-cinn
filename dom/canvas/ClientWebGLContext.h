@@ -152,7 +152,7 @@ public:
 
   bool mTfActiveAndNotPaused = false;
 
-  std::vector<GenericVertexAttribData> mGenericVertexAttribs;
+  std::vector<TypedQuad> mGenericVertexAttribs;
 
   bool mColorWriteMask[4] = {true, true, true, true};
   int32_t mScissor[4] = {};
@@ -160,6 +160,8 @@ public:
   float mClearColor[4] = {1, 1, 1, 1};
   float mBlendColor[4] = {1, 1, 1, 1};
   float mDepthRange[2] = {0, 1};
+
+  std::vector<GLenum> mCompressedTextureFormats;
 
 public:
   explicit ContextGenerationInfo(ClientWebGLContext& context) : mContext(context), mLastId(0) {}
@@ -1026,7 +1028,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   }
   void ClearBufferuiv(GLenum buffer, GLint drawBuffer, const Uint32ListU& list,
                       GLuint srcElemOffset) const {
-    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::UInt, MakeRange(list), srcElemOffset);
+    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Uint, MakeRange(list), srcElemOffset);
   }
 
   // -
@@ -1622,7 +1624,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
 private:
-  void VertexAttrib4Tv(GLuint index, uint8_t n, webgl::AttribBaseType,
+  void VertexAttrib4Tv(GLuint index, webgl::AttribBaseType,
       const Range<const uint8_t>&);
 
 public:
@@ -1688,16 +1690,16 @@ public:
     VertexAttrib4Tv(index, webgl::AttribBaseType::Int, MakeByteRange(list));
   }
   void VertexAttribI4uiv(GLuint index, const Uint32ListU& list) {
-    VertexAttrib4Tv(index, webgl::AttribBaseType::UInt, MakeByteRange(list));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Uint, MakeByteRange(list));
   }
 
   void VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z, GLint w) {
     const int32_t arr[4] = {x, y, z, w};
-    VertexAttribNTv(index, webgl::AttribBaseType::Int, MakeByteRange(arr));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Int, MakeByteRange(arr));
   }
   void VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z, GLuint w) {
     const uint32_t arr[4] = {x, y, z, w};
-    VertexAttribNTv(index, webgl::AttribBaseType::UInt, MakeByteRange(arr));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Uint, MakeByteRange(arr));
   }
 
   void VertexAttribIPointer(GLuint index, GLint size, GLenum type,
@@ -1823,6 +1825,9 @@ public:
   RefPtr<ClientWebGLExtensionBase> GetExtension(WebGLExtensionID ext,
                                                 dom::CallerType callerType);
   void RequestExtension(WebGLExtensionID) const;
+
+ public:
+  void AddCompressedFormat(GLenum);
 
   // ---------------------------- Misc Extensions ----------------------------
  public:

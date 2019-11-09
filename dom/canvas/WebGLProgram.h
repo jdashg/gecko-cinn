@@ -132,9 +132,9 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
   void Delete();
 
   // GL funcs
-  void AttachShader(WebGLShader* shader);
+  void AttachShader(WebGLShader& shader);
   void BindAttribLocation(GLuint index, const nsAString& name);
-  void DetachShader(const WebGLShader* shader);
+  void DetachShader(const WebGLShader& shader);
   void UniformBlockBinding(GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding) const;
 
