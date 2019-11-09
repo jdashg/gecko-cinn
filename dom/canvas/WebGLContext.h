@@ -69,7 +69,6 @@ class ScopedCopyTexImageSource;
 class ScopedDrawCallWrapper;
 class ScopedResolveTexturesForDraw;
 class ScopedUnpackReset;
-class WebGLActiveInfo;
 class WebGLBuffer;
 class WebGLExtensionBase;
 class WebGLFramebuffer;
@@ -114,6 +113,7 @@ class FormatUsageAuthority;
 struct FormatUsageInfo;
 struct ImageInfo;
 struct LinkedProgramInfo;
+struct SamplerUniformInfo;
 struct SamplingState;
 class ScopedPrepForResourceClear;
 class ShaderValidator;
@@ -257,6 +257,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   friend class WebGLMemoryTracker;
   friend class webgl::AvailabilityRunnable;
   friend struct webgl::LinkedProgramInfo;
+  friend struct webgl::SamplerUniformInfo;
   friend class webgl::ScopedPrepForResourceClear;
   friend struct webgl::UniformBlockInfo;
 
@@ -598,18 +599,18 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                               uint32_t dataLen, uint32_t rowStride);
 
  public:
-  void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                  GLenum format, GLenum type, WebGLsizeiptr offset);
+  void ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
+                     GLenum format, GLenum type, WebGLsizeiptr offset);
 
-  Maybe<UniquePtr<RawBuffer<>>> ReadPixels(GLint x, GLint y, GLsizei width,
+  UniqueBuffer ReadPixels(GLint x, GLint y, GLsizei width,
                                            GLsizei height, GLenum format,
                                            GLenum type, size_t byteLen);
 
   ////
 
-  void RenderbufferStorage_base(GLenum target, GLsizei samples,
-                                GLenum internalformat, GLsizei width,
-                                GLsizei height);
+  void RenderbufferStorageMultisample(WebGLRenderbuffer*, uint32_t samples,
+                                GLenum internalformat, uint32_t width,
+                                uint32_t height) const;
 
  public:
   void SampleCoverage(GLclampf value, WebGLboolean invert);
@@ -738,8 +739,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool IsQuery(const WebGLQuery* query);
   void BeginQuery(GLenum target, WebGLQuery* query);
   void EndQuery(GLenum target);
-  Maybe<double> GetQueryParameter(const WebGLQuery* query, GLenum pname);
-
+  Maybe<double> GetQueryParameter(const WebGLQuery* query, GLenum pname) const;
   void QueryCounter(WebGLQuery*, const GLenum target) const;
 
   // -----------------------------------------------------------------------------

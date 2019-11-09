@@ -105,7 +105,6 @@ UNIFIED_SOURCES += [
     'WebGL2ContextTransformFeedback.cpp',
     'WebGL2ContextUniforms.cpp',
     'WebGL2ContextVAOs.cpp',
-    'WebGLActiveInfo.cpp',
     'WebGLBuffer.cpp',
     'WebGLChild.cpp',
     'WebGLContext.cpp',

@@ -2622,7 +2622,14 @@ void ClientWebGLContext::RenderbufferStorageMultisample(GLenum target,
     return;
   }
 
-  Run<RPROC(RenderbufferStorageMultisample)>(rb->mId, samples, internalFormat, width, height);
+  if (!ValidateNonNegative("width", width) ||
+      !ValidateNonNegative("height", height) ||
+      !ValidateNonNegative("samples", samples)) {
+    return;
+  }
+
+  Run<RPROC(RenderbufferStorageMultisample)>(rb->mId, static_cast<uint32_t>(samples),
+    internalFormat, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 }
 
 // --------------------------- Texture objects ---------------------------
@@ -3235,7 +3242,7 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
                                     ErrorResult& out_error) {
   const FuncScope funcScope(this, "readPixels");
   if (!ReadPixels_SharedPrecheck(aCallerType, out_error)) return;
-  Run<RPROC(ReadPixels1)>(x, y, width, height, format, type, offset);
+  Run<RPROC(ReadPixelsPbo)>(x, y, width, height, format, type, offset);
 }
 
 void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
@@ -3273,7 +3280,7 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
   }
 
   Maybe<UniquePtr<RawBuffer<>>> result =
-      Run<RPROC(ReadPixels2)>(x, y, width, height, format, type, byteLen);
+      Run<RPROC(ReadPixels)>(x, y, width, height, format, type, byteLen);
   if (!result) {
     return;
   }

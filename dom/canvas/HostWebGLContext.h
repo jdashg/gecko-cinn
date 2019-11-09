@@ -14,7 +14,6 @@
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
 #include "mozilla/dom/WebGLTypes.h"
-#include "WebGLActiveInfo.h"
 
 #ifndef WEBGL_BRIDGE_LOG_
 #  define WEBGL_BRIDGE_LOG_(lvl, ...) \
@@ -214,7 +213,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void DeleteVertexArray(ObjectId);
 
   // ------------------------- GL State -------------------------
-  bool IsContextLost() const;
+  bool IsContextLost() const {
+    return mContext->IsContextLost();
+  }
 
   void Disable(GLenum cap) const {
     mContext->Disable(cap);
@@ -471,9 +472,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                                                       GLenum internalformat,
                                                       GLenum pname);
 
-  void RenderbufferStorageMultisample(ObjectId id, GLsizei samples,
-                                      GLenum internalFormat, GLsizei width,
-                                      GLsizei height) const {
+  void RenderbufferStorageMultisample(ObjectId id, uint32_t samples,
+                                      GLenum internalFormat, uint32_t width,
+                                      uint32_t height) const {
     mContext->RenderbufferStorageMultisample(ById(id), samples, internalFormat,
      width, height);
   }

@@ -18,13 +18,11 @@
 #include "nsWrapperCache.h"
 
 #include "CacheInvalidator.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLContext.h"
 #include "WebGLObjectModel.h"
 
 namespace mozilla {
 class ErrorResult;
-class WebGLActiveInfo;
 class WebGLContext;
 class WebGLProgram;
 class WebGLShader;

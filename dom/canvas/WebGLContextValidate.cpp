@@ -15,7 +15,6 @@
 #include "mozilla/StaticPrefs_webgl.h"
 #include "nsIObserverService.h"
 #include "nsPrintfCString.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLBuffer.h"
 #include "WebGLContextUtils.h"
 #include "WebGLFramebuffer.h"

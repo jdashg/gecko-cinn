@@ -4,7 +4,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "WebGL2Context.h"
-#include "WebGLActiveInfo.h"
 #include "WebGLProgram.h"
 #include "WebGLTransformFeedback.h"
 #include "GLContext.h"
@@ -40,16 +39,6 @@ void WebGL2Context::DeleteTransformFeedback(WebGLTransformFeedback* tf) {
   }
 
   tf->RequestDelete();
-}
-
-bool WebGL2Context::IsTransformFeedback(
-    const WebGLTransformFeedback* const obj) {
-  const FuncScope funcScope(*this, "isTransformFeedback");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return obj->mHasBeenBound;
 }
 
 void WebGL2Context::BindTransformFeedback(GLenum target,
