@@ -12,7 +12,6 @@
 #include "WebGLRenderbuffer.h"
 #include "WebGLShader.h"
 #include "WebGLTexture.h"
-#include "WebGLUniformLocation.h"
 
 namespace mozilla {
 

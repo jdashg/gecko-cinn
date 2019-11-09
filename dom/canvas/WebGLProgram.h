@@ -28,7 +28,6 @@ class WebGLActiveInfo;
 class WebGLContext;
 class WebGLProgram;
 class WebGLShader;
-class WebGLUniformLocation;
 
 namespace dom {
 template <typename>

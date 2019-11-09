@@ -30,15 +30,6 @@ void WebGL2Context::DeleteSampler(WebGLSampler* sampler) {
   sampler->RequestDelete();
 }
 
-bool WebGL2Context::IsSampler(const WebGLSampler* const obj) {
-  const FuncScope funcScope(*this, "isSampler");
-  if (!ValidateIsObject(obj)) return false;
-
-  if (obj->IsDeleteRequested()) return false;
-
-  return true;
-}
-
 void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
   const FuncScope funcScope(*this, "bindSampler");
   if (IsContextLost()) return;
@@ -75,12 +66,12 @@ void WebGL2Context::SamplerParameterf(WebGLSampler& sampler, GLenum pname,
   sampler.SamplerParameter(pname, FloatOrInt(param));
 }
 
-MaybeWebGLVariant WebGL2Context::GetSamplerParameter(
-    const WebGLSampler& sampler, GLenum pname) {
+Maybe<double> WebGL2Context::GetSamplerParameter(
+    const WebGLSampler& sampler, GLenum pname) const {
   const FuncScope funcScope(*this, "getSamplerParameter");
-  if (IsContextLost()) return Nothing();
+  if (IsContextLost()) return {};
 
-  if (!ValidateObject("sampler", sampler)) return Nothing();
+  if (!ValidateObject("sampler", sampler)) return {};
 
   ////
 
@@ -94,18 +85,18 @@ MaybeWebGLVariant WebGL2Context::GetSamplerParameter(
     case LOCAL_GL_TEXTURE_COMPARE_FUNC: {
       GLint param = 0;
       gl->fGetSamplerParameteriv(sampler.mGLName, pname, &param);
-      return AsSomeVariant(param);
+      return Some(param);
     }
     case LOCAL_GL_TEXTURE_MIN_LOD:
     case LOCAL_GL_TEXTURE_MAX_LOD: {
       GLfloat param = 0;
       gl->fGetSamplerParameterfv(sampler.mGLName, pname, &param);
-      return AsSomeVariant(param);
+      return Some(param);
     }
 
     default:
       ErrorInvalidEnumInfo("pname", pname);
-      return Nothing();
+      return {};
   }
 }
 

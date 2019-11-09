@@ -44,44 +44,10 @@ static bool ValidateAttribIndex(WebGLContext& webgl, GLuint index) {
   return valid;
 }
 
-Float32Array4&& WebGLContext::GetVertexAttribFloat32Array(GLuint index) {
-  Float32Array4 attrib;
-  if (index) {
-    gl->fGetVertexAttribfv(index, LOCAL_GL_CURRENT_VERTEX_ATTRIB, &attrib[0]);
-  } else {
-    memcpy(&attrib[0], mGenericVertexAttrib0Data,
-           sizeof(mGenericVertexAttrib0Data));
-  }
-  return std::move(attrib);
-}
-
-Int32Array4&& WebGLContext::GetVertexAttribInt32Array(GLuint index) {
-  Int32Array4 attrib;
-  if (index) {
-    gl->fGetVertexAttribIiv(index, LOCAL_GL_CURRENT_VERTEX_ATTRIB, &attrib[0]);
-  } else {
-    memcpy(&attrib[0], mGenericVertexAttrib0Data,
-           sizeof(mGenericVertexAttrib0Data));
-  }
-  return std::move(attrib);
-}
-
-Uint32Array4&& WebGLContext::GetVertexAttribUint32Array(GLuint index) {
-  Uint32Array4 attrib;
-  if (index) {
-    gl->fGetVertexAttribIuiv(index, LOCAL_GL_CURRENT_VERTEX_ATTRIB, &attrib[0]);
-  } else {
-    memcpy(&attrib[0], mGenericVertexAttrib0Data,
-           sizeof(mGenericVertexAttrib0Data));
-  }
-  return std::move(attrib);
-}
-
 ////////////////////////////////////////
 
-void WebGLContext::VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z,
-                                  GLfloat w) {
-  const FuncScope funcScope(*this, "vertexAttrib4f");
+void WebGLContext::VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData& src) {
+  const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]v?");
   if (IsContextLost()) return;
 
   if (!ValidateAttribIndex(*this, index)) return;
@@ -89,7 +55,18 @@ void WebGLContext::VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z,
   ////
 
   if (index || !gl->IsCompatibilityProfile()) {
-    gl->fVertexAttrib4f(index, x, y, z, w);
+    switch (src.type) {
+      case webgl::AttribBaseType::Boolean:
+      case webgl::AttribBaseType::Float:
+        gl->fVertexAttrib4fv(index, reinterpret_cast<const float*>(src.data));
+        break;
+      case webgl::AttribBaseType::Int:
+        gl->fVertexAttribI4iv(index, reinterpret_cast<const int32_t*>(src.data));
+        break;
+      case webgl::AttribBaseType::Uint:
+        gl->fVertexAttribI4uiv(index, reinterpret_cast<const uint32_t*>(src.data));
+        break;
+    }
   }
 
   ////
@@ -99,54 +76,6 @@ void WebGLContext::VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z,
 
   if (!index) {
     const float data[4] = {x, y, z, w};
-    memcpy(mGenericVertexAttrib0Data, data, sizeof(data));
-  }
-}
-
-void WebGL2Context::VertexAttribI4i(GLuint index, GLint x, GLint y, GLint z,
-                                    GLint w) {
-  const FuncScope funcScope(*this, "vertexAttribI4i");
-  if (IsContextLost()) return;
-
-  if (!ValidateAttribIndex(*this, index)) return;
-
-  ////
-
-  if (index || !gl->IsCompatibilityProfile()) {
-    gl->fVertexAttribI4i(index, x, y, z, w);
-  }
-
-  ////
-
-  mGenericVertexAttribTypes[index] = webgl::AttribBaseType::Int;
-  mGenericVertexAttribTypeInvalidator.InvalidateCaches();
-
-  if (!index) {
-    const int32_t data[4] = {x, y, z, w};
-    memcpy(mGenericVertexAttrib0Data, data, sizeof(data));
-  }
-}
-
-void WebGL2Context::VertexAttribI4ui(GLuint index, GLuint x, GLuint y, GLuint z,
-                                     GLuint w) {
-  const FuncScope funcScope(*this, "vertexAttribI4ui");
-  if (IsContextLost()) return;
-
-  if (!ValidateAttribIndex(*this, index)) return;
-
-  ////
-
-  if (index || !gl->IsCompatibilityProfile()) {
-    gl->fVertexAttribI4ui(index, x, y, z, w);
-  }
-
-  ////
-
-  mGenericVertexAttribTypes[index] = webgl::AttribBaseType::UInt;
-  mGenericVertexAttribTypeInvalidator.InvalidateCaches();
-
-  if (!index) {
-    const uint32_t data[4] = {x, y, z, w};
     memcpy(mGenericVertexAttrib0Data, data, sizeof(data));
   }
 }

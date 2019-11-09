@@ -81,7 +81,6 @@ class WebGLShader;
 class WebGLSync;
 class WebGLTexture;
 class WebGLTransformFeedback;
-class WebGLUniformLocation;
 class WebGLVertexArray;
 
 namespace dom {
@@ -621,59 +620,21 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
                          GLenum dppass);
 
-  //////
-
-  void Uniform1f(WebGLUniformLocation* loc, GLfloat x);
-  void Uniform2f(WebGLUniformLocation* loc, GLfloat x, GLfloat y);
-  void Uniform3f(WebGLUniformLocation* loc, GLfloat x, GLfloat y, GLfloat z);
-  void Uniform4f(WebGLUniformLocation* loc, GLfloat x, GLfloat y, GLfloat z,
-                 GLfloat w);
-
-  void Uniform1i(WebGLUniformLocation* loc, GLint x);
-  void Uniform2i(WebGLUniformLocation* loc, GLint x, GLint y);
-  void Uniform3i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z);
-  void Uniform4i(WebGLUniformLocation* loc, GLint x, GLint y, GLint z, GLint w);
-
-  void Uniform1ui(WebGLUniformLocation* loc, GLuint v0);
-  void Uniform2ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1);
-  void Uniform3ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2);
-  void Uniform4ui(WebGLUniformLocation* loc, GLuint v0, GLuint v1, GLuint v2,
-                  GLuint v3);
-
   //////////////////////////
 
   void UniformNTv(uint32_t loc, uint8_t n, webgl::UniformBaseType t,
-                  const RawBuffer<>& data) const;
+                  const Range<const uint8_t>& data) const;
 
-  void UniformMatrixAxBfv(const char* funcName, uint8_t A, uint8_t B,
-                          WebGLUniformLocation* loc, bool transpose,
-                          const RawBuffer<const float>& arr, GLuint elemOffset,
-                          GLuint elemCountOverride);
+  void UniformMatrixAxBfv(uint32_t loc, uint8_t A, uint8_t B,
+                          webgl::UniformBaseType t, bool transpose,
+                          const Range<const float>& data) const;
 
   ////////////////////////////////////
 
   void UseProgram(WebGLProgram* prog);
 
   bool ValidateAttribArraySetter(uint32_t count, uint32_t arrayLength);
-  bool ValidateUniformLocation(const WebGLUniformLocation* loc);
-  bool ValidateUniformSetter(const WebGLUniformLocation* loc,
-                             uint8_t setterElemSize,
-                             webgl::AttribBaseType setterType);
-  bool ValidateUniformArraySetter(const WebGLUniformLocation* loc,
-                                  uint8_t setterElemSize,
-                                  webgl::AttribBaseType setterType,
-                                  uint32_t setterArraySize,
-                                  uint32_t* out_numElementsToUpload);
-  bool ValidateUniformMatrixArraySetter(const WebGLUniformLocation* loc,
-                                        uint8_t setterCols, uint8_t setterRows,
-                                        webgl::AttribBaseType setterType,
-                                        uint32_t setterArraySize,
-                                        bool setterTranspose,
-                                        uint32_t* out_numElementsToUpload);
   void ValidateProgram(const WebGLProgram* prog);
-  bool ValidateUniformLocation(const char* info, WebGLUniformLocation* loc);
-  bool ValidateSamplerUniformSetter(const char* info, WebGLUniformLocation* loc,
-                                    GLint value);
   void Viewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
   // -----------------------------------------------------------------------------
@@ -935,7 +896,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
 
-  void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
+  void VertexAttrib4T(GLuint index, const webgl::GenericVertexAttribData&);
 
   ////
 
@@ -1146,9 +1107,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                     GLsizei width, GLsizei height,
                                     uint32_t byteLength, WebGLTexImageFunc func,
                                     WebGLTexDimensions dims);
-
-  bool ValidateUniformLocationForProgram(WebGLUniformLocation* location,
-                                         WebGLProgram* program);
 
   bool HasDrawBuffers() const {
     return IsWebGL2() ||
@@ -1381,10 +1339,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool mFakeVertexAttrib0DataDefined = false;
   uint8_t mFakeVertexAttrib0Data[sizeof(float) * 4];
 
-  Float32Array4&& GetVertexAttribFloat32Array(GLuint index);
-  Int32Array4&& GetVertexAttribInt32Array(GLuint index);
-  Uint32Array4&& GetVertexAttribUint32Array(GLuint index);
-
   GLint mStencilRefFront = 0;
   GLint mStencilRefBack = 0;
   GLuint mStencilValueMaskFront = 0;
@@ -1537,7 +1491,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   friend class WebGLShader;
   friend class WebGLSync;
   friend class WebGLTransformFeedback;
-  friend class WebGLUniformLocation;
   friend class WebGLVertexArray;
   friend class WebGLVertexArrayFake;
   friend class WebGLVertexArrayGL;

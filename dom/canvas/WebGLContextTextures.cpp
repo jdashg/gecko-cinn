@@ -9,7 +9,6 @@
 #include "WebGLVertexAttribData.h"
 #include "WebGLShader.h"
 #include "WebGLProgram.h"
-#include "WebGLUniformLocation.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLTexture.h"

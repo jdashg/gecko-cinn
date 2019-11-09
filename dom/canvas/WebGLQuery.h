@@ -54,7 +54,7 @@ class WebGLQuery final : public WebGLRefCountedObject<WebGLQuery>,
   void BeginQuery(GLenum target, WebGLRefPtr<WebGLQuery>& slot);
   void DeleteQuery();
   void EndQuery();
-  MaybeWebGLVariant GetQueryParameter(GLenum pname) const;
+  Maybe<double> GetQueryParameter(GLenum pname) const;
   bool IsQuery() const;
   void QueryCounter(GLenum target);
 };

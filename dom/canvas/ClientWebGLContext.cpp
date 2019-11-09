@@ -3044,7 +3044,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
                                          GLenum pname,
                                          JS::MutableHandle<JS::Value> retval,
                                          ErrorResult& rv) {
-  const FuncScope funcScope(*this, "bindVertexArray");
+  const FuncScope funcScope(*this, "getVertexAttrib");
   if (IsContextLost()) return;
   const auto& state = *(mNotLost->generation);
 
@@ -3102,7 +3102,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
   }
 }
 
-void ClientWebGLContext::UniformNTv(const WebGLUniformLocation* const loc, const uint8_t n,
+void ClientWebGLContext::UniformNTv(const WebGLUniformLocationJS* const loc, const uint8_t n,
               const webgl::UniformBaseType t, const Range<const uint8_t>& bytes) const {
   if (!loc) return;
   Run<RPROC(UniformNTv)>(loc->mLoc, n, t, bytes);
@@ -3149,93 +3149,35 @@ void ClientWebGLContext::DisableVertexAttribArray(GLuint index) {
 
 WebGLsizeiptr ClientWebGLContext::GetVertexAttribOffset(GLuint index,
                                                         GLenum pname) {
-  return Run<RPROC(GetVertexAttribOffset)>(index, pname);
-}
+  const FuncScope funcScope(*this, "getVertexAttrib");
+  if (IsContextLost()) return;
 
-void ClientWebGLContext::VertexAttribNTv(GLuint index, uint8_t n, webgl::AttribBaseType t,
-                                         const Range<const uint8_t>& data) {
-  const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]{v}");
-
-  if (data.length() / sizeof(float) < n) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "Array must have >= %d elements.",
-                 n);
+  if (pname != LOCAL_GL_VERTEX_ATTRIB_ARRAY_POINTER) {
+    EnqueueError_ArgEnum("pname", pname);
     return;
   }
 
-  Run<RPROC(VertexAttrib4Tv)>(index, t, data);
+  const auto maybe = Run<RPROC(GetVertexAttrib)>(index, pname);
+  if (maybe) {
+    retval.set(JS::NumberValue(*maybe));
+  }
 }
 
-void ClientWebGLContext::VertexAttrib2fv(GLuint index,
-                                         const Float32ListU& list) {
-  const FuncScope funcScope(this, FuncScopeId::vertexAttrib2fv);
-  const auto& arr = Float32Arr::From(list);
-  if (!ValidateAttribArraySetter(2, arr.elemCount)) return;
+void ClientWebGLContext::VertexAttrib4Tv(GLuint index, webgl::AttribBaseType t,
+                                         const Range<const uint8_t>& src) {
+  const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]{v}");
+  if (IsContextLost()) return;
 
-  Run<RPROC(VertexAttrib4f)>(index, arr.elemBytes[0], arr.elemBytes[1], 0, 1,
-                             GetFuncScopeId());
-}
+  if (src.length() / sizeof(float) < 4) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "Array must have >=4 elements.");
+    return;
+  }
 
-void ClientWebGLContext::VertexAttrib3fv(GLuint index,
-                                         const Float32ListU& list) {
-  const FuncScope funcScope(this, FuncScopeId::vertexAttrib3fv);
-  const auto& arr = Float32Arr::From(list);
-  if (!ValidateAttribArraySetter(3, arr.elemCount)) return;
+  GenericVertexAttribData data;
+  data.type = t;
+  memcpy(data.data, src.begin(), sizeof(data.data));
 
-  Run<RPROC(VertexAttrib4f)>(index, arr.elemBytes[0], arr.elemBytes[1],
-                             arr.elemBytes[2], 1, GetFuncScopeId());
-}
-
-void ClientWebGLContext::VertexAttrib4fv(GLuint index,
-                                         const Float32ListU& list) {
-  const FuncScope funcScope(this, FuncScopeId::vertexAttrib4fv);
-  const auto& arr = Float32Arr::From(list);
-  if (!ValidateAttribArraySetter(4, arr.elemCount)) return;
-
-  Run<RPROC(VertexAttrib4f)>(index, arr.elemBytes[0], arr.elemBytes[1],
-                             arr.elemBytes[2], arr.elemBytes[3],
-                             GetFuncScopeId());
-}
-
-void ClientWebGLContext::VertexAttrib4f(GLuint index, GLfloat x, GLfloat y,
-                                        GLfloat z, GLfloat w,
-                                        FuncScopeId aFuncId) {
-  Run<RPROC(VertexAttrib4f)>(index, x, y, z, w, aFuncId);
-}
-
-void ClientWebGLContext::VertexAttribI4i(GLuint index, GLint x, GLint y,
-                                         GLint z, GLint w,
-                                         FuncScopeId aFuncId) {
-  Run<RPROC(VertexAttribI4i)>(index, x, y, z, w, aFuncId);
-}
-
-void ClientWebGLContext::VertexAttribI4ui(GLuint index, GLuint x, GLuint y,
-                                          GLuint z, GLuint w,
-                                          FuncScopeId aFuncId) {
-  Run<RPROC(VertexAttribI4ui)>(index, x, y, z, w, aFuncId);
-}
-
-void ClientWebGLContext::VertexAttribI4iv(GLuint index,
-                                          const Int32ListU& list) {
-  FuncScope scope(this, FuncScopeId::vertexAttribI4iv);
-
-  const auto& arr = Int32Arr::From(list);
-  if (!ValidateAttribArraySetter(4, arr.elemCount)) return;
-
-  const auto& itr = arr.elemBytes;
-  Run<RPROC(VertexAttribI4i)>(index, itr[0], itr[1], itr[2], itr[3],
-                              FuncScopeId::vertexAttribI4iv);
-}
-
-void ClientWebGLContext::VertexAttribI4uiv(GLuint index,
-                                           const Uint32ListU& list) {
-  FuncScope scope(this, FuncScopeId::vertexAttribI4uiv);
-
-  const auto& arr = Uint32Arr::From(list);
-  if (!ValidateAttribArraySetter(4, arr.elemCount)) return;
-
-  const auto& itr = arr.elemBytes;
-  Run<RPROC(VertexAttribI4ui)>(index, itr[0], itr[1], itr[2], itr[3],
-                               FuncScopeId::vertexAttribI4uiv);
+  Run<RPROC(VertexAttrib4T)>(index, data);
 }
 
 // -
