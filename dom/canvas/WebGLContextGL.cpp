@@ -88,7 +88,7 @@ void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) const {
 }
 
 void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
-                                      const nsAString& name) {
+                                      const std::string& name) const {
   const FuncScope funcScope(*this, "bindAttribLocation");
   if (IsContextLost()) return;
 
@@ -1678,7 +1678,7 @@ Maybe<webgl::ShaderPrecisionFormat> WebGLContext::GetShaderPrecisionFormat(
   return Some(webgl::ShaderPrecisionFormat{range[0], range[1], precision});
 }
 
-void WebGLContext::ShaderSource(WebGLShader& shader, const nsAString& source) {
+void WebGLContext::ShaderSource(WebGLShader& shader, const std::string& source) const {
   const FuncScope funcScope(*this, "shaderSource");
   if (IsContextLost()) return;
 

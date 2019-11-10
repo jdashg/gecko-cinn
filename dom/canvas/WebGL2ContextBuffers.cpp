@@ -28,12 +28,6 @@ void WebGL2Context::CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
   const auto& writeBuffer = ValidateBufferSelection(writeTarget);
   if (!writeBuffer) return;
 
-  if (!ValidateNonNegative("readOffset", readOffset) ||
-      !ValidateNonNegative("writeOffset", writeOffset) ||
-      !ValidateNonNegative("size", size)) {
-    return;
-  }
-
   if (!CheckedInt<GLintptr>(readOffset).isValid() ||
       !CheckedInt<GLintptr>(writeOffset).isValid() ||
       !CheckedInt<GLsizeiptr>(size).isValid())

@@ -154,4 +154,25 @@ bool WebGLContext::InitWebGL2(FailureReason* const out_failReason) {
   return true;
 }
 
+// -
+
+/*virtual*/
+bool WebGL2Context::IsTexParamValid(GLenum pname) const {
+  switch (pname) {
+    case LOCAL_GL_TEXTURE_BASE_LEVEL:
+    case LOCAL_GL_TEXTURE_COMPARE_FUNC:
+    case LOCAL_GL_TEXTURE_COMPARE_MODE:
+    case LOCAL_GL_TEXTURE_IMMUTABLE_FORMAT:
+    case LOCAL_GL_TEXTURE_IMMUTABLE_LEVELS:
+    case LOCAL_GL_TEXTURE_MAX_LEVEL:
+    case LOCAL_GL_TEXTURE_WRAP_R:
+    case LOCAL_GL_TEXTURE_MAX_LOD:
+    case LOCAL_GL_TEXTURE_MIN_LOD:
+      return true;
+
+    default:
+      return WebGLContext::IsTexParamValid(pname);
+  }
+}
+
 }  // namespace mozilla

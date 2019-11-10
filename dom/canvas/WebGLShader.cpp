@@ -81,21 +81,10 @@ WebGLShader::WebGLShader(WebGLContext* webgl, GLenum type)
 
 WebGLShader::~WebGLShader() { DeleteOnce(); }
 
-void WebGLShader::ShaderSource(const nsAString& source) {
-  nsString sourceWithoutComments;
-  if (!TruncateComments(source, &sourceWithoutComments)) {
-    mContext->ErrorOutOfMemory("Failed to alloc for empting comment contents.");
-    return;
-  }
-
-  if (!ValidateGLSLPreprocString(mContext, sourceWithoutComments)) return;
-
-  // We checked that the source stripped of comments is in the
-  // 7-bit ASCII range, so we can skip the NS_IsAscii() check.
-  const NS_LossyConvertUTF16toASCII cleanSource(sourceWithoutComments);
+void WebGLShader::ShaderSource(const std::string& source) {
+  if (!ValidateGLSLPreprocString(mContext, source)) return;
 
   mSource = source;
-  mCleanSource = cleanSource;
 }
 
 void WebGLShader::CompileShader() {
@@ -106,7 +95,7 @@ void WebGLShader::CompileShader() {
   static const bool kDumpShaders = PR_GetEnv("MOZ_WEBGL_DUMP_SHADERS");
   if (MOZ_UNLIKELY(kDumpShaders)) {
     printf_stderr("==== begin MOZ_WEBGL_DUMP_SHADERS ====\n");
-    PrintLongString(mCleanSource.BeginReading(), mCleanSource.Length());
+    PrintLongString(mSource.c_str(), mSource.size());
   }
 
   {
@@ -114,7 +103,7 @@ void WebGLShader::CompileShader() {
     MOZ_ASSERT(validator);
 
     mCompileResults =
-        validator->ValidateAndTranslate(mCleanSource.BeginReading());
+        validator->ValidateAndTranslate(mSource.BeginReading());
   }
 
   mCompilationLog = mCompileResults->mInfoLog.c_str();
@@ -172,7 +161,7 @@ void WebGLShader::BindAttribLocation(GLuint prog, const std::string& userName,
 }
 
 void WebGLShader::MapTransformFeedbackVaryings(
-    const std::vector<nsString>& varyings,
+    const std::vector<std::string>& varyings,
     std::vector<std::string>* out_mappedVaryings) const {
   MOZ_ASSERT(mType == LOCAL_GL_VERTEX_SHADER);
   MOZ_ASSERT(out_mappedVaryings);
@@ -182,11 +171,7 @@ void WebGLShader::MapTransformFeedbackVaryings(
 
   const auto& shaderVaryings = mCompileResults->mVaryings;
 
-  for (const auto& wideUserName : varyings) {
-    const NS_LossyConvertUTF16toASCII mozUserName(
-        wideUserName);  // Don't validate here.
-    const std::string userName(mozUserName.BeginReading(),
-                               mozUserName.Length());
+  for (const auto& userName : varyings) {
     const auto* mappedName = &userName;
     for (const auto& shaderVarying : shaderVaryings) {
       if (shaderVarying.name == userName) {
@@ -204,7 +189,6 @@ void WebGLShader::MapTransformFeedbackVaryings(
 size_t WebGLShader::SizeOfIncludingThis(MallocSizeOf mallocSizeOf) const {
   return mallocSizeOf(this) +
          mSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
-         mCleanSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
          mCompileResults->SizeOfIncludingThis(mallocSizeOf) +
          mCompilationLog.SizeOfExcludingThisIfUnshared(mallocSizeOf);
 }

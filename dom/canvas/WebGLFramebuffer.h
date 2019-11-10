@@ -265,7 +265,7 @@ class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
   FBStatus CheckFramebufferStatus() const;
   void FramebufferAttach(GLenum attachEnum,
                          const webgl::FbAttachInfo& toAttach);
-  void DrawBuffers(const nsTArray<GLenum>& buffers);
+  void DrawBuffers(const std::vector<GLenum>& buffers);
   void ReadBuffer(GLenum attachPoint);
 
   Maybe<double> GetAttachmentParameter(GLenum attachment,

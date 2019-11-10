@@ -336,11 +336,35 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void FramebufferAttach(const GLenum target, const GLenum attachEnum,
-                         const GLenum texTarget, const ObjectId id,
+                         const GLenum attachTarget, const ObjectId id,
                          const GLint mipLevel, const GLint zLayerBase,
                          const GLsizei numViewLayers) const {
-    mContext->FramebufferAttach(target, attachEnum, texTarget, ById(id), ById(id),
-                                 mipLevel, zLayerBase, numViewLayers);
+    TexTarget bindTexTarget = 0;
+    switch (attachTarget) {
+      case LOCAL_GL_TEXTURE_2D:
+        bindTexTarget = LOCAL_GL_TEXTURE_2D;
+        break;
+      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
+      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
+      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
+      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
+      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
+      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
+        bindTexTarget = LOCAL_GL_TEXTURE_CUBE_MAP;
+        break;
+    }
+
+    webgl::FbAttachInfo toAttach;
+    toAttach.rb = ById(id);
+    toAttach.tex = ById(id);
+    toAttach.mipLevel = mipLevel;
+    toAttach.zLayer = zLayerBase;
+    if (numViewLayers) {
+      toAttach.zLayerCount = numViewLayers;
+      toAttach.isMultiview = true;
+    }
+
+    mContext->FramebufferAttach(target, attachEnum, bindTexTarget, toAttach);
   }
 
   void FrontFace(GLenum mode) const {
@@ -383,12 +407,12 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(GLenum shaderType,
                                              GLenum precisionType) const {
-    return mContext->GetShaderPrecisionFormat(shadertype, prescisionType);
+    return mContext->GetShaderPrecisionFormat(shaderType, precisionType);
   }
 
-  webgl::GetUniformData GetUniform(ObjectId prog, uint32_t loc) const {
+  webgl::GetUniformData GetUniform(ObjectId id, uint32_t loc) const {
     const auto obj = ById(id);
-    if (!obj) return {}
+    if (!obj) return {};
     return mContext->GetUniform(*obj, loc);
   }
 
@@ -422,6 +446,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->Scissor(x, y, width, height);
   }
 
+  // TODO: s/nsAString/std::string/
   void ShaderSource(const ObjectId id,
                     const std::string& source) const {
     const auto obj = ById(id);
@@ -452,13 +477,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void BindBufferRange(GLenum target, GLuint index,
                        const ObjectId id, uint64_t offset,
                        uint64_t size) const {
-    mContext->BindBufferRange(target, index, ById(id), offset, size);
+    GetWebGL2Context()->BindBufferRange(target, index, ById(id), offset, size);
   }
 
   void CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
-                         GLintptr readOffset, GLintptr writeOffset,
-                         GLsizeiptr size) const {
-    mContext->CopyBufferSubData(readTarget, writeTarget, readOffset, writeOffset, size);
+                         uint64_t readOffset, uint64_t writeOffset,
+                         uint64_t size) const {
+    GetWebGL2Context()->CopyBufferSubData(readTarget, writeTarget, readOffset, writeOffset, size);
   }
 
   Maybe<UniquePtr<RawBuffer<>>> GetBufferSubData(GLenum target,
@@ -474,30 +499,32 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
                        GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
                        GLbitfield mask, GLenum filter) const {
-    mContext->BlitFramebuffer(srcX0, srcY0, srcX1, srcY1,
+    GetWebGL2Context()->BlitFramebuffer(srcX0, srcY0, srcX1, srcY1,
                        dstX0, dstY0, dstX1, dstY1,
                        mask, filter);
   }
 
   void InvalidateFramebuffer(GLenum target,
-                             const nsTArray<GLenum>& attachments) const {
-    mContext->InvalidateFramebuffer(target, attachments);
+                             const std::vector<GLenum>& attachments) const {
+    GetWebGL2Context()->InvalidateFramebuffer(target, attachments);
   }
 
   void InvalidateSubFramebuffer(GLenum target,
-                                const nsTArray<GLenum>& attachments, GLint x,
+                                const std::vector<GLenum>& attachments, GLint x,
                                 GLint y, GLsizei width, GLsizei height) const {
-    mContext->InvalidateSubFramebuffer(target, attachments, x, y, width, height);
+    GetWebGL2Context()->InvalidateSubFramebuffer(target, attachments, x, y, width, height);
   }
 
   void ReadBuffer(GLenum mode) const {
-    mContext->ReadBuffer(mode);
+    GetWebGL2Context()->ReadBuffer(mode);
   }
 
   // ----------------------- Renderbuffer objects -----------------------
-  Maybe<nsTArray<int32_t>> GetInternalformatParameter(GLenum target,
+  Maybe<std::vector<int32_t>> GetInternalformatParameter(GLenum target,
                                                       GLenum internalformat,
-                                                      GLenum pname);
+                                                      GLenum pname) const {
+    return GetWebGL2Context()->GetInternalformatParameter(target, internalformat, pname);
+  }
 
   void RenderbufferStorageMultisample(ObjectId id, uint32_t samples,
                                       GLenum internalFormat, uint32_t width,
@@ -514,66 +541,43 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void BindTexture(GLenum texTarget, const ObjectId id) const {
-    BindTexture(texTarget, ById(id));
+    mContext->BindTexture(texTarget, ById(id));
   }
 
   void GenerateMipmap(GLenum texTarget) const {
     mContext->GenerateMipmap(texTarget);
   }
 
-  void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat,
-                      GLint x, GLint y, uint32_t width, uint32_t height) const {
-    mContext->CopyTexImage2D(target, level, internalFormat, x, y, width, height);
+  // CompressedTexSubImage if `sub`
+  void CompressedTexImage(bool sub, GLenum imageTarget,
+                                        uint32_t level, GLenum format,
+                                        const uvec3& offset, const uvec3& size,
+                                        const RawBuffer<>& src,
+                                        const uint32_t pboImageSize,
+                                        const Maybe<uint64_t> pboOffset) const {
+    mContext->CompressedTexImage(sub, imageTarget, level, format, offset, size, src,
+                                        pboImageSize, pboOffset);
   }
 
-  void TexStorage(uint8_t funcDims, GLenum target, GLsizei levels,
-                  GLenum internalFormat, GLsizei width, GLsizei height,
-                  GLsizei depth) const {
-    mContext->TexStorage(funcDims, target, levels, internalFormat, width, height, depth);
+  // CopyTexSubImage if `!respectFormat`
+  void CopyTexImage(GLenum imageTarget, uint32_t level,
+                                    GLenum respecFormat, const uvec3& dstOffset,
+                                    const ivec2& srcOffset,
+                                    const uvec2& size) const {
+    mContext->CopyTexImage(imageTarget, level, respecFormat, dstOffset, srcOffset, size);
   }
 
-  void TexImage(uint8_t funcDims, GLenum target, GLint level,
-                GLenum internalFormat, GLsizei width, GLsizei height,
-                GLsizei depth, GLint border, GLenum unpackFormat,
-                GLenum unpackType, MaybeWebGLTexUnpackVariant&& src) const {
-    mContext->TexImage(funcDims, target, level, internalFormat, width, height, depth, border,
-    unpackFormat, unpackType, src);
+  // TexSubImage if `!respectFormat`
+  void TexImage(GLenum imageTarget, uint32_t level,
+                              GLenum respecFormat, const uvec3& offset, const uvec3& size,
+                              const webgl::PackingInfo& pi,
+                              webgl::TexUnpackBlob& src) const {
+    mContext->TexImage(imageTarget, level, respecFormat, offset, size, pi, src);
   }
 
-  void TexSubImage(uint8_t funcDims, GLenum target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, GLsizei width, GLsizei height,
-                   GLsizei depth, GLenum unpackFormat, GLenum unpackType,
-                   MaybeWebGLTexUnpackVariant&& src) const {
-    mContext->TexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-    width, height, depth, unpackFormat, unpackType, src);
-  }
-
-  void CompressedTexImage(uint8_t funcDims, GLenum target, GLint level,
-                          GLenum internalFormat, GLsizei width, GLsizei height,
-                          GLsizei depth, GLint border,
-                          MaybeWebGLTexUnpackVariant&& src,
-                          const Maybe<GLsizei>& expectedImageSize) const {
-    mContext->CompressedTexImage(funcDims, target, level, internalFormat,
-     width, height, depth, border,
-     src, expectedImageSize);
-  }
-
-  void CompressedTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                             GLint xOffset, GLint yOffset, GLint zOffset,
-                             GLsizei width, GLsizei height, GLsizei depth,
-                             GLenum unpackFormat,
-                             MaybeWebGLTexUnpackVariant&& src,
-                             const Maybe<GLsizei>& expectedImageSize) const {
-    mContext->CompressedTexSubImage(funcDims, target, level,
-      xOffset, yOffset, zOffset, width, hieght, depth, unpackFormat, src,
-      expectedImageSize);
-  }
-
-  void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                       GLint xOffset, GLint yOffset, GLint zOffset, GLint x,
-                       GLint y, uint32_t width, uint32_t height) const {
-    mContext->CopyTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-    x, y, width, height);
+  void TexStorage(GLenum texTarget, uint32_t levels,
+                  GLenum internalFormat, const uvec3& size) const {
+    GetWebGL2Context()->TexStorage(texTarget, levels, internalFormat, size);
   }
 
   Maybe<double> GetTexParameter(ObjectId id, GLenum pname) const {
@@ -601,17 +605,17 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // ------------------------ Uniforms and attributes ------------------------
 
   void UniformNTv(ObjectId id, const uint8_t n,
-              const webgl::UniformBaseType t, const RawBuffer<>& bytes) const {
+              const webgl::UniformBaseType t, const RawBuffer<>& data) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->UniformNTv(*obj, n, t, bytes);
+    mContext->UniformNTv(*obj, n, t, MakeRange(data));
   }
 
   void UniformMatrixAxBfv(uint8_t A, uint8_t B, const ObjectId id,
                           bool transpose, const RawBuffer<const float>& data) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->UniformMatrixAxBfv(A, B, *obj, transpose, data);
+    mContext->UniformMatrixAxBfv(A, B, *obj, transpose, MakeRange(data));
   }
 
   void VertexAttrib4T(GLuint index, const webgl::TypedQuad& data) const {
@@ -622,8 +626,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->VertexAttribDivisor(index, divisor);
   }
 
-  uint64_t GetIndexedParameter(GLenum target, GLuint index) const {
-    return mContext->GetIndexedParameter(target, index);
+  Maybe<double> GetIndexedParameter(GLenum target, GLuint index) const {
+    return GetWebGL2Context()->GetIndexedParameter(target, index);
   }
 
   void UniformBlockBinding(const ObjectId id,
@@ -631,7 +635,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                            GLuint uniformBlockBinding) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->UniformBlockBinding(*obj, uniformBlockIndex, uniformBlockBinding);
+    GetWebGL2Context()->UniformBlockBinding(*obj, uniformBlockIndex, uniformBlockBinding);
   }
 
   void EnableVertexAttribArray(GLuint index) const {
@@ -652,12 +656,12 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // --------------------------- Buffer Operations --------------------------
   void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::TypedQuad& data) const {
-    mContext->ClearBufferTv(buffer, drawBuffer, data);
+    GetWebGL2Context()->ClearBufferTv(buffer, drawBuffer, data);
   }
 
   void ClearBufferfi(GLenum buffer, GLint drawBuffer, GLfloat depth,
                      GLint stencil) const {
-    mContext->ClearBufferfi(buffer, drawBuffer, depth, stencil);
+    GetWebGL2Context()->ClearBufferfi(buffer, drawBuffer, depth, stencil);
   }
 
   // ------------------------------ Readback -------------------------------
@@ -673,28 +677,28 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // ----------------------------- Sampler -----------------------------------
 
   void BindSampler(GLuint unit, ObjectId id) const {
-    mContext->BindSampler(unit, ById(id));
+    GetWebGL2Context()->BindSampler(unit, ById(id));
   }
 
   void SamplerParameteri(ObjectId id, GLenum pname,
                          GLint param) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->SamplerParameteri(*obj, pname, param);
+    GetWebGL2Context()->SamplerParameteri(*obj, pname, param);
   }
 
   void SamplerParameterf(ObjectId id, GLenum pname,
                          GLfloat param) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->SamplerParameterf(*obj, pname, param);
+    GetWebGL2Context()->SamplerParameterf(*obj, pname, param);
   }
 
   Maybe<double> GetSamplerParameter(ObjectId id,
                                         GLenum pname) const {
     const auto obj = ById(id);
     if (!obj) return {};
-    return mContext->GetSamplerParameter(*obj, pname);
+    return GetWebGL2Context()->GetSamplerParameter(*obj, pname);
   }
 
   // ------------------------------- GL Sync ---------------------------------
@@ -703,35 +707,28 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                         GLuint64 timeout) const {
     const auto obj = ById(id);
     if (!obj) return;
-    return mContext->ClientWaitSync(*obj, flags, timeout);
-  }
-
-  void WaitSync(ObjectId id, GLbitfield flags,
-                GLint64 timeout) const {
-    const auto obj = ById(id);
-    if (!obj) return;
-    mContext->WaitSync(*obj, flags, timeout);
+    return GetWebGL2Context()->ClientWaitSync(*obj, flags, timeout);
   }
 
   // -------------------------- Transform Feedback ---------------------------
   void BindTransformFeedback(ObjectId id) const {
-    mContext->BindTransformFeedback(ById(id));
+    GetWebGL2Context()->BindTransformFeedback(ById(id));
   }
 
   void BeginTransformFeedback(GLenum primitiveMode) const {
-    mContext->BeginTransformFeedback(primitiveMode);
+    GetWebGL2Context()->BeginTransformFeedback(primitiveMode);
   }
 
   void EndTransformFeedback() const {
-    mContext->EndTransformFeedback();
+    GetWebGL2Context()->EndTransformFeedback();
   }
 
   void PauseTransformFeedback() const {
-    mContext->PauseTransformFeedback();
+    GetWebGL2Context()->PauseTransformFeedback();
   }
 
   void ResumeTransformFeedback() const {
-    mContext->ResumeTransformFeedback();
+    GetWebGL2Context()->ResumeTransformFeedback();
   }
 
   void TransformFeedbackVaryings(ObjectId id,
@@ -739,7 +736,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                                  GLenum bufferMode) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->TransformFeedbackVaryings(*obj, varyings, bufferMode);
+    GetWebGL2Context()->TransformFeedbackVaryings(*obj, varyings, bufferMode);
   }
 
   // ------------------------------ WebGL Debug
@@ -797,7 +794,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   Maybe<double> GetQueryParameter(ObjectId id,
                                       GLenum pname) const {
     const auto obj = ById(id);
-    if (!obj) return;
+    if (!obj) return {};
     return mContext->GetQueryParameter(*obj, pname);
   }
 
@@ -816,14 +813,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
 
  protected:
-  const WebGL2Context* GetWebGL2Context() const {
+  WebGL2Context* GetWebGL2Context() const {
     MOZ_RELEASE_ASSERT(mContext->IsWebGL2(), "Requires WebGL2 context");
     return static_cast<WebGL2Context*>(mContext.get());
-  }
-
-  WebGL2Context* GetWebGL2Context() {
-    const auto* constThis = this;
-    return const_cast<WebGL2Context*>(constThis->GetWebGL2Context());
   }
 
   mozilla::ipc::Shmem PopShmem() { return mShmemStack.PopLastElement(); }

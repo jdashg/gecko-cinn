@@ -8,13 +8,11 @@
 
 #include <map>
 #include <set>
-#include <string>
 #include <vector>
 
 #include "mozilla/LinkedList.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/WeakPtr.h"
-#include "nsString.h"
 #include "nsWrapperCache.h"
 
 #include "CacheInvalidator.h"
@@ -46,8 +44,8 @@ struct UniformBlockInfo final {
 
 struct FragOutputInfo final {
   const uint8_t loc;
-  const nsCString userName;
-  const nsCString mappedName;
+  const std::string userName;
+  const std::string mappedName;
   const TextureBaseType baseType;
 };
 
@@ -133,7 +131,7 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   // GL funcs
   void AttachShader(WebGLShader& shader);
-  void BindAttribLocation(GLuint index, const nsAString& name);
+  void BindAttribLocation(GLuint index, const std::string& name);
   void DetachShader(const WebGLShader& shader);
   void UniformBlockBinding(GLuint uniformBlockIndex,
                            GLuint uniformBlockBinding) const;
@@ -144,7 +142,7 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   ////////////////
 
-  void TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
+  void TransformFeedbackVaryings(const std::vector<std::string>& varyings,
                                  GLenum bufferMode);
 
   bool IsLinked() const { return mMostRecentLinkInfo; }
@@ -161,7 +159,7 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   void LinkAndUpdate();
   bool ValidateForLink();
-  bool ValidateAfterTentativeLink(nsCString* const out_linkLog) const;
+  bool ValidateAfterTentativeLink(std::string* const out_linkLog) const;
 
  public:
   const GLuint mGLName;
@@ -173,10 +171,10 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   std::map<std::string, GLuint> mNextLink_BoundAttribLocs;
 
-  std::vector<nsString> mNextLink_TransformFeedbackVaryings;
+  std::vector<std::string> mNextLink_TransformFeedbackVaryings;
   GLenum mNextLink_TransformFeedbackBufferMode;
 
-  nsCString mLinkLog;
+  std::string mLinkLog;
   RefPtr<const webgl::LinkedProgramInfo> mMostRecentLinkInfo;
 };
 

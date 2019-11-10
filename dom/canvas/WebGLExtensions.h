@@ -7,8 +7,6 @@
 #define WEBGL_EXTENSIONS_H_
 
 #include "mozilla/AlreadyAddRefed.h"
-#include "nsString.h"
-#include "nsTArray.h"
 #include "nsWrapperCache.h"
 #include "WebGLObjectModel.h"
 #include "WebGLTypes.h"
@@ -65,8 +63,6 @@ class WebGLExtensionCompressedTextureASTC : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureASTC(WebGLContext* webgl);
   virtual ~WebGLExtensionCompressedTextureASTC();
-
-  Maybe<nsTArray<nsString>> GetSupportedProfiles() const;
 
   static bool IsSupported(const WebGLContext* webgl);
 };
@@ -283,8 +279,6 @@ class WebGLExtensionDrawBuffers : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionDrawBuffers(WebGLContext*);
   virtual ~WebGLExtensionDrawBuffers();
-
-  void DrawBuffersWEBGL(const nsTArray<GLenum>& buffers);
 
   static bool IsSupported(const WebGLContext*);
 };

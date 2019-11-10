@@ -452,7 +452,7 @@ void WebGLProgram::AttachShader(WebGLShader& shader) {
   mContext->gl->fAttachShader(mGLName, shader.mGLName);
 }
 
-void WebGLProgram::BindAttribLocation(GLuint loc, const nsAString& name) {
+void WebGLProgram::BindAttribLocation(GLuint loc, const std::string& name) {
   if (!ValidateGLSLVariableName(name, mContext)) return;
 
   if (loc >= mContext->MaxVertexAttribs()) {
@@ -462,17 +462,14 @@ void WebGLProgram::BindAttribLocation(GLuint loc, const nsAString& name) {
     return;
   }
 
-  if (StringBeginsWith(name, NS_LITERAL_STRING("gl_"))) {
+  if (name.find("gl_") == 0) {
     mContext->ErrorInvalidOperation(
         "Can't set the location of a"
         " name that starts with 'gl_'.");
     return;
   }
 
-  const NS_LossyConvertUTF16toASCII asciiName(name);
-  const std::string asciiNameStr(asciiName.BeginReading());
-
-  auto res = mNextLink_BoundAttribLocs.insert({asciiNameStr, loc});
+  auto res = mNextLink_BoundAttribLocs.insert({name, loc});
 
   const auto& wasInserted = res.second;
   if (!wasInserted) {
@@ -733,7 +730,7 @@ static uint8_t NumComponents(GLenum elemType) {
 }
 
 bool WebGLProgram::ValidateAfterTentativeLink(
-    nsCString* const out_linkLog) const {
+    std::string* const out_linkLog) const {
   const auto& linkInfo = mMostRecentLinkInfo;
   const auto& gl = mContext->gl;
 
@@ -753,7 +750,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
         *out_linkLog = nsPrintfCString(
             "Attrib name conflicts with uniform name:"
             " %s",
-            attribName.BeginReading());
+            attribName.c_str()).BeginReading();
         return false;
       }
     }
@@ -777,7 +774,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
           *out_linkLog = nsPrintfCString(
               "Attrib \"%s\" aliases locations used by"
               " attrib \"%s\".",
-              aliasingName.BeginReading(), existingName.BeginReading());
+              aliasingName.c_str(), existingName.c_str()).BeginReading();
           return false;
         }
       }
@@ -822,7 +819,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
             "Transform feedback varying \"%s\""
             " pushed `componentsForIndex` over the"
             " limit of %u.",
-            cur.name.c_str(), maxComponentsPerIndex);
+            cur.name.c_str(), maxComponentsPerIndex).BeginReading();
         return false;
       }
     }
@@ -878,14 +875,14 @@ void WebGLProgram::LinkAndUpdate() {
   gl->fLinkProgram(mGLName);
 
   // Grab the program log.
-  GLuint logLenWithNull = 0;
-  gl->fGetProgramiv(mGLName, LOCAL_GL_INFO_LOG_LENGTH, (GLint*)&logLenWithNull);
-  if (logLenWithNull > 1) {
-    mLinkLog.SetLength(logLenWithNull - 1);
-    gl->fGetProgramInfoLog(mGLName, logLenWithNull, nullptr,
-                           mLinkLog.BeginWriting());
-  } else {
-    mLinkLog.SetLength(0);
+  {
+    GLuint logLenWithNull = 0;
+    gl->fGetProgramiv(mGLName, LOCAL_GL_INFO_LOG_LENGTH, (GLint*)&logLenWithNull);
+    std::vector<char> buffer(logLenWithNull);
+    if (logLenWithNull > 1) {
+      gl->fGetProgramInfoLog(mGLName, buffer.size(), nullptr, buffer.data());
+    }
+    mLinkLog = buffer.data();
   }
 
   GLint ok = 0;
@@ -896,7 +893,7 @@ void WebGLProgram::LinkAndUpdate() {
       QueryProgramInfo(this, gl);  // Fallible after context loss.
 }
 
-void WebGLProgram::TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
+void WebGLProgram::TransformFeedbackVaryings(const std::vector<std::string>& varyings,
                                              GLenum bufferMode) {
   const auto& gl = mContext->gl;
 
@@ -908,7 +905,7 @@ void WebGLProgram::TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
       GLuint maxAttribs = 0;
       gl->GetUIntegerv(LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS,
                        &maxAttribs);
-      if (varyings.Length() > maxAttribs) {
+      if (varyings.size() > maxAttribs) {
         mContext->ErrorInvalidValue("Length of `varyings` exceeds %s.",
                                     "TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS");
         return;
@@ -922,8 +919,7 @@ void WebGLProgram::TransformFeedbackVaryings(const nsTArray<nsString>& varyings,
 
   ////
 
-  mNextLink_TransformFeedbackVaryings.assign(
-      varyings.Elements(), varyings.Elements() + varyings.Length());
+  mNextLink_TransformFeedbackVaryings = varyings;
   mNextLink_TransformFeedbackBufferMode = bufferMode;
 }
 
