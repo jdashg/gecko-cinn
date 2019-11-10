@@ -35,19 +35,15 @@ void WebGL2Context::DeleteTransformFeedback(WebGLTransformFeedback* tf) {
   }
 
   if (mBoundTransformFeedback == tf) {
-    BindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, nullptr);
+    BindTransformFeedback(nullptr);
   }
 
   tf->RequestDelete();
 }
 
-void WebGL2Context::BindTransformFeedback(GLenum target,
-                                          WebGLTransformFeedback* tf) {
+void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
   const FuncScope funcScope(*this, "bindTransformFeedback");
   if (IsContextLost()) return;
-
-  if (target != LOCAL_GL_TRANSFORM_FEEDBACK)
-    return ErrorInvalidEnum("`target` must be TRANSFORM_FEEDBACK.");
 
   if (tf && !ValidateObject("tf", *tf)) return;
 
@@ -63,7 +59,7 @@ void WebGL2Context::BindTransformFeedback(GLenum target,
 
   mBoundTransformFeedback = (tf ? tf : mDefaultTransformFeedback);
 
-  gl->fBindTransformFeedback(target, mBoundTransformFeedback->mGLName);
+  gl->fBindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, mBoundTransformFeedback->mGLName);
 
   if (mBoundTransformFeedback) {
     mBoundTransformFeedback->mHasBeenBound = true;
@@ -99,8 +95,8 @@ void WebGL2Context::ResumeTransformFeedback() {
 }
 
 void WebGL2Context::TransformFeedbackVaryings(
-    WebGLProgram& program, const nsTArray<nsString>& varyings,
-    GLenum bufferMode) {
+    WebGLProgram& program, const std::vector<std::string>& varyings,
+    GLenum bufferMode) const {
   const FuncScope funcScope(*this, "transformFeedbackVaryings");
   if (IsContextLost()) return;
 

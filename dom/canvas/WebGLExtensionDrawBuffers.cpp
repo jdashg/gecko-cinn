@@ -24,18 +24,6 @@ WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
 
 WebGLExtensionDrawBuffers::~WebGLExtensionDrawBuffers() {}
 
-void WebGLExtensionDrawBuffers::DrawBuffersWEBGL(
-    const nsTArray<GLenum>& buffers) {
-  if (mIsLost) {
-    if (mContext) {
-      mContext->ErrorInvalidOperation("drawBuffersWEBGL: Extension is lost.");
-    }
-    return;
-  }
-
-  mContext->DrawBuffers(buffers);
-}
-
 bool WebGLExtensionDrawBuffers::IsSupported(const WebGLContext* webgl) {
   if (webgl->IsWebGL2()) return false;
 

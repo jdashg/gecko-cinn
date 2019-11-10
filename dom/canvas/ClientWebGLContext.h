@@ -571,6 +571,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   // -
 
+  template<typename T, size_t N>
+  static Range<const T> MakeRange(T (&arr)[N]) {
+    return {arr, N};
+  }
+
   template<typename T>
   static Range<T> MakeRange(const dom::Sequence<T>& seq) {
     return {seq.Elements(), seq.Length()};
@@ -599,6 +604,12 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     if (list.IsUint32Array()) return MakeRangeAbv(list.GetAsUint32Array());
 
     return MakeRange(list.GetAsUnsignedLongSequence());
+  }
+
+  template<typename T>
+  static Range<const uint8_t> MakeByteRange(const T& x) {
+    const auto typed = MakeRange(x);
+    return Range<const uint8_t>(typed);
   }
 
   // -
@@ -717,9 +728,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   bool ValidateViewType(GLenum unpackType, const TexImageSource& src) const;
 
-  bool ValidateExtents(GLsizei width, GLsizei height, GLsizei depth,
-                       GLint border, uint32_t* const out_width,
-                       uint32_t* const out_height, uint32_t* const out_depth) const;
+  Maybe<uvec3> ValidateExtents(GLsizei width, GLsizei height, GLsizei depth,
+                               GLint border) const;
 
   // -------------------------------------------------------------------------
   // nsICanvasRenderingContextInternal / nsAPostRefreshObserver
@@ -853,7 +863,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   bool IsEnabled(GLenum cap) const;
 
   void GetParameter(JSContext* cx, GLenum pname,
-                    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) const;
+                    JS::MutableHandle<JS::Value> retval, ErrorResult& rv,
+                    bool debug = false) const;
 
   void GetBufferParameter(JSContext* cx, GLenum target, GLenum pname,
                           JS::MutableHandle<JS::Value> retval) const;
@@ -1007,28 +1018,20 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   void ClearBufferTv(GLenum buffer, GLint drawBuffer, webgl::AttribBaseType,
-      const Range<const uint8_t>& view) const;
-
-  template<typename T>
-  void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::AttribBaseType type,
-        const Range<T>& view, GLuint srcElemOffset) const {
-    static_assert(sizeof(T) == 4);
-    #error subrange
-    ClearBufferv(buffer, drawBuffer, type, Range<const uint8_t>{view}, srcElemOffset);
-  }
+      const Range<const uint8_t>& view, GLuint srcElemOffset) const;
 
  public:
   void ClearBufferfv(GLenum buffer, GLint drawBuffer, const Float32ListU& list,
                      GLuint srcElemOffset) const {
-    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Float, MakeRange(list), srcElemOffset);
+    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Float, MakeByteRange(list), srcElemOffset);
   }
   void ClearBufferiv(GLenum buffer, GLint drawBuffer, const Int32ListU& list,
                      GLuint srcElemOffset) const {
-    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Int, MakeRange(list), srcElemOffset);
+    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Int, MakeByteRange(list), srcElemOffset);
   }
   void ClearBufferuiv(GLenum buffer, GLint drawBuffer, const Uint32ListU& list,
                       GLuint srcElemOffset) const {
-    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Uint, MakeRange(list), srcElemOffset);
+    ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Uint, MakeByteRange(list), srcElemOffset);
   }
 
   // -
@@ -1220,7 +1223,18 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   void TexStorage(uint8_t funcDims, GLenum target, GLsizei levels, GLenum internalFormat,
-                    ivec3 size) const;
+                    const ivec3& size) const;
+
+  // Primitive tex upload functions
+  void TexImage(uint8_t funcDims, GLenum target, GLint level,
+                GLenum respecFormat, const ivec3& offset, const ivec3& size, GLint border,
+                const webgl::PackingInfo& pi, const TexImageSource& src) const;
+  void CompressedTexImage(bool sub, uint8_t funcDims, GLenum target, GLint level,
+                          GLenum format, const ivec3& offset, const ivec3& size, GLint border,
+                          const TexImageSource& src) const;
+  void CopyTexImage(uint8_t funcDims, GLenum target, GLint level, GLenum respecFormat,
+                       const ivec3& dstOffset,
+                       const ivec2& srcOffset, const ivec2& size, GLint border) const;
 
  public:
   void TexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat,
@@ -1235,113 +1249,89 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   ////////////////////////////////////
 
-  template <typename T>
-  void TexImage2D(GLenum target, GLint level, GLenum internalFormat,
-                  GLenum unpackFormat, GLenum unpackType, const T& src,
-                  ErrorResult& out_error) {
-    GLsizei width = 0;
-    GLsizei height = 0;
-    GLint border = 0;
-    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
-               unpackFormat, unpackType, src, out_error);
-  }
-
-  template <typename T>
+  template <typename T> // TexImageSource or WebGLintptr
   void TexImage2D(GLenum target, GLint level, GLenum internalFormat,
                   GLsizei width, GLsizei height, GLint border,
                   GLenum unpackFormat, GLenum unpackType, const T& anySrc,
-                  ErrorResult& out_error) {
+                  ErrorResult& out_error) const {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
-               unpackFormat, unpackType, src);
+    TexImage(2, target, level, internalFormat, {0,0,0}, {width, height, 1}, border,
+               {unpackFormat, unpackType}, src);
   }
 
   void TexImage2D(GLenum target, GLint level, GLenum internalFormat,
                   GLsizei width, GLsizei height, GLint border,
                   GLenum unpackFormat, GLenum unpackType,
                   const dom::ArrayBufferView& view, GLuint viewElemOffset,
-                  ErrorResult&) {
+                  ErrorResult&) const {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexImage(2, target, level, internalFormat, {width, height, 1}, border,
-               unpackFormat, unpackType, src);
+    TexImage(2, target, level, internalFormat, {0,0,0}, {width, height, 1}, border,
+               {unpackFormat, unpackType}, src);
   }
 
-  ////////////////////////////////////
+  // -
 
- public:
-  template <typename T>
-  void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
-                     GLenum unpackFormat, GLenum unpackType, const T& src,
-                     ErrorResult& out_error) {
-    GLsizei width = 0;
-    GLsizei height = 0;
-    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
-                  unpackType, src, out_error);
-  }
-
-  template <typename T>
+  template <typename T> // TexImageSource or WebGLintptr
   void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
                      GLsizei width, GLsizei height, GLenum unpackFormat,
                      GLenum unpackType, const T& anySrc,
-                     ErrorResult& out_error) {
+                     ErrorResult& out_error) const {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
-                  unpackType, src);
+    TexImage(2, target, level, 0, {xOffset, yOffset, 0}, {width, height, 1}, 0,
+            {unpackFormat, unpackType}, src);
   }
 
   void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
                      GLsizei width, GLsizei height, GLenum unpackFormat,
                      GLenum unpackType, const dom::ArrayBufferView& view,
-                     GLuint viewElemOffset, ErrorResult&) {
+                     GLuint viewElemOffset, ErrorResult&) const {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexSubImage(2, target, level, {xOffset, yOffset, 0}, {width, height, 1}, unpackFormat,
-                  unpackType, src);
+    TexImage(2, target, level, 0, {xOffset, yOffset, 0}, {width, height, 1}, 0,
+            {unpackFormat, unpackType}, src);
   }
 
-  ////////////////////////////////////
+  // -
 
- public:
-  template <typename T>
+  template <typename T> // TexImageSource or WebGLintptr
   void TexImage3D(GLenum target, GLint level, GLenum internalFormat,
                   GLsizei width, GLsizei height, GLsizei depth, GLint border,
                   GLenum unpackFormat, GLenum unpackType, const T& anySrc,
-                  ErrorResult& out_error) {
+                  ErrorResult& out_error) const {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexImage(3, target, level, internalFormat, {width, height, depth}, border,
-               unpackFormat, unpackType, src);
+    TexImage(3, target, level, internalFormat, {0,0,0}, {width, height, depth}, border,
+               {unpackFormat, unpackType}, src);
   }
 
   void TexImage3D(GLenum target, GLint level, GLenum internalFormat,
                   GLsizei width, GLsizei height, GLsizei depth, GLint border,
                   GLenum unpackFormat, GLenum unpackType,
                   const dom::ArrayBufferView& view, GLuint viewElemOffset,
-                  ErrorResult&) {
+                  ErrorResult&) const {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexImage(3, target, level, internalFormat, {width, height, depth}, border,
-               unpackFormat, unpackType, src);
+    TexImage(3, target, level, internalFormat, {0,0,0} {width, height, depth}, border,
+               {unpackFormat, unpackType}, src);
   }
 
-  ////////////////////////////////////
+  // -
 
- public:
-  template <typename T>
+  template <typename T> // TexImageSource or WebGLintptr
   void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
                      GLint zOffset, GLsizei width, GLsizei height,
                      GLsizei depth, GLenum unpackFormat, GLenum unpackType,
-                     const T& anySrc, ErrorResult& out_error) {
+                     const T& anySrc, ErrorResult& out_error) const {
     const TexImageSourceAdapter src(&anySrc, &out_error);
-    TexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {width, height,
-                  depth}, unpackFormat, unpackType, src);
+    TexImage(3, target, level, 0, {xOffset, yOffset, zOffset}, {width, height,
+                  depth}, 0, {unpackFormat, unpackType}, src);
   }
 
   void TexSubImage3D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
                      GLint zOffset, GLsizei width, GLsizei height,
                      GLsizei depth, GLenum unpackFormat, GLenum unpackType,
                      const dom::Nullable<dom::ArrayBufferView>& maybeSrcView,
-                     GLuint srcElemOffset, ErrorResult&) {
+                     GLuint srcElemOffset, ErrorResult&) const {
     const TexImageSourceAdapter src(&maybeSrcView, srcElemOffset);
-    TexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {width, height,
-                  depth}, unpackFormat, unpackType, src);
+    TexImage(3, target, level, 0, {xOffset, yOffset, zOffset}, {width, height,
+                  depth}, 0, {unpackFormat, unpackType}, src);
   }
 
   ////////////////////////////////////
@@ -1349,150 +1339,133 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   void CompressedTexImage2D(GLenum target, GLint level, GLenum internalFormat,
                             GLsizei width, GLsizei height, GLint border,
-                            GLsizei imageSize, WebGLsizeiptr offset) {
-    const FuncScope scope(this, FuncScopeId::compressedTexImage2D);
-    const uint8_t funcDims = 2;
-    const GLsizei depth = 1;
-    const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
-                       depth}, border, src, Some(imageSize));
+                            GLsizei imageSize, WebGLintptr offset) const {
+    const TexImageSourceAdapter src(&offset);
+    CompressedTexImage(false, 2, target, level, internalFormat, {0,0,0}, {width, height,
+                       depth}, border, src, imageSize);
   }
 
-  template <typename T>
   void CompressedTexImage2D(GLenum target, GLint level, GLenum internalFormat,
                             GLsizei width, GLsizei height, GLint border,
-                            const T& anySrc, GLuint viewElemOffset = 0,
-                            GLuint viewElemLengthOverride = 0) {
-    const FuncScope scope(this, FuncScopeId::compressedTexImage2D);
-    const uint8_t funcDims = 2;
-    const GLsizei depth = 1;
-    const TexImageSourceAdapter src(&anySrc, viewElemOffset,
+                            const dom::ArrayBufferView& view, GLuint viewElemOffset = 0,
+                            GLuint viewElemLengthOverride = 0) const {
+    const TexImageSourceAdapter src(&view, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
-                       depth}, border, src, Nothing());
-  }
-
-  void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
-                               GLint yOffset, GLsizei width, GLsizei height,
-                               GLenum unpackFormat, GLsizei imageSize,
-                               WebGLsizeiptr offset) {
-    const FuncScope scope(this, FuncScopeId::compressedTexSubImage2D);
-    const uint8_t funcDims = 2;
-    const GLint zOffset = 0;
-    const GLsizei depth = 1;
-    const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
-                          {width, height, depth}, unpackFormat, src,
-                          Some(imageSize));
-  }
-
-  template <typename T>
-  void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
-                               GLint yOffset, GLsizei width, GLsizei height,
-                               GLenum unpackFormat, const T& anySrc,
-                               GLuint viewElemOffset = 0,
-                               GLuint viewElemLengthOverride = 0) {
-    const FuncScope scope(this, FuncScopeId::compressedTexSubImage2D);
-    const uint8_t funcDims = 2;
-    const GLint zOffset = 0;
-    const GLsizei depth = 1;
-    const TexImageSourceAdapter src(&anySrc, viewElemOffset,
-                                    viewElemLengthOverride);
-    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
-                          {width, height, depth}, unpackFormat, src, Nothing());
-  }
-
-  ////////////////////////////////////
-
- public:
-  void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
-                            GLsizei width, GLsizei height, GLsizei depth,
-                            GLint border, GLsizei imageSize,
-                            WebGLintptr offset) {
-    const FuncScope scope(this, FuncScopeId::compressedTexImage3D);
-    const uint8_t funcDims = 3;
-    const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
-                       depth}, border, src, Some(imageSize));
-  }
-
-  template <typename T>
-  void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
-                            GLsizei width, GLsizei height, GLsizei depth,
-                            GLint border, const T& anySrc,
-                            GLuint viewElemOffset = 0,
-                            GLuint viewElemLengthOverride = 0) {
-    const FuncScope scope(this, FuncScopeId::compressedTexImage3D);
-    const uint8_t funcDims = 3;
-    const TexImageSourceAdapter src(&anySrc, viewElemOffset,
-                                    viewElemLengthOverride);
-    CompressedTexImage(funcDims, target, level, internalFormat, {width, height,
-                       depth}, border, src, Nothing());
-  }
-
-  void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset,
-                               GLint yOffset, GLint zOffset, GLsizei width,
-                               GLsizei height, GLsizei depth,
-                               GLenum unpackFormat, GLsizei imageSize,
-                               WebGLintptr offset) {
-    const FuncScope scope(this, FuncScopeId::compressedTexSubImage3D);
-    const uint8_t funcDims = 3;
-    const TexImageSourceAdapter src(&offset, 0, 0);
-    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
-                          {width, height, depth}, unpackFormat, src,
-                          Some(imageSize));
-  }
-
-  template <typename T>
-  void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset,
-                               GLint yOffset, GLint zOffset, GLsizei width,
-                               GLsizei height, GLsizei depth,
-                               GLenum unpackFormat, const T& anySrc,
-                               GLuint viewElemOffset = 0,
-                               GLuint viewElemLengthOverride = 0) {
-    const FuncScope scope(this, FuncScopeId::compressedTexSubImage3D);
-    const uint8_t funcDims = 3;
-    const TexImageSourceAdapter src(&anySrc, viewElemOffset,
-                                    viewElemLengthOverride);
-    CompressedTexSubImage(funcDims, target, level, {xOffset, yOffset, zOffset},
-                          {width, height, depth}, unpackFormat, src, Nothing());
+    CompressedTexImage(false, 2, target, level, internalFormat, {0,0,0}, {width, height,
+                       1}, border, src, 0);
   }
 
   // -
 
+  void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
+                               GLint yOffset, GLsizei width, GLsizei height,
+                               GLenum unpackFormat, GLsizei imageSize,
+                               WebGLintptr offset) const {
+    const TexImageSourceAdapter src(&offset);
+    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, 0},
+                          {width, height, 1}, 0, src,
+                          imageSize);
+  }
+
+  void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
+                               GLint yOffset, GLsizei width, GLsizei height,
+                               GLenum unpackFormat, const dom::ArrayBufferView& view,
+                               GLuint viewElemOffset = 0,
+                               GLuint viewElemLengthOverride = 0) const {
+    const TexImageSourceAdapter src(&view, viewElemOffset,
+                                    viewElemLengthOverride);
+    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, 0, src, 0);
+  }
+
+  // -
+
+  void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
+                            GLsizei width, GLsizei height, GLsizei depth,
+                            GLint border, GLsizei imageSize,
+                            WebGLintptr offset) const {
+    const TexImageSourceAdapter src(&offset);
+    CompressedTexImage(false, funcDims, target, level, internalFormat, {0,0,0}, {width, height,
+                       depth}, border, src, imageSize);
+  }
+
+  void CompressedTexImage3D(GLenum target, GLint level, GLenum internalFormat,
+                            GLsizei width, GLsizei height, GLsizei depth,
+                            GLint border, const dom::ArrayBufferView& view,
+                            GLuint viewElemOffset = 0,
+                            GLuint viewElemLengthOverride = 0) const {
+    const TexImageSourceAdapter src(&view, viewElemOffset,
+                                    viewElemLengthOverride);
+    CompressedTexImage(false, funcDims, target, level, internalFormat, {0,0,0}, {width, height,
+                       depth}, border, src, 0);
+  }
+
+  // -
+
+  void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset,
+                               GLint yOffset, GLint zOffset, GLsizei width,
+                               GLsizei height, GLsizei depth,
+                               GLenum unpackFormat, GLsizei imageSize,
+                               WebGLintptr offset) const {
+    const TexImageSourceAdapter src(&offset);
+    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, 0, src,
+                          imageSize);
+  }
+
+  void CompressedTexSubImage3D(GLenum target, GLint level, GLint xOffset,
+                               GLint yOffset, GLint zOffset, GLsizei width,
+                               GLsizei height, GLsizei depth,
+                               GLenum unpackFormat, const dom::ArrayBufferView& view,
+                               GLuint viewElemOffset = 0,
+                               GLuint viewElemLengthOverride = 0) const {
+    const TexImageSourceAdapter src(&view, viewElemOffset,
+                                    viewElemLengthOverride);
+    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
+                          {width, height, depth}, 0, src, 0);
+  }
+
+  // --------------------
+
+  void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat,
+                        GLint x, GLint y, GLsizei width,
+                         GLsizei height, GLint border) const {
+    CopyTexImage(2, target, level, internalFormat, {0, 0, 0}, {x, y}, {width, height},
+                border);
+  }
+
   void CopyTexSubImage2D(GLenum target, GLint level, GLint xOffset,
                          GLint yOffset, GLint x, GLint y, GLsizei width,
                          GLsizei height) const {
-    CopyTexSubImage(2, target, level, {xOffset, yOffset, 0}, {x, y}, {width, height});
+    CopyTexImage(2, target, level, 0, {xOffset, yOffset, 0}, {x, y}, {width, height}, 0);
   }
 
   void CopyTexSubImage3D(GLenum target, GLint level, GLint xOffset,
                          GLint yOffset, GLint zOffset, GLint x, GLint y,
                          GLsizei width, GLsizei height) const {
-    CopyTexSubImage(3, target, level, {xOffset, yOffset, zOffset}, {x, y}, {width, height});
+    CopyTexImage(3, target, level, 0, {xOffset, yOffset, zOffset}, {x, y}, {width, height}, 0);
   }
 
- protected:
-  // Primitive tex upload functions
-  void TexImage(uint8_t funcDims, GLenum target, GLint level,
-                GLenum internalFormat, ivec3 size, GLint border, GLenum unpackFormat,
-                GLenum unpackType, const TexImageSource& src) const;
-  void TexSubImage(uint8_t funcDims, GLenum target, GLint level, ivec3 offset, ivec3 size,
-                   GLenum unpackFormat, GLenum unpackType,
-                   const TexImageSource& src) const;
-  void CompressedTexImage(uint8_t funcDims, GLenum target, GLint level,
-                          GLenum internalFormat, ivec3 size, GLint border,
-                          const TexImageSource& src,
-                          const Maybe<GLsizei>& expectedImageSize) const;
-  void CompressedTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                             ivec3 offset, ivec3 size,
-                             GLenum unpackFormat, const TexImageSource& src,
-                             const Maybe<GLsizei>& expectedImageSize) const;
-  void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat,
-                      ivec2 srcOffset, ivec2 size, GLint border) const;
-  void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level, ivec3 dstOffset,
-                       ivec2 srcOffset, ivec2 size) const;
+  // -------------------
+  // Forward legacy TexImageSource uploads for default width/height
 
+  template <typename TexImageSourceT>
+  void TexImage2D(GLenum target, GLint level, GLenum internalFormat,
+                  GLenum unpackFormat, GLenum unpackType, const TexImageSourceT& anySrc,
+                  ErrorResult& out_error) const {
+    TexImage2D(target, level, internalFormat, 0, 0, 0, unpackFormat, unpackType, anySrc,
+        out_error);
+  }
+
+  template <typename TexImageSourceT>
+  void TexSubImage2D(GLenum target, GLint level, GLint xOffset, GLint yOffset,
+                     GLenum unpackFormat, GLenum unpackType, const TexImageSourceT& anySrc,
+                     ErrorResult& out_error) const {
+    TexSubImage2D(target, level, xOffset, yOffset, 0, 0, unpackFormat, unpackType, anySrc,
+        out_error);
+  }
+
+  // =========================================================================
   // ------------------------ Uniforms and attributes ------------------------
  public:
   void GetVertexAttrib(JSContext* cx, GLuint index, GLenum pname,
@@ -1501,17 +1474,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  private:
   void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
     const Range<const uint8_t>& bytes) const;
-
-  template<typename T>
-  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
-          const Range<T>& range) const {
-    UniformNTV(loc, n, t, Range<const uint8_t>(range));
-  }
-
-  template<typename T, size_t N>
-  static Range<const T> MakeRange(T (&arr)[N]) {
-    return {arr, N};
-  }
 
   // -
 
@@ -1539,22 +1501,22 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   #define _(T,Type,BaseType) \
     void Uniform1 ## T(const WebGLUniformLocationJS* const loc, Type x) const { \
       const Type arr[] = { x }; \
-      UniformNTv(loc, 1, BaseType, MakeRange(arr)); \
+      UniformNTv(loc, 1, BaseType, MakeByteRange(arr)); \
     } \
     void Uniform2 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y) const { \
       const Type arr[] = { x, y }; \
-      UniformNTv(loc, 2, BaseType, MakeRange(arr)); \
+      UniformNTv(loc, 2, BaseType, MakeByteRange(arr)); \
     } \
     void Uniform3 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y, Type z) const { \
       const Type arr[] = { x, y, z }; \
-      UniformNTv(loc, 3, BaseType, MakeRange(arr)); \
+      UniformNTv(loc, 3, BaseType, MakeByteRange(arr)); \
     } \
     void Uniform4 ## T(const WebGLUniformLocationJS* const loc, Type x, \
                    Type y, Type z, Type w) const { \
       const Type arr[] = { x, y, z, w }; \
-      UniformNTv(loc, 4, BaseType, MakeRange(arr)); \
+      UniformNTv(loc, 4, BaseType, MakeByteRange(arr)); \
     }
 
   _(f,float,webgl::UniformBaseType::Float)
@@ -1567,7 +1529,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   #define _(N,T,BaseType,TypeListU) \
     void Uniform ## N ## T ## v(const WebGLUniformLocationJS* const loc, const TypeListU& list) const { \
-      UniformNTv(loc, N, BaseType, MakeRange(list)); \
+      UniformNTv(loc, N, BaseType, MakeByteRange(list)); \
     }
 
   _(1,f,webgl::UniformBaseType::Float,Float32ListU)
@@ -1637,9 +1599,10 @@ public:
   void VertexAttrib3f(GLuint index, GLfloat x, GLfloat y, GLfloat z) {
     VertexAttrib4f(index, x, y, z, 1);
   }
+
   void VertexAttrib4f(GLuint index, GLfloat x, GLfloat y, GLfloat z, GLfloat w) {
     const float arr[4] = {x, y, z, w};
-    VertexAttrib4Tv(index, webgl::AttribBaseType::Float, MakeRange(arr));
+    VertexAttrib4Tv(index, webgl::AttribBaseType::Float, MakeByteRange(arr));
   }
 
   // -

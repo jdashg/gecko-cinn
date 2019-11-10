@@ -34,8 +34,8 @@ class WebGL2Context final : public WebGLContext {
   // Buffer objects - WebGL2ContextBuffers.cpp
 
   void CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
-                         WebGLintptr readOffset, WebGLintptr writeOffset,
-                         WebGLsizeiptr size);
+                         uint64_t readOffset, uint64_t writeOffset,
+                         uint64_t size);
 
  private:
   template <typename BufferT>
@@ -55,25 +55,21 @@ class WebGL2Context final : public WebGLContext {
                        GLbitfield mask, GLenum filter);
 
   void InvalidateFramebuffer(GLenum target,
-                             const nsTArray<GLenum>& attachments);
+                             const std::vector<GLenum>& attachments);
   void InvalidateSubFramebuffer(GLenum target,
-                                const nsTArray<GLenum>& attachments, GLint x,
+                                const std::vector<GLenum>& attachments, GLint x,
                                 GLint y, GLsizei width, GLsizei height);
   void ReadBuffer(GLenum mode);
 
   // -------------------------------------------------------------------------
   // Renderbuffer objects - WebGL2ContextRenderbuffers.cpp
 
-  Maybe<nsTArray<int32_t>> GetInternalformatParameter(GLenum target,
+  Maybe<std::vector<int32_t>> GetInternalformatParameter(GLenum target,
                                                       GLenum internalformat,
-                                                      GLenum pname);
+                                                      GLenum pname) const;
 
   // -------------------------------------------------------------------------
   // Texture objects - WebGL2ContextTextures.cpp
-
-  void TexStorage(uint8_t funcDims, GLenum target, GLsizei levels,
-                  GLenum internalFormat, GLsizei width, GLsizei height,
-                  GLsizei depth);
 
   GLint GetFragDataLocation(const WebGLProgram& prog, const nsAString& name);
 
@@ -94,9 +90,6 @@ class WebGL2Context final : public WebGLContext {
 
   // ------------------------------------------------------------------------
   // Multiple Render Targets - WebGL2ContextMRTs.cpp
-  /* Implemented in WebGLContext
-  void DrawBuffers(const nsTArray<GLenum>& buffers);
-  */
 
  private:
   bool ValidateClearBuffer(GLenum buffer, GLint drawBuffer,
@@ -134,14 +127,14 @@ class WebGL2Context final : public WebGLContext {
 
   already_AddRefed<WebGLTransformFeedback> CreateTransformFeedback();
   void DeleteTransformFeedback(WebGLTransformFeedback* tf);
-  void BindTransformFeedback(GLenum target, WebGLTransformFeedback* tf);
+  void BindTransformFeedback(WebGLTransformFeedback* tf);
   void BeginTransformFeedback(GLenum primitiveMode);
   void EndTransformFeedback();
   void PauseTransformFeedback();
   void ResumeTransformFeedback();
   void TransformFeedbackVaryings(WebGLProgram& program,
-                                 const nsTArray<nsString>& varyings,
-                                 GLenum bufferMode);
+                                 const std::vector<std::string>& varyings,
+                                 GLenum bufferMode) const;
 
   // -------------------------------------------------------------------------
   // Uniform Buffer Objects and Transform Feedback Buffers -

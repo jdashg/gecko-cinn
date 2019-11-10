@@ -101,7 +101,6 @@ UNIFIED_SOURCES += [
     'WebGL2ContextSamplers.cpp',
     'WebGL2ContextState.cpp',
     'WebGL2ContextSync.cpp',
-    'WebGL2ContextTextures.cpp',
     'WebGL2ContextTransformFeedback.cpp',
     'WebGL2ContextUniforms.cpp',
     'WebGL2ContextVAOs.cpp',

@@ -12,7 +12,7 @@
 #include <vector>
 
 // Most WebIDL typedefs are identical to their OpenGL counterparts.
-#include "GLTypes.h"
+#include "GLDefs.h"
 #include "mozilla/Casting.h"
 #include "mozilla/CheckedInt.h"
 #include "gfxTypes.h"
@@ -780,6 +780,22 @@ inline typename C::mapped_type Find(const C& container, const K& key,
   const auto itr = container.find(key);
   if (itr == container.end()) return notFound;
   return itr->second;
+}
+
+// -
+
+inline GLenum ImageToTexTarget(const GLenum imageTarget) {
+  switch (imageTarget) {
+    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
+    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
+    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
+    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
+    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
+    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
+      return LOCAL_GL_TEXTURE_CUBE_MAP;
+    default:
+      return imageTarget;
+  }
 }
 
 }  // namespace mozilla

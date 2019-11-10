@@ -63,25 +63,6 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
 
 WebGLExtensionCompressedTextureASTC::~WebGLExtensionCompressedTextureASTC() {}
 
-Maybe<nsTArray<nsString>>
-WebGLExtensionCompressedTextureASTC::GetSupportedProfiles() const {
-  if (mIsLost || !mContext) {
-    if (mContext) {
-      mContext->ErrorInvalidOperation("%s: Extension is lost.",
-                                      "drawElementsInstancedANGLE");
-    }
-    return {};
-  }
-
-  nsTArray<nsString> arr;
-  arr.AppendElement(NS_LITERAL_STRING("ldr"));
-  if (mContext->gl->IsExtensionSupported(
-          gl::GLContext::KHR_texture_compression_astc_hdr)) {
-    arr.AppendElement(NS_LITERAL_STRING("hdr"));
-  }
-  return Some(arr);
-}
-
 bool WebGLExtensionCompressedTextureASTC::IsSupported(
     const WebGLContext* webgl) {
   gl::GLContext* gl = webgl->GL();

@@ -207,46 +207,27 @@ class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
                       const webgl::PackingInfo& srcPI) const;
 
  public:
-  void TexStorage(TexTarget target, GLsizei levels, GLenum sizedFormat,
-                  GLsizei width, GLsizei height, GLsizei depth);
+  void TexStorage(TexTarget target, uint32_t levels, GLenum sizedFormat, const uvec3& size);
 
-  void TexImage(TexImageTarget target, GLint level, GLenum internalFormat,
-                GLsizei width, GLsizei height, GLsizei depth, GLint border,
-                const webgl::PackingInfo& pi,
-                UniquePtr<webgl::TexUnpackBlob>&& src);
-  void TexSubImage(TexImageTarget target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, GLsizei width, GLsizei height,
-                   GLsizei depth, const webgl::PackingInfo& pi,
-                   UniquePtr<webgl::TexUnpackBlob>&& src);
+  // TexSubImage iff `!respecFormat`
+  void TexImage(GLenum imageTarget, uint32_t level,
+                            GLenum respecFormat, const uvec3& offset,
+                            const webgl::PackingInfo& pi,
+                            const webgl::TexUnpackBlob& src);
 
- protected:
-  void TexImage(TexImageTarget target, GLint level, GLenum internalFormat,
-                const webgl::PackingInfo& pi,
-                UniquePtr<webgl::TexUnpackBlob>&& blob);
+  // CompressedTexSubImage iff `sub`
+  void CompressedTexImage(bool sub, GLenum imageTarget,
+                                        uint32_t level, GLenum formatEnum,
+                                        const uvec3& offset, const uvec3& size,
+                                        const Range<const uint8_t>& src,
+                                        const uint32_t pboImageSize,
+                                        const Maybe<uint64_t> pboOffset);
 
-  void TexSubImage(TexImageTarget target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, const webgl::PackingInfo& pi,
-                   UniquePtr<webgl::TexUnpackBlob>&& blob);
-
- public:
-  void CompressedTexImage(TexImageTarget target, GLint level,
-                          GLenum internalFormat, GLsizei width, GLsizei height,
-                          GLsizei depth, GLint border,
-                          UniquePtr<webgl::TexUnpackBytes>&& src,
-                          const Maybe<GLsizei>& expectedImageSize);
-  void CompressedTexSubImage(TexImageTarget target, GLint level, GLint xOffset,
-                             GLint yOffset, GLint zOffset, GLsizei width,
-                             GLsizei height, GLsizei depth,
-                             GLenum sizedUnpackFormat,
-                             UniquePtr<webgl::TexUnpackBytes>&& src,
-                             const Maybe<GLsizei>& expectedImageSize);
-
-  void CopyTexImage2D(TexImageTarget target, GLint level, GLenum internalFormat,
-                      GLint x, GLint y, uint32_t width, uint32_t height,
-                      uint32_t depth);
-  void CopyTexSubImage(TexImageTarget target, GLint level, GLint xOffset,
-                       GLint yOffset, GLint zOffset, GLint x, GLint y,
-                       uint32_t width, uint32_t height, uint32_t depth);
+  // CopyTexSubImage iff `!respecFormat`
+  void CopyTexImage(GLenum imageTarget, uint32_t level,
+                                    GLenum respecFormat, const uvec3& dstOffset,
+                                    const ivec2& srcOffset,
+                                    const uvec2& size2);
 
   ////////////////////////////////////
 

@@ -2468,8 +2468,15 @@ void ClientWebGLContext::CopyBufferSubData(GLenum readTarget,
                                            GLintptr readOffset,
                                            GLintptr writeOffset,
                                            GLsizeiptr size) {
-  Run<RPROC(CopyBufferSubData)>(readTarget, writeTarget, readOffset,
-                                writeOffset, size);
+  const FuncScope funcScope(this, "copyBufferSubData");
+  if (!ValidateNonNegative("readOffset", readOffset) ||
+      !ValidateNonNegative("writeOffset", writeOffset) ||
+      !ValidateNonNegative("size", size))
+  {
+    return;
+  }
+  Run<RPROC(CopyBufferSubData)>(readTarget, writeTarget, static_cast<uint64_t>(readOffset),
+                                static_cast<uint64_t>(writeOffset), static_cast<uint64_t>(size));
 }
 
 // -------------------------- Framebuffer Objects --------------------------
@@ -2725,20 +2732,6 @@ void ClientWebGLContext::GenerateMipmap(GLenum texTarget) {
   Run<RPROC(GenerateMipmap)>(texTarget);
 }
 
-void ClientWebGLContext::CopyTexImage2D(GLenum target, GLint level,
-                                        GLenum internalFormat, GLint x, GLint y,
-                                        GLsizei rawWidth, GLsizei rawHeight,
-                                        GLint border) {
-  uint32_t width, height, depth;
-  if (!ValidateExtents(rawWidth, rawHeight, 1, border, &width, &height,
-                       &depth)) {
-    return;
-  }
-
-  Run<RPROC(CopyTexImage2D)>(target, level, internalFormat, x, y, width, height,
-                             depth);
-}
-
 void ClientWebGLContext::GetTexParameter(JSContext* cx, GLenum texTarget,
                                          GLenum pname,
                                          JS::MutableHandle<JS::Value> retval) const {
@@ -2769,12 +2762,6 @@ void ClientWebGLContext::TexParameterf(GLenum texTarget, GLenum pname,
 void ClientWebGLContext::TexParameteri(GLenum texTarget, GLenum pname,
                                        GLint param) {
   Run<RPROC(TexParameter_base)>(texTarget, pname, FloatOrInt(param));
-}
-
-void ClientWebGLContext::TexStorage(uint8_t funcDims, GLenum target, GLsizei levels, GLenum internalFormat,
-                    GLsizei width, GLsizei height, GLsizei depth) const {
-  Run<RPROC(TexStorage)>(funcDims, target, levels, internalFormat, width,
-                         height, depth);
 }
 
 ////////////////////////////////////
@@ -2835,199 +2822,74 @@ bool ClientWebGLContext::ValidateViewType(GLenum unpackType,
   return true;
 }
 
-////////////////////////////////////
+/////////////////////////////////////////////////
 
-void ClientWebGLContext::TexImage2D(GLenum target, GLint level,
-                                    GLenum internalFormat, GLsizei width,
-                                    GLsizei height, GLint border,
-                                    GLenum unpackFormat, GLenum unpackType,
-                                    const TexImageSource& src) {
-  const FuncScope scope(this, FuncScopeId::texImage2D);
-  const uint8_t funcDims = 2;
-  const GLsizei depth = 1;
-
-  if (!ValidateViewType(unpackType, src)) {
-    return;
-  }
-
-  MaybeWebGLTexUnpackVariant blob =
-      From(target, width, height, depth, border, src);
-  if (!blob) {
-    return;
-  }
-
-  Run<RPROC(TexImage)>(funcDims, target, level, internalFormat, width, height,
-                       depth, border, unpackFormat, unpackType, std::move(blob),
-                       GetFuncScopeId());
+static inline uvec2 CastUvec2(const ivec2& val) {
+  return {static_cast<uint32_t>(val.x),
+               static_cast<uint32_t>(val.y)};
 }
 
-////////////////////////////////////
-
-void ClientWebGLContext::TexSubImage2D(GLenum target, GLint level,
-                                       GLint xOffset, GLint yOffset,
-                                       GLsizei width, GLsizei height,
-                                       GLenum unpackFormat, GLenum unpackType,
-                                       const TexImageSource& src) {
-  const FuncScope scope(this, FuncScopeId::texSubImage2D);
-  const uint8_t funcDims = 2;
-  const GLint zOffset = 0;
-  const GLsizei depth = 1;
-
-  if (!ValidateViewType(unpackType, src)) {
-    return;
-  }
-
-  MaybeWebGLTexUnpackVariant blob = From(target, width, height, depth, 0, src);
-  if (!blob) {
-    return;
-  }
-
-  Run<RPROC(TexSubImage)>(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, unpackType,
-                          std::move(blob), GetFuncScopeId());
+static inline uvec3 CastUvec3(const ivec3& val) {
+  return {static_cast<uint32_t>(val.x),
+               static_cast<uint32_t>(val.y),
+               static_cast<uint32_t>(val.z)};
 }
 
-////////////////////////////////////
-
-void ClientWebGLContext::TexImage3D(GLenum target, GLint level,
-                                    GLenum internalFormat, GLsizei width,
-                                    GLsizei height, GLsizei depth, GLint border,
-                                    GLenum unpackFormat, GLenum unpackType,
-                                    const TexImageSource& src) {
-  const FuncScope scope(this, FuncScopeId::texImage3D);
-  const uint8_t funcDims = 3;
-
-  MaybeWebGLTexUnpackVariant blob =
-      From(target, width, height, depth, border, src);
-  if (!blob) {
-    return;
-  }
-  Run<RPROC(TexImage)>(funcDims, target, level, internalFormat, width, height,
-                       depth, border, unpackFormat, unpackType, std::move(blob),
-                       GetFuncScopeId());
+void ClientWebGLContext::TexStorage(uint8_t funcDims, GLenum target, GLsizei levels,
+                                    GLenum internalFormat, const ivec3& size) const {
+  const FuncScope funcScope(*this, "texStorage[23]D");
+  if (IsContextLost()) return;
+  if (!ValidateTexTarget(funcDims, target)) return;
+  Run<RPROC(TexStorage)>(target, static_cast<uint32_t>(levels), internalFormat, CastUvec3(size));
 }
 
-////////////////////////////////////
-
-void ClientWebGLContext::TexSubImage3D(GLenum target, GLint level,
-                                       GLint xOffset, GLint yOffset,
-                                       GLint zOffset, GLsizei width,
-                                       GLsizei height, GLsizei depth,
-                                       GLenum unpackFormat, GLenum unpackType,
-                                       const TexImageSource& src) {
-  const FuncScope scope(this, FuncScopeId::texSubImage3D);
-  const uint8_t funcDims = 3;
-
-  MaybeWebGLTexUnpackVariant blob = From(target, width, height, depth, 0, src);
-  if (!blob) {
+void ClientWebGLContext::TexImage(uint8_t funcDims, GLenum imageTarget, GLint level,
+                                  GLenum respecFormat, const ivec3& offset,
+                                  const ivec3& size, GLint border,
+                                  const webgl::PackingInfo& pi,
+                                  const webgl::TexImageSource& src) const {
+  const FuncScope funcScope(*this, "tex(Sub)Image[23]D");
+  if (IsContextLost()) return;
+  if (!ValidateTexTarget(funcDims, ImageToTexTarget(imageTarget))) return;
+  if (border != 0) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
-  Run<RPROC(TexSubImage)>(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, unpackType,
-                          std::move(blob), GetFuncScopeId());
-}
-
-////////////////////////////////////
-
-void ClientWebGLContext::CopyTexSubImage2D(GLenum target, GLint level,
-                                           GLint xOffset, GLint yOffset,
-                                           GLint x, GLint y, GLsizei rawWidth,
-                                           GLsizei rawHeight) {
-  const FuncScope scope(this, FuncScopeId::copyTexSubImage2D);
-  const uint8_t funcDims = 2;
-  const GLint zOffset = 0;
-
-  uint32_t width, height, depth;
-  if (!ValidateExtents(rawWidth, rawHeight, 1, 0, &width, &height, &depth)) {
-    return;
-  }
-
-  Run<RPROC(CopyTexSubImage)>(funcDims, target, level, xOffset, yOffset,
-                              zOffset, x, y, width, height, depth,
-                              GetFuncScopeId());
-}
-
-////////////////////////////////////
-
-void ClientWebGLContext::CopyTexSubImage3D(GLenum target, GLint level,
-                                           GLint xOffset, GLint yOffset,
-                                           GLint zOffset, GLint x, GLint y,
-                                           GLsizei rawWidth,
-                                           GLsizei rawHeight) {
-  const FuncScope scope(this, FuncScopeId::copyTexSubImage3D);
-  const uint8_t funcDims = 3;
-
-  uint32_t width, height, depth;
-  if (!ValidateExtents(rawWidth, rawHeight, 1, 0, &width, &height, &depth)) {
-    return;
-  }
-
-  Run<RPROC(CopyTexSubImage)>(funcDims, target, level, xOffset, yOffset,
-                              zOffset, x, y, width, height, depth,
-                              GetFuncScopeId());
-}
-
-void ClientWebGLContext::TexImage(uint8_t funcDims, GLenum target, GLint level,
-                                  GLenum internalFormat, GLsizei width,
-                                  GLsizei height, GLsizei depth, GLint border,
-                                  GLenum unpackFormat, GLenum unpackType,
-                                  const TexImageSource& src,
-                                  FuncScopeId aFuncId) {
-  const FuncScope scope(this, FuncScopeId::texImage2D);
-  MaybeWebGLTexUnpackVariant blob =
-      From(target, width, height, depth, border, src);
-  if (!blob) {
-    return;
-  }
-  Run<RPROC(TexImage)>(funcDims, target, level, internalFormat, width, height,
-                       depth, border, unpackFormat, unpackType, std::move(blob),
-                       aFuncId);
-}
-
-void ClientWebGLContext::TexSubImage(uint8_t funcDims, GLenum target,
-                                     GLint level, GLint xOffset, GLint yOffset,
-                                     GLint zOffset, GLsizei width,
-                                     GLsizei height, GLsizei depth,
-                                     GLenum unpackFormat, GLenum unpackType,
-                                     const TexImageSource& src,
-                                     FuncScopeId aFuncId) {
-  MaybeWebGLTexUnpackVariant blob = From(target, width, height, depth, 0, src);
-  if (!blob) {
-    return;
-  }
-  Run<RPROC(TexSubImage)>(funcDims, target, level, xOffset, yOffset, zOffset,
-                          width, height, depth, unpackFormat, unpackType,
-                          std::move(blob), aFuncId);
+  #error TexImageSource to TexUnpackBlob
+  Run<RPROC(TexImage)>(imageTarget, static_cast<uint32_t>(level), respecFormat,
+                CastUvec3(offset), CastUvec3(size), pi, src):
 }
 
 void ClientWebGLContext::CompressedTexImage(
-    uint8_t funcDims, GLenum target, GLint level, GLenum internalFormat,
-    GLsizei width, GLsizei height, GLsizei depth, GLint border,
-    const TexImageSource& src, const Maybe<GLsizei>& expectedImageSize,
-    FuncScopeId aFuncId) {
-  MaybeWebGLTexUnpackVariant blob = FromCompressed(
-      target, width, height, depth, border, src, expectedImageSize);
-  if (!blob) {
+    uint8_t funcDims, bool sub, GLenum imageTarget, GLint level, GLenum format,
+    const ivec3& offset, const ivec3& size, GLint border,
+    const webgl::TexImageSource& src, uint32_t pboImageSize) const {
+  const FuncScope funcScope(*this, "compressedTex(Sub)Image[23]D");
+  if (IsContextLost()) return;
+  if (!ValidateTexTarget(funcDims, ImageToTexTarget(imageTarget))) return;
+  if (border != 0) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
-  Run<RPROC(CompressedTexImage)>(funcDims, target, level, internalFormat, width,
-                                 height, depth, border, std::move(blob),
-                                 expectedImageSize, aFuncId);
+  #error TexImageSource to Range<const uint8_t>
+  Run<RPROC(CompressedTexImage)>(sub, imageTarget, static_cast<uint32_t>(level),
+                                 format, CastUvec3(offset), CastUvec3(size), data,
+                                 pboImageSize, pboOffset);
 }
 
-void ClientWebGLContext::CompressedTexSubImage(
-    uint8_t funcDims, GLenum target, GLint level, GLint xOffset, GLint yOffset,
-    GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
-    GLenum unpackFormat, const TexImageSource& src,
-    const Maybe<GLsizei>& expectedImageSize, FuncScopeId aFuncId) {
-  MaybeWebGLTexUnpackVariant blob =
-      FromCompressed(target, width, height, depth, 0, src, expectedImageSize);
-  if (!blob) {
+void ClientWebGLContext::CopyTexImage(uint8_t funcDims, GLenum imageTarget, GLint level,
+                                        GLenum respecFormat, const ivec3& dstOffset,
+                                        const ivec2& srcOffset, const ivec2& size,
+                                        GLint border) const {
+  const FuncScope funcScope(*this, "copy(Sub)Image[23]D");
+  if (IsContextLost()) return;
+  if (!ValidateTexTarget(funcDims, ImageToTexTarget(imageTarget))) return;
+  if (border != 0) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
-  Run<RPROC(CompressedTexSubImage)>(
-      funcDims, target, level, xOffset, yOffset, zOffset, width, height, depth,
-      unpackFormat, std::move(blob), expectedImageSize, aFuncId);
+  Run<RPROC(CopyTexImage)>(imageTarget, static_cast<uint32_t>(level), respecFormat,
+                           CastUvec3(dstOffset), srcOffset, CastUvec2(size));
 }
 
 // ------------------- Programs and shaders --------------------------------
@@ -3678,12 +3540,6 @@ void ClientWebGLContext::LoseContext(const webgl::ContextLossReason reason) {
   Run<RPROC(LoseContext)>(reason);
 }
 
-void ClientWebGLContext::MOZDebugGetParameter(
-    JSContext* cx, GLenum pname, JS::MutableHandle<JS::Value> retval,
-    ErrorResult& rv) const {
-  retval.set(ToJSValue(cx, Run<RPROC(MOZDebugGetParameter)>(pname), rv));
-}
-
 void ClientWebGLContext::EnqueueErrorImpl(const GLenum error,
                                           const nsACString& text) const {
   if (!mNotLost) {
@@ -3815,7 +3671,7 @@ void ClientWebGLContext::BindAttribLocation(const WebGLProgramJS& prog,
                                             const GLuint location,
                                             const nsAString& name) const {
   const auto& nameU8 = NS_ConvertUTF16toUTF8(name);
-  Run<RPROC(BindAttribLocation)>(prog, location, nameU8);
+  Run<RPROC(BindAttribLocation)>(prog, location, nameU8.BeginReading());
 }
 
 void ClientWebGLContext::DetachShader(WebGLProgramJS& prog,
@@ -4296,8 +4152,15 @@ void ClientWebGLContext::ShaderSource(WebGLShaderJS& shader, const nsAString& so
   if (IsContextLost()) return;
   if (!shader.ValidateUsable(*this, "shader")) return;
 
+  nsString withoutComments;
+  if (!TruncateComments(source, withoutComments)) {
+    EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "Allocation failed.");
+    return;
+  }
+
   shader.mSource = NS_ConvertUTF16toUTF8(source);
-  Run<RPROC(ShaderSource)>(shader.mId, shader.mSource);
+
+  Run<RPROC(ShaderSource)>(shader.mId, shader.mSource.BeginReading());
 }
 
 // -

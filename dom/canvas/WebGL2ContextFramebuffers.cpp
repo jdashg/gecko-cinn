@@ -106,7 +106,7 @@ static bool ValidateFramebufferAttachmentEnum(WebGLContext* webgl,
 }
 
 bool WebGLContext::ValidateInvalidateFramebuffer(
-    GLenum target, const nsTArray<GLenum>& attachments,
+    GLenum target, const std::vector<GLenum>& attachments,
     std::vector<GLenum>* const scopedVector,
     GLsizei* const out_glNumAttachments,
     const GLenum** const out_glAttachments) {
@@ -183,7 +183,7 @@ bool WebGLContext::ValidateInvalidateFramebuffer(
 }
 
 void WebGL2Context::InvalidateFramebuffer(GLenum target,
-                                          const nsTArray<GLenum>& attachments) {
+                                          const std::vector<GLenum>& attachments) {
   const FuncScope funcScope(*this, "invalidateFramebuffer");
 
   std::vector<GLenum> scopedVector;
@@ -210,7 +210,7 @@ void WebGL2Context::InvalidateFramebuffer(GLenum target,
 }
 
 void WebGL2Context::InvalidateSubFramebuffer(
-    GLenum target, const nsTArray<GLenum>& attachments, GLint x, GLint y,
+    GLenum target, const std::vector<GLenum>& attachments, GLint x, GLint y,
     GLsizei width, GLsizei height) {
   const FuncScope funcScope(*this, "invalidateSubFramebuffer");
 

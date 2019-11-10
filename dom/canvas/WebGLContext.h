@@ -453,15 +453,19 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     }
   }
 
-  /* Use this function when you have the texture image target, for example:
-   * GL_TEXTURE_2D, GL_TEXTURE_CUBE_MAP_[POSITIVE|NEGATIVE]_[X|Y|Z], and
-   * not the actual texture binding target: GL_TEXTURE_2D or
-   * GL_TEXTURE_CUBE_MAP.
-   */
-  WebGLTexture* ActiveBoundTextureForTexImageTarget(
-      const TexImageTarget texImgTarget) const {
-    const TexTarget texTarget = TexImageTargetToTexTarget(texImgTarget);
-    return ActiveBoundTextureForTarget(texTarget);
+  WebGLTexture* GetActiveTex(const GLenum texTarget) const {
+    switch (texTarget) {
+      case LOCAL_GL_TEXTURE_2D:
+        return mBound2DTextures[mActiveTexture];
+      case LOCAL_GL_TEXTURE_CUBE_MAP:
+        return mBoundCubeMapTextures[mActiveTexture];
+      case LOCAL_GL_TEXTURE_3D:
+        return mBound3DTextures[mActiveTexture];
+      case LOCAL_GL_TEXTURE_2D_ARRAY:
+        return mBound2DArrayTextures[mActiveTexture];
+      default:
+        return nullptr;
+    }
   }
 
   already_AddRefed<layers::Layer> GetCanvasLayer(nsDisplayListBuilder* builder,
@@ -509,7 +513,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void AttachShader(WebGLProgram& prog, WebGLShader& shader) const;
   void BindAttribLocation(WebGLProgram& prog, GLuint location,
-                          const nsAString& name);
+                          const std::string& name) const;
   void BindFramebuffer(GLenum target, WebGLFramebuffer* fb);
   void BindRenderbuffer(GLenum target, WebGLRenderbuffer* fb);
   void BindVertexArray(WebGLVertexArray* vao);
@@ -544,7 +548,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DepthMask(WebGLboolean b);
   void DepthRange(GLclampf zNear, GLclampf zFar);
   void DetachShader(WebGLProgram& prog, const WebGLShader& shader) const;
-  void DrawBuffers(const nsTArray<GLenum>& buffers);
+  void DrawBuffers(const std::vector<GLenum>& buffers);
   void Flush();
   void Finish();
 
@@ -614,7 +618,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   void SampleCoverage(GLclampf value, WebGLboolean invert);
   void Scissor(GLint x, GLint y, GLsizei width, GLsizei height);
-  void ShaderSource(WebGLShader& shader, const nsAString& source);
+  void ShaderSource(WebGLShader& shader, const std::string& source) const;
   void StencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask);
   void StencilMaskSeparate(GLenum face, GLuint mask);
   void StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
@@ -803,55 +807,27 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   virtual bool IsTexParamValid(GLenum pname) const;
 
   ////////////////////////////////////
+  // Uploads
 
-  void CompressedTexImage(uint8_t funcDims, GLenum target, GLint level,
-                          GLenum internalFormat, GLsizei width, GLsizei height,
-                          GLsizei depth, GLint border,
-                          UniquePtr<webgl::TexUnpackBytes>&& src,
-                          const Maybe<GLsizei>& expectedImageSize);
-  void CompressedTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                             GLint xOffset, GLint yOffset, GLint zOffset,
-                             GLsizei width, GLsizei height, GLsizei depth,
-                             GLenum unpackFormat,
-                             UniquePtr<webgl::TexUnpackBytes>&& src,
-                             const Maybe<GLsizei>& expectedImageSize);
+  // CompressedTexSubImage if `sub`
+  void CompressedTexImage(bool sub, GLenum imageTarget,
+                                        uint32_t level, GLenum format,
+                                        uvec3 offset, const uvec3& size,
+                                        const Range<const uint8_t>& src,
+                                        const uint32_t pboImageSize,
+                                        const Maybe<uint64_t> pboOffset) const;
 
-  ////////////////////////////////////
+  // CopyTexSubImage if `!respectFormat`
+  void CopyTexImage(GLenum imageTarget, uint32_t level,
+                                    GLenum respecFormat, uvec3 dstOffset,
+                                    const ivec2& srcOffset,
+                                    const uvec2& size) const;
 
- public:
-  void CopyTexImage2D(GLenum target, GLint level, GLenum internalFormat,
-                      GLint x, GLint y, uint32_t width, uint32_t height,
-                      uint32_t depth);
-
-  void CopyTexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                       GLint xOffset, GLint yOffset, GLint zOffset, GLint x,
-                       GLint y, uint32_t width, uint32_t height,
-                       uint32_t depth);
-
-  ////////////////////////////////////
-  // TexImage
-
-  // Implicit width/height uploads
-
- public:
-  void TexImage(uint8_t funcDims, GLenum target, GLint level,
-                GLenum internalFormat, uint32_t width, uint32_t height,
-                uint32_t depth, GLint border, GLenum unpackFormat,
-                GLenum unpackType, UniquePtr<webgl::TexUnpackBlob>&& src);
-
-  ////
-  void TexSubImage(uint8_t funcDims, GLenum target, GLint level, GLint xOffset,
-                   GLint yOffset, GLint zOffset, uint32_t width,
-                   uint32_t height, uint32_t depth, GLenum unpackFormat,
-                   GLenum unpackType, UniquePtr<webgl::TexUnpackBlob>&& src);
-
-  bool ValidateNullPixelUnpackBuffer() {
-    if (mBoundPixelUnpackBuffer) {
-      ErrorInvalidOperation("PIXEL_UNPACK_BUFFER must be null.");
-      return false;
-    }
-    return true;
-  }
+  // TexSubImage if `!respectFormat`
+  void TexImage(GLenum imageTarget, uint32_t level,
+                              GLenum respecFormat, uvec3 offset,
+                              const webgl::PackingInfo&,
+                              const webgl::TexUnpackBlob& src) const;
 
   UniquePtr<webgl::TexUnpackBlob> ToTexUnpackBytes(
       const WebGLTexImageData& imageData);
@@ -1279,7 +1255,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   bool ValidateFramebufferTarget(GLenum target) const;
   bool ValidateInvalidateFramebuffer(GLenum target,
-                                     const nsTArray<GLenum>& attachments,
+                                     const std::vector<GLenum>& attachments,
                                      std::vector<GLenum>* const scopedVector,
                                      GLsizei* const out_glNumAttachments,
                                      const GLenum** const out_glAttachments);
@@ -1505,10 +1481,6 @@ std::string EnumString(GLenum val);
 bool ValidateTexTarget(WebGLContext* webgl, uint8_t funcDims,
                        GLenum rawTexTarget, TexTarget* const out_texTarget,
                        WebGLTexture** const out_tex);
-bool ValidateTexImageTarget(WebGLContext* webgl, uint8_t funcDims,
-                            GLenum rawTexImageTarget,
-                            TexImageTarget* const out_texImageTarget,
-                            WebGLTexture** const out_tex);
 
 class ScopedUnpackReset final {
  private:

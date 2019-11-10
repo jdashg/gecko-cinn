@@ -1062,8 +1062,8 @@ void WebGLFramebuffer::RefreshReadBuffer() const {
 
 ////
 
-void WebGLFramebuffer::DrawBuffers(const nsTArray<GLenum>& buffers) {
-  if (buffers.Length() > mContext->mGLMaxDrawBuffers) {
+void WebGLFramebuffer::DrawBuffers(const std::vector<GLenum>& buffers) {
+  if (buffers.size() > mContext->mGLMaxDrawBuffers) {
     // "An INVALID_VALUE error is generated if `n` is greater than
     // MAX_DRAW_BUFFERS."
     mContext->ErrorInvalidValue(
@@ -1073,9 +1073,9 @@ void WebGLFramebuffer::DrawBuffers(const nsTArray<GLenum>& buffers) {
   }
 
   std::vector<const WebGLFBAttachPoint*> newColorDrawBuffers;
-  newColorDrawBuffers.reserve(buffers.Length());
+  newColorDrawBuffers.reserve(buffers.size());
 
-  for (size_t i = 0; i < buffers.Length(); i++) {
+  for (const auto i : IntegerRange(buffers.size())) {
     // "If the GL is bound to a draw framebuffer object, the `i`th buffer listed
     // in bufs must be COLOR_ATTACHMENTi or NONE. Specifying a buffer out of
     // order, BACK, or COLOR_ATTACHMENTm where `m` is greater than or equal to
@@ -1108,7 +1108,7 @@ void WebGLFramebuffer::DrawBuffers(const nsTArray<GLenum>& buffers) {
 
   ////
 
-  mColorDrawBuffers.swap(newColorDrawBuffers);
+  mColorDrawBuffers = std::move(newColorDrawBuffers);
   RefreshDrawBuffers();  // Calls glDrawBuffers.
 }
 

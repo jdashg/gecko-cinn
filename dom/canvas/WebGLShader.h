@@ -14,7 +14,6 @@
 #include "GLDefs.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/MemoryReporting.h"
-#include "nsString.h"
 #include "nsWrapperCache.h"
 
 #include "WebGLObjectModel.h"
@@ -39,7 +38,7 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
  public:
   // GL funcs
   void CompileShader();
-  void ShaderSource(const nsAString& source);
+  void ShaderSource(const std::string& source);
 
   // Util funcs
   size_t CalcNumSamplerUniforms() const;
@@ -49,10 +48,10 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
   const auto& CompileResults() const { return mCompileResults; }
 
  private:
-  void BindAttribLocation(GLuint prog, const nsAString& userName,
+  void BindAttribLocation(GLuint prog, const std::string& userName,
                           GLuint index) const;
   void MapTransformFeedbackVaryings(
-      const std::vector<nsString>& varyings,
+      const std::vector<std::string>& varyings,
       std::vector<std::string>* out_mappedVaryings) const;
 
  public:
@@ -67,13 +66,13 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
   const GLenum mType;
 
  protected:
-  nsString mSource;
-  nsCString mCleanSource;
+  std::string mSource;
+  std::string mCleanSource;
 
   std::unique_ptr<const webgl::ShaderValidatorResults>
       mCompileResults;  // Never null.
   bool mCompilationSuccessful = false;
-  nsCString mCompilationLog;
+  std::string mCompilationLog;
 };
 
 }  // namespace mozilla
