@@ -82,6 +82,8 @@ bool WebGLParent::RunCommandQueue() {
     return true;
   }
 
+  MOZ_CRASH("todo");
+  /*
   // Drain the queue for up to kMaxWebGLCommandTimeSliceMs, then
   // repeat no sooner than kDrainDelayMs later.
   // TODO: Tune these.
@@ -106,6 +108,7 @@ bool WebGLParent::RunCommandQueue() {
   MOZ_ASSERT(MessageLoop::current());
   MessageLoop::current()->PostDelayedTask(do_AddRef(mRunCommandsRunnable),
                                           kDrainDelayMs);
+  */
   return true;
 }
 

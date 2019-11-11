@@ -63,8 +63,8 @@ WebGLRefPtr<WebGLBuffer>* WebGLContext::ValidateBufferSlot(GLenum target) {
   return slot;
 }
 
-WebGLBuffer* WebGLContext::ValidateBufferSelection(GLenum target) {
-  const auto& slot = ValidateBufferSlot(target);
+WebGLBuffer* WebGLContext::ValidateBufferSelection(GLenum target) const {
+  const auto& slot = const_cast<WebGLContext*>(this)->ValidateBufferSlot(target);
   if (!slot) return nullptr;
   const auto& buffer = *slot;
 

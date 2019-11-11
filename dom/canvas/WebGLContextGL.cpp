@@ -862,9 +862,9 @@ void WebGLContext::LinkProgram(WebGLProgram& prog) {
   }
 }
 
-WebGLPixelStore WebGLContext::PixelStorei(GLenum pname, GLint param) {
+void WebGLContext::PixelStorei(GLenum pname, GLint param) {
   const FuncScope funcScope(*this, "pixelStorei");
-  if (IsContextLost()) return mPixelStore;
+  if (IsContextLost()) return;
 
   if (IsWebGL2()) {
     uint32_t* pValueSlot = nullptr;
@@ -903,39 +903,39 @@ WebGLPixelStore WebGLContext::PixelStorei(GLenum pname, GLint param) {
     }
 
     if (pValueSlot) {
-      if (!ValidateNonNegative("param", param)) return mPixelStore;
+      if (!ValidateNonNegative("param", param)) return;
 
       gl->fPixelStorei(pname, param);
       *pValueSlot = param;
-      return mPixelStore;
+      return;
     }
   }
 
   switch (pname) {
     case UNPACK_FLIP_Y_WEBGL:
       mPixelStore.mFlipY = bool(param);
-      return mPixelStore;
+      return;
 
     case UNPACK_PREMULTIPLY_ALPHA_WEBGL:
       mPixelStore.mPremultiplyAlpha = bool(param);
-      return mPixelStore;
+      return;
 
     case UNPACK_COLORSPACE_CONVERSION_WEBGL:
       switch (param) {
         case LOCAL_GL_NONE:
         case BROWSER_DEFAULT_WEBGL:
           mPixelStore.mColorspaceConversion = param;
-          return mPixelStore;
+          return;
 
         default:
           ErrorInvalidEnumInfo("colorspace conversion parameter", param);
-          return mPixelStore;
+          return;
       }
 
     case UNPACK_REQUIRE_FASTPATH:
       if (IsExtensionEnabled(WebGLExtensionID::MOZ_debug)) {
         mPixelStore.mRequireFastPath = bool(param);
-        return mPixelStore;
+        return;
       }
       break;
 
@@ -952,11 +952,11 @@ WebGLPixelStore WebGLContext::PixelStorei(GLenum pname, GLint param) {
             mPixelStore.mUnpackAlignment = param;
 
           gl->fPixelStorei(pname, param);
-          return mPixelStore;
+          return;
 
         default:
           ErrorInvalidValue("Invalid pack/unpack alignment value.");
-          return mPixelStore;
+          return;
       }
 
     default:
@@ -964,7 +964,7 @@ WebGLPixelStore WebGLContext::PixelStorei(GLenum pname, GLint param) {
   }
 
   ErrorInvalidEnumInfo("pname", pname);
-  return mPixelStore;
+  return;
 }
 
 bool WebGLContext::DoReadPixelsAndConvert(const webgl::FormatInfo* srcFormat,
@@ -1427,7 +1427,7 @@ void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::
   if (!typeOk) {
     ErrorInvalidOperation(
         "Type from function (%s) is incompatible with type in shader (%s).",
-        ToString(t), ToString(locInfo->info.elemType));
+        ToString(t), ToString(locInfo->info.elemType).c_str());
     return;
   }
 
@@ -1558,7 +1558,7 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
       &gl::GLContext::fUniformMatrix4fv};
   const auto func = kFuncList[3 * (a - 2) + (b - 2)];
 
-  (gl->*func)(static_cast<GLint>(loc), elemCount, transpose, data.begin());
+  (gl->*func)(static_cast<GLint>(loc), elemCount, transpose, data.begin().get());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -198,6 +198,11 @@ class ProducerView {
    */
   inline PcqStatus Write(const void* aBuffer, size_t aBufferSize);
 
+  template<typename T>
+  inline PcqStatus Write(const T* src, size_t count) {
+    return Write(reinterpret_cast<const void*>(src), count*sizeof(T));
+  }
+
   /**
    * Serialize aArg using Arg's PcqParamTraits.
    */
@@ -260,6 +265,11 @@ class ConsumerView {
    * be null (in which case the data is skipped)
    */
   inline PcqStatus Read(void* aBuffer, size_t aBufferSize);
+
+  template<typename T>
+  inline PcqStatus Read(T* dest, size_t count) {
+    return Read(reinterpret_cast<void*>(dest), count*sizeof(T));
+  }
 
   /**
    * Calls a Matcher that returns a PcqStatus when told that the next bytes are

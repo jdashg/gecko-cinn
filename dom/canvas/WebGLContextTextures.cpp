@@ -242,34 +242,58 @@ void WebGLContext::TexParameter_base(GLenum rawTexTarget, GLenum pname,
 //////////////////////////////////////////////////////////////////////////////////////////
 // Uploads
 
+static bool IsTexTarget3D(const GLenum texTarget) {
+  switch (texTarget) {
+    case LOCAL_GL_TEXTURE_2D_ARRAY:
+    case LOCAL_GL_TEXTURE_3D:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+
 void WebGLContext::TexStorage(GLenum texTarget,
                                uint32_t levels, GLenum internalFormat,
-                               const uvec3& size) const {
+                               uvec3 size) const {
+  if (!IsTexTarget3D(texTarget)) {
+    size.z = 1;
+  }
   const auto tex = GetActiveTex(texTarget);
   tex->TexStorage(texTarget, levels, internalFormat, size);
 }
 
 void WebGLContext::TexImage(GLenum imageTarget, uint32_t level,
-                            GLenum respecFormat, uvec3 offset,
+                            GLenum respecFormat, uvec3 offset, uvec3 size,
                             const webgl::PackingInfo& pi,
-                            const webgl::TexUnpackBlob& src) const {
+                            const TexImageSource& src,
+                            const dom::HTMLCanvasElement& canvas) const {
   if (respecFormat) {
     offset = {0,0,0};
   }
-  const auto tex = GetActiveTex(ImageToTexTarget(imageTarget));
-  tex->TexImage(imageTarget, level, respecFormat, offset, pi, src);
+  const auto texTarget = ImageToTexTarget(imageTarget);
+  if (!IsTexTarget3D(texTarget)) {
+    size.z = 1;
+  }
+  const auto tex = GetActiveTex(texTarget);
+  tex->TexImage(imageTarget, level, respecFormat, offset, size, pi, src, canvas);
 }
 
 void WebGLContext::CompressedTexImage(bool sub, GLenum imageTarget,
                                       uint32_t level, GLenum format,
-                                      uvec3 offset, const uvec3& size,
+                                      uvec3 offset, uvec3 size,
                                       const Range<const uint8_t>& src,
                                       const uint32_t pboImageSize,
                                       const Maybe<uint64_t> pboOffset) const {
   if (!sub) {
     offset = {0,0,0};
   }
-  const auto tex = GetActiveTex(ImageToTexTarget(imageTarget));
+  const auto texTarget = ImageToTexTarget(imageTarget);
+  if (!IsTexTarget3D(texTarget)) {
+    size.z = 1;
+  }
+  const auto tex = GetActiveTex(texTarget);
   tex->CompressedTexImage(sub, imageTarget, level, format, offset, size,
         src, pboImageSize, pboOffset);
 }

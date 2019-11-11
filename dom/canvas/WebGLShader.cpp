@@ -49,22 +49,19 @@ static bool SubstringStartsWith(const std::string& testStr, size_t offset,
 
 static void GetCompilationStatusAndLog(gl::GLContext* gl, GLuint shader,
                                        bool* const out_success,
-                                       nsACString* const out_log) {
+                                       std::string* const out_log) {
   GLint compileStatus = LOCAL_GL_FALSE;
   gl->fGetShaderiv(shader, LOCAL_GL_COMPILE_STATUS, &compileStatus);
 
   // It's simpler if we always get the log.
   GLint lenWithNull = 0;
   gl->fGetShaderiv(shader, LOCAL_GL_INFO_LOG_LENGTH, &lenWithNull);
-
-  if (lenWithNull > 1) {
-    // SetLength takes the length without the null.
-    out_log->SetLength(lenWithNull - 1);
-    gl->fGetShaderInfoLog(shader, lenWithNull, nullptr,
-                          out_log->BeginWriting());
-  } else {
-    out_log->SetLength(0);
+  if (lenWithNull < 1) {
+    lenWithNull = 1;
   }
+  std::vector<char> buffer(lenWithNull);
+  gl->fGetShaderInfoLog(shader, buffer.size(), nullptr, buffer.data());
+  *out_log = buffer.data();
 
   *out_success = (compileStatus == LOCAL_GL_TRUE);
 }
@@ -103,7 +100,7 @@ void WebGLShader::CompileShader() {
     MOZ_ASSERT(validator);
 
     mCompileResults =
-        validator->ValidateAndTranslate(mSource.BeginReading());
+        validator->ValidateAndTranslate(mSource.c_str());
   }
 
   mCompilationLog = mCompileResults->mInfoLog.c_str();
@@ -113,7 +110,7 @@ void WebGLShader::CompileShader() {
     printf_stderr("\n==== \\/ \\/ \\/ ====\n");
     if (success) {
       const auto& translated = mCompileResults->mObjectCode;
-      PrintLongString(translated.data(), translated.length());
+      PrintLongString(translated.data(), translated.size());
     } else {
       printf_stderr("Validation failed:\n%s",
                     mCompileResults->mInfoLog.c_str());
@@ -188,9 +185,9 @@ void WebGLShader::MapTransformFeedbackVaryings(
 
 size_t WebGLShader::SizeOfIncludingThis(MallocSizeOf mallocSizeOf) const {
   return mallocSizeOf(this) +
-         mSource.SizeOfExcludingThisIfUnshared(mallocSizeOf) +
+         mSource.size()+1 +
          mCompileResults->SizeOfIncludingThis(mallocSizeOf) +
-         mCompilationLog.SizeOfExcludingThisIfUnshared(mallocSizeOf);
+         mCompilationLog.size()+1;
 }
 
 void WebGLShader::Delete() {

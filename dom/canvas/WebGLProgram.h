@@ -85,7 +85,6 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
   WebGLProgram* const prog;
   const GLenum transformFeedbackBufferMode;
 
-  std::vector<UniformBlockInfo> uniformBlocks;
   std::unordered_map<uint8_t, const FragOutputInfo> fragOutputs;
   uint8_t zLayerCount = 1;
 
@@ -101,6 +100,8 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
 
   std::vector<std::unique_ptr<SamplerUniformInfo>> samplerUniforms;
   std::unordered_map<uint32_t, LocationInfo> locationMap;
+
+  mutable std::vector<UniformBlockInfo> uniformBlocks;
 
   //////
 
