@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <queue>
+#include <regex>
 
 #include "AccessCheck.h"
 #include "CompositableHost.h"
@@ -1910,38 +1911,6 @@ bool WebGLContext::ValidateArrayBufferView(const dom::ArrayBufferView& view,
   return true;
 }
 
-bool ClientWebGLContext::ValidateArrayBufferView(
-    const dom::ArrayBufferView& view, GLuint elemOffset,
-    GLuint elemCountOverride, const GLenum errorEnum, uint8_t** const out_bytes,
-    size_t* const out_byteLen) {
-  view.ComputeLengthAndData();
-  uint8_t* const bytes = view.DataAllowShared();
-  const size_t byteLen = view.LengthAllowShared();
-
-  const auto& elemSize = SizeOfViewElem(view);
-
-  size_t elemCount = byteLen / elemSize;
-  if (elemOffset > elemCount) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE,
-                 "Invalid offset into ArrayBufferView.");
-    return false;
-  }
-  elemCount -= elemOffset;
-
-  if (elemCountOverride) {
-    if (elemCountOverride > elemCount) {
-      EnqueueError(LOCAL_GL_INVALID_VALUE,
-                   "Invalid sub-length for ArrayBufferView.");
-      return false;
-    }
-    elemCount = elemCountOverride;
-  }
-
-  *out_bytes = bytes + (elemOffset * elemSize);
-  *out_byteLen = elemCount * elemSize;
-  return true;
-}
-
 ////
 
 void WebGLContext::UpdateMaxDrawBuffers() {
@@ -2176,50 +2145,9 @@ Maybe<std::string> WebGLContext::GetString(const GLenum pname) const {
   }
 }
 
-webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram* const prog,
-        const uint32_t loc) const {
-  webgl::GetUniformData ret;
-  [&]() {
-    if (!prog) return;
-
-    const auto& uniform = prog->GetUniformInfo(loc);
-    if (!uniform) return;
-    const auto iloc = static_cast<int32_t>(loc);
-
-    switch (uniform->baseType) {
-      case webgl::AttribBaseType::Boolean: {
-        const auto ptr = reinterpret_cast<bool*>(ret.data);
-        gl->fGetUniformfv(prog->mGLName, iloc, ptr);
-        break;
-      }
-      case webgl::AttribBaseType::Float: {
-        const auto ptr = reinterpret_cast<float*>(ret.data);
-        gl->fGetUniformfv(prog->mGLName, iloc, ptr);
-        break;
-      }
-      case webgl::AttribBaseType::Int: {
-        const auto ptr = reinterpret_cast<int32_t*>(ret.data);
-        gl->fGetUniformiv(prog->mGLName, iloc, ptr);
-        break;
-      }
-      case webgl::AttribBaseType::Uint: {
-        const auto ptr = reinterpret_cast<uint32_t*>(ret.data);
-        gl->fGetUniformuiv(prog->mGLName, iloc, ptr);
-        break;
-      }
-    }
-  }();
-  return ret;
-}
-
 // ---------------------------------
 
-struct IndexedName final {
-  std::string name;
-  uint64_t index;
-};
-
-static Maybe<IndexedName> ParseIndexed(const std::string& str) {
+Maybe<webgl::IndexedName> ParseIndexed(const std::string& str) {
   static const std::regex kRegex("(.*)\\[([0-9]+)\\]");
 
   std::smatch match;
@@ -2279,7 +2207,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
     const auto fnUnmapName = [&](const std::string& mappedName) {
       const auto parts = ExplodeName(mappedName);
 
-      ostringstream ret;
+      std::ostringstream ret;
       for (const auto& part : parts) {
         const auto maybe = MaybeFind(nameUnmap, part);
         if (maybe) {
@@ -2295,7 +2223,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
     {
       const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_ATTRIBUTES);
-      ret.activeAttribs.reserve(count);
+      ret.active.activeAttribs.reserve(count);
       for (const auto& i : IntegerRange(count)) {
         GLsizei lengthWithoutNull = 0;
         GLint elemCount = 0;  // `size`
@@ -2313,7 +2241,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
         const auto userName = fnUnmapName(mappedName);
 
-        const loc = gl.fGetAttribLocation(prog, userName.c_str());
+        auto loc = gl.fGetAttribLocation(prog, userName.c_str());
         if (mappedName.find("gl_") == 0) {
           // Bug 1328559: Appears problematic on ANGLE and OSX, but not Linux or
           // Win+GL.
@@ -2324,7 +2252,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         printf_stderr("[attrib %u/%u] @%i %s->%s\n", i, count, loc,
                       userName.c_str(), mappedName.c_str());
   #endif
-        ret.activeAttribs.emplace_back(elemType, elemCount, userName, loc);
+        ret.active.activeAttribs.emplace_back(elemType, elemCount, userName, loc);
       }
     }
 
@@ -2332,7 +2260,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
     {
       const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORMS);
-      ret.activeUniforms.reserve(count);
+      ret.active.activeUniforms.reserve(count);
 
       std::vector<GLint> blockIndexList(count, -1);
       std::vector<GLint> blockOffsetList(count, -1);
@@ -2408,7 +2336,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
         // -
 
-        auto& info = ret.activeUniforms.emplace_back(elemType, elemCount, userName);
+        auto& info = ret.active.activeUniforms.emplace_back(elemType, elemCount, userName);
         info.block_index = blockIndexList[i];
         info.block_offset = blockOffsetList[i];
         info.block_arrayStride = blockArrayStrideList[i];
@@ -2446,7 +2374,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
       // active uniform blocks
       {
         const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORM_BLOCKS);
-        ret.activeUniformBlocks.reserve(count);
+        ret.active.activeUniformBlocks.reserve(count);
 
         for (const auto& i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
@@ -2457,7 +2385,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
           // -
 
-          auto& info = ret.activeUniformBlocks.emplace_back(userName);
+          auto& info = ret.active.activeUniformBlocks.emplace_back(userName);
           GLint val = 0;
 
           gl.fGetActiveUniformBlockiv(prog, i, LOCAL_GL_UNIFORM_BLOCK_DATA_SIZE, &val);
@@ -2482,7 +2410,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
       // active tf varyings
       {
         const auto count = fnGetProgramui(LOCAL_GL_TRANSFORM_FEEDBACK_VARYINGS);
-        ret.activeTfVaryings.reserve(count);
+        ret.active.activeTfVaryings.reserve(count);
 
         for (const auto& i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
@@ -2493,7 +2421,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
           const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
           const auto userName = fnUnmapName(mappedName);
 
-          ret.activeTfVaryings.emplace_back(elemType, elemCount, userName);
+          ret.active.activeTfVaryings.emplace_back(elemType, elemCount, userName);
         }
       }
     } // if webgl2

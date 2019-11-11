@@ -17,14 +17,11 @@ namespace ipc {
 template <typename T>
 struct PcqParamTraits;
 
-template <typename WebGLType>
-struct IsTriviallySerializable<WebGLId<WebGLType>> : TrueType {};
-
 template <>
 struct IsTriviallySerializable<FloatOrInt> : TrueType {};
 
 template <>
-struct IsTriviallySerializable<WebGLShaderPrecisionFormat> : TrueType {};
+struct IsTriviallySerializable<webgl::ShaderPrecisionFormat> : TrueType {};
 
 template <>
 struct IsTriviallySerializable<WebGLContextOptions> : TrueType {};
@@ -40,6 +37,8 @@ struct IsTriviallySerializable<WebGLTexPboOffset> : TrueType {};
 
 template <>
 struct IsTriviallySerializable<webgl::ExtensionBits> : TrueType {};
+template <>
+struct IsTriviallySerializable<webgl::GetUniformData> : TrueType {};
 
 template <>
 struct IsTriviallySerializable<ICRData> : TrueType {};
@@ -49,6 +48,8 @@ struct IsTriviallySerializable<gfx::IntSize> : TrueType {};
 
 template <typename T>
 struct IsTriviallySerializable<avec2<T>> : TrueType {};
+template <typename T>
+struct IsTriviallySerializable<avec3<T>> : TrueType {};
 
 template <>
 struct IsTriviallySerializable<webgl::TexUnpackBlob> : TrueType {};
@@ -403,6 +404,38 @@ struct PcqParamTraits<std::string> {
     auto size = aView.template MinSizeParam<size_t>();
     if (aArg) {
       size += aArg->size();
+    }
+    return size;
+  }
+};
+
+template <typename U>
+struct PcqParamTraits<std::vector<U>> {
+  using T = std::string;
+
+  static PcqStatus Write(ProducerView& aProducerView, const T& aArg) {
+    auto status = aProducerView.WriteParam(aArg.size());
+    if (!status) return status;
+    status = aProducerView.Write(aArg.data(), aArg.size());
+    return status;
+  }
+
+  static PcqStatus Read(ConsumerView& aConsumerView, T* const aArg) {
+    MOZ_CRASH("no way to fallibly resize vectors without exceptions");
+    size_t size;
+    auto status = aConsumerView.ReadParam(&size);
+    if (!status) return status;
+
+    aArg->resize(size);
+    status = aConsumerView.Read(aArg->data(), aArg->size());
+    return status;
+  }
+
+  template <typename View>
+  static size_t MinSize(View& aView, const T* const aArg) {
+    auto size = aView.template MinSizeParam<size_t>();
+    if (aArg) {
+      size += aArg->size() * sizeof(U);
     }
     return size;
   }

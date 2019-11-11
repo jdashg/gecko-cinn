@@ -263,6 +263,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   friend const webgl::CachedDrawFetchLimits* ValidateDraw(WebGLContext*, GLenum,
                                                           uint32_t);
+  friend RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
+    WebGLProgram* prog, gl::GLContext* gl);
 
   enum {
     UNPACK_FLIP_Y_WEBGL = 0x9240,
@@ -581,7 +583,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   void LineWidth(GLfloat width);
   void LinkProgram(WebGLProgram& prog);
-  WebGLPixelStore PixelStorei(GLenum pname, GLint param);
+  void PixelStorei(GLenum pname, GLint param);
   void PolygonOffset(GLfloat factor, GLfloat units);
 
   already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
@@ -812,7 +814,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // CompressedTexSubImage if `sub`
   void CompressedTexImage(bool sub, GLenum imageTarget,
                                         uint32_t level, GLenum format,
-                                        uvec3 offset, const uvec3& size,
+                                        uvec3 offset, uvec3 size,
                                         const Range<const uint8_t>& src,
                                         const uint32_t pboImageSize,
                                         const Maybe<uint64_t> pboOffset) const;
@@ -825,9 +827,12 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   // TexSubImage if `!respectFormat`
   void TexImage(GLenum imageTarget, uint32_t level,
-                              GLenum respecFormat, uvec3 offset,
-                              const webgl::PackingInfo&,
-                              const webgl::TexUnpackBlob& src) const;
+                              GLenum respecFormat, uvec3 offset, uvec3 size,
+                              const webgl::PackingInfo& pi,
+                              const TexImageSource& src,
+                              const dom::HTMLCanvasElement& canvas) const;
+
+  void TexStorage(GLenum texTarget, uint32_t levels, GLenum sizedFormat, uvec3 size) const;
 
   UniquePtr<webgl::TexUnpackBlob> ToTexUnpackBytes(
       const WebGLTexImageData& imageData);
@@ -874,9 +879,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
 
-  void VertexAttribAnyPointer(bool isFuncInt, GLuint index, GLint size,
-                              GLenum type, bool normalized, GLsizei stride,
-                              WebGLintptr byteOffset);
+  void VertexAttribPointer(bool isFuncInt, GLuint index, GLint size,
+                              GLenum type, bool normalized, uint32_t stride,
+                              uint64_t byteOffset);
 
  public:
   void VertexAttribDivisor(GLuint index, GLuint divisor);
@@ -1088,7 +1093,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   WebGLRefPtr<WebGLBuffer>* ValidateBufferSlot(GLenum target);
 
  public:
-  WebGLBuffer* ValidateBufferSelection(GLenum target);
+  WebGLBuffer* ValidateBufferSelection(GLenum target) const;
 
  protected:
   IndexedBufferBinding* ValidateIndexedBufferSlot(GLenum target, GLuint index);
@@ -1098,6 +1103,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       WebGLRefPtr<WebGLBuffer>** const out_genericBinding,
       IndexedBufferBinding** const out_indexedBinding);
 
+ public:
   bool ValidateNonNegative(const char* argName, int64_t val) const {
     if (MOZ_UNLIKELY(val < 0)) {
       ErrorInvalidValue("`%s` must be non-negative.", argName);
@@ -1106,7 +1112,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     return true;
   }
 
- public:
   template <typename T>
   bool ValidateNonNull(const char* const argName,
                        const dom::Nullable<T>& maybe) const {
@@ -1122,9 +1127,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                GLenum errorVal, uint8_t** const out_bytes,
                                size_t* const out_byteLen) const;
 
- protected:
   ////
 
+ protected:
   void DestroyResourcesAndContext();
 
   // helpers
@@ -1292,6 +1297,15 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool ValidatePackSize(uint32_t width, uint32_t height, uint8_t bytesPerPixel,
                         uint32_t* const out_rowStride,
                         uint32_t* const out_endOffset);
+
+  UniquePtr<webgl::TexUnpackBlob> FromDomElem(const dom::HTMLCanvasElement& canvas,
+    TexImageTarget target, uvec3 size,
+    const dom::Element& elem, ErrorResult* const out_error) const;
+
+  UniquePtr<webgl::TexUnpackBlob> From(const dom::HTMLCanvasElement& canvas,
+    TexImageTarget target, const uvec3& size, const TexImageSource& src,
+    dom::Uint8ClampedArray* const scopedArr) const;
+
 
   ////////////////////////////////////
 
@@ -1530,6 +1544,7 @@ class ScopedDrawCallWrapper final {
 };
 
 namespace webgl {
+
 class ScopedPrepForResourceClear final {
   const WebGLContext& webgl;
 
@@ -1537,7 +1552,18 @@ class ScopedPrepForResourceClear final {
   explicit ScopedPrepForResourceClear(const WebGLContext&);
   ~ScopedPrepForResourceClear();
 };
+
+struct IndexedName final {
+  std::string name;
+  uint64_t index;
+};
+
 }  // namespace webgl
+
+webgl::LinkActiveInfo GetLinkActiveInfo(gl::GLContext& gl, const GLuint prog, const bool webgl2,
+                                 const std::unordered_map<std::string, std::string>& nameUnmap);
+
+Maybe<webgl::IndexedName> ParseIndexed(const std::string& str);
 
 }  // namespace mozilla
 

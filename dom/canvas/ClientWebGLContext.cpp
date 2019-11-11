@@ -2111,7 +2111,7 @@ void ClientWebGLContext::LineWidth(GLfloat width) {
 }
 
 void ClientWebGLContext::PixelStorei(GLenum pname, GLint param) {
-  mPixelStore = Run<RPROC(PixelStorei)>(pname, param);
+  Run<RPROC(PixelStorei)>(pname, param);
 }
 
 void ClientWebGLContext::PolygonOffset(GLfloat factor, GLfloat units) {
@@ -2835,6 +2835,28 @@ static inline uvec3 CastUvec3(const ivec3& val) {
                static_cast<uint32_t>(val.z)};
 }
 
+Maybe<Range<const uint8_t>> GetRangeFromView(
+    const dom::ArrayBufferView& view, GLuint elemOffset,
+    GLuint elemCountOverride) {
+  auto range = MakeRange(view);
+  //view.ComputeLengthAndData();
+  //const auto bytes = view.DataAllowShared();
+  //const auto byteLen = view.LengthAllowShared();
+
+  const auto elemSize = SizeOfViewElem(view);
+  auto elemCount = range.length() / elemSize;
+  if (elemOffset > elemCount) return {};
+  elemCount -= elemOffset;
+
+  if (elemCountOverride) {
+    if (elemCountOverride > elemCount) return {};
+    elemCount = elemCountOverride;
+  }
+  return Some({range.begin(), elemCount});
+}
+
+// -
+
 void ClientWebGLContext::TexStorage(uint8_t funcDims, GLenum target, GLsizei levels,
                                     GLenum internalFormat, const ivec3& size) const {
   const FuncScope funcScope(*this, "texStorage[23]D");
@@ -2855,15 +2877,15 @@ void ClientWebGLContext::TexImage(uint8_t funcDims, GLenum imageTarget, GLint le
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
-  #error TexImageSource to TexUnpackBlob
+  // TODO: Convert TexImageSource into something IPC-capable.
   Run<RPROC(TexImage)>(imageTarget, static_cast<uint32_t>(level), respecFormat,
-                CastUvec3(offset), CastUvec3(size), pi, src):
+                       CastUvec3(offset), CastUvec3(size), pi, src, *GetCanvas()):
 }
 
 void ClientWebGLContext::CompressedTexImage(
     uint8_t funcDims, bool sub, GLenum imageTarget, GLint level, GLenum format,
     const ivec3& offset, const ivec3& size, GLint border,
-    const webgl::TexImageSource& src, uint32_t pboImageSize) const {
+    const webgl::TexImageSource& src, GLsizei pboImageSize) const {
   const FuncScope funcScope(*this, "compressedTex(Sub)Image[23]D");
   if (IsContextLost()) return;
   if (!ValidateTexTarget(funcDims, ImageToTexTarget(imageTarget))) return;
@@ -2871,10 +2893,27 @@ void ClientWebGLContext::CompressedTexImage(
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
-  #error TexImageSource to Range<const uint8_t>
+
+  RawBuffer<const uint8_t> bufferView;
+  Maybe<uint64_t> pboOffset;
+  if (src.mView) {
+    const auto range = GetRangeFromView(*src.mView, src.mViewElemOffset,
+     mViewElemLengthOverride);
+    if (!range) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "`source` too small.");
+      return;
+    }
+    bufferView = RawBuffer<const uint8_t>(range.begin(), range.length());
+  } else if (src.mPboOffset) {
+    if (!ValidateNonNegative("offset", *src.mPboOffset)) return;
+    pboOffset = Some(*src.mPboOffset);
+  } else {
+    MOZ_CRASH("impossible");
+  }
+
   Run<RPROC(CompressedTexImage)>(sub, imageTarget, static_cast<uint32_t>(level),
-                                 format, CastUvec3(offset), CastUvec3(size), data,
-                                 pboImageSize, pboOffset);
+                                 format, CastUvec3(offset), CastUvec3(size), bufferView,
+                                 static_cast<uint32_t>(pboImageSize), pboOffset);
 }
 
 void ClientWebGLContext::CopyTexImage(uint8_t funcDims, GLenum imageTarget, GLint level,
@@ -3075,25 +3114,42 @@ void ClientWebGLContext::VertexAttribDivisor(GLuint index, GLuint divisor) {
 
 // -
 
-void ClientWebGLContext::VertexAttribIPointer(GLuint index, GLint size,
-                                              GLenum type, GLsizei stride,
-                                              WebGLintptr byteOffset) {
-  const bool isFuncInt = true;
-  const bool normalized = false;
-  Run<RPROC(VertexAttribAnyPointer)>(isFuncInt, index, size, type, normalized,
-                                     stride, byteOffset,
-                                     FuncScopeId::vertexAttribIPointer);
-}
+void ClientWebGLContext::VertexAttribPointerImpl(bool isFuncInt, GLuint index, GLint size,
+                                             GLenum type, bool normalized,
+                                             GLsizei iStride,
+                                             WebGLintptr iByteOffset) {
+  const FuncScope funcScope(*this, "vertexAttribI?Pointer");
+  if (IsContextLost()) return;
+  if (!ValidateNonNegative("stride", iStride)) return;
+  if (!ValidateNonNegative("byteOffset", iByteOffset)) return;
+  const auto stride = static_cast<uint64_t>(iStride);
+  const auto byteOffset = static_cast<uint64_t>(iByteOffset);
 
-void ClientWebGLContext::VertexAttribPointer(GLuint index, GLint size,
-                                             GLenum type,
-                                             WebGLboolean normalized,
-                                             GLsizei stride,
-                                             WebGLintptr byteOffset) {
-  const bool isFuncInt = false;
-  Run<RPROC(VertexAttribAnyPointer)>(isFuncInt, index, size, type, normalized,
-                                     stride, byteOffset,
-                                     FuncScopeId::vertexAttribPointer);
+  const auto err = CheckVertexAttribPointer(IsWebGL2(),isFuncInt, size, type,
+    normalized, stride, byteOffset);
+  if (err) {
+    EnqueueError(err->type, err->info);
+    return;
+  }
+
+  auto& list = state.mBoundVao->mAttribBuffers;
+  if (index >= list.size()) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` (%u) must be < MAX_VERTEX_ATTRIBS.", index);
+    return;
+  }
+
+  const auto& state = *(mNotLost->generation);
+  const auto buffer = state.mBoundBufferByTarget[LOCAL_GL_ARRAY_BUFFER];
+
+  if (!buffer && byteOffset) {
+    return Some({LOCAL_GL_INVALID_OPERATION,
+      "If ARRAY_BUFFER is null, byteOffset must be zero."});
+  }
+
+  Run<RPROC(VertexAttribPointer)>(isFuncInt, index, size, type, normalized,
+                                  stride, byteOffset);
+
+  list[index] = buffer;
 }
 
 // -------------------------------- Drawing -------------------------------

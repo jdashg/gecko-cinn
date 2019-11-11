@@ -119,20 +119,18 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
         if (loc == -1) loc = 0;
 
         const auto info = webgl::FragOutputInfo{
-            uint8_t(loc), nsCString(cur.name.c_str()),
-            nsCString(cur.mappedName.c_str()), FragOutputBaseType(cur.type)};
+            uint8_t(loc), cur.name,
+            cur.mappedName, FragOutputBaseType(cur.type)};
         if (!cur.isArray()) {
           fnAddInfo(info);
           continue;
         }
         MOZ_ASSERT(cur.arraySizes.size() == 1);
         for (uint32_t i = 0; i < cur.arraySizes[0]; ++i) {
-          const auto indexStr = nsPrintfCString("[%u]", i);
+          const auto indexStr = std::string("[") + std::to_string(i) + "]";
 
-          auto userName = info.userName;
-          userName.Append(indexStr);
-          auto mappedName = info.mappedName;
-          mappedName.Append(indexStr);
+          const auto userName = info.userName + indexStr;
+          const auto mappedName = info.mappedName + indexStr;
 
           const auto indexedInfo = webgl::FragOutputInfo{
               uint8_t(info.loc + i), userName, mappedName, info.baseType};
@@ -154,7 +152,7 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
       }
 
       for (uint32_t i = 0; i < drawBuffers; ++i) {
-        const auto& name = nsPrintfCString("gl_FragData[%u]", i);
+        const auto name = std::string("gl_FragData[") + std::to_string(i) + "]";
         const auto info = webgl::FragOutputInfo{uint8_t(i), name, name,
                                                 webgl::TextureBaseType::Float};
         fnAddInfo(info);
@@ -179,8 +177,8 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
       nameMap.insert(pair);
     }
   };
-  fnAccum(prog->VertShader());
-  fnAccum(prog->FragShader());
+  fnAccum(*prog->VertShader());
+  fnAccum(*prog->FragShader());
 
   // -
 
@@ -189,19 +187,20 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
     nameUnmap.insert({pair.second, pair.first});
   }
 
-  info->active = GetLinkActiveInfo(*gl, prog->mGLName, IsWebGL2, nameUnmap);
+  info->active = GetLinkActiveInfo(*gl, prog->mGLName, webgl->IsWebGL2(), nameUnmap);
 
   // -
 
   for (const auto& uniform : info->active.activeUniforms) {
-    SamplerUniformInfo* samplerInfo = nullptr;
-    const auto baseType = SamplerBaseType(uniform.elemType);
+    const auto& elemType = uniform.elemType;
+    webgl::SamplerUniformInfo* samplerInfo = nullptr;
+    const auto baseType = SamplerBaseType(elemType);
     if (baseType) {
-      const bool isShadowSampler = IsShadowSampler(uniform.elemType);
+      const bool isShadowSampler = IsShadowSampler(elemType);
 
-      const auto* texList = &webgl->mBound2DTextures;
+      auto* texList = &webgl->mBound2DTextures;
 
-      switch (activeInfo->mElemType) {
+      switch (elemType) {
         case LOCAL_GL_SAMPLER_2D:
         case LOCAL_GL_SAMPLER_2D_SHADOW:
         case LOCAL_GL_INT_SAMPLER_2D:
@@ -229,14 +228,14 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
           break;
       }
 
-      auto info = std::make_unique<SamplerUniformInfo>(*texList, baseType, isShadowSampler);
-      auto& ref = info->samplerUniforms.push_back(std::move(samplerInfo));
-      ref->texUnits.resize(uniform.elemCount);
-      samplerInfo = ref.get();
+      auto sui = std::make_unique<webgl::SamplerUniformInfo>(*texList, baseType, isShadowSampler);
+      sui->texUnits.resize(uniform.elemCount);
+      samplerInfo = sui.get();
+      info->samplerUniforms.push_back(std::move(sui));
     }
 
     for (const auto& pair : uniform.locByIndex) {
-      info->samplerLocationMap.insert({pair.second, {uniform, pair.first, samplerInfo}});
+      info->locationMap.insert({pair.second, {uniform, pair.first, samplerInfo}});
     }
   }
 
@@ -480,7 +479,7 @@ void WebGLProgram::BindAttribLocation(GLuint loc, const std::string& name) {
 
 void WebGLProgram::DetachShader(const WebGLShader& shader) {
   WebGLRefPtr<WebGLShader>* shaderSlot;
-  switch (shader->mType) {
+  switch (shader.mType) {
     case LOCAL_GL_VERTEX_SHADER:
       shaderSlot = &mVertShader;
       break;
@@ -515,7 +514,7 @@ void WebGLProgram::UniformBlockBinding(GLuint uniformBlockIndex,
     return;
   }
 
-  const auto& uniformBlocks = LinkInfo()->uniformBlocks;
+  auto& uniformBlocks = LinkInfo()->uniformBlocks;
   if (uniformBlockIndex >= uniformBlocks.size()) {
     mContext->ErrorInvalidValue("Index %u invalid.", uniformBlockIndex);
     return;
@@ -541,18 +540,22 @@ void WebGLProgram::UniformBlockBinding(GLuint uniformBlockIndex,
 
 bool WebGLProgram::ValidateForLink() {
   if (!mVertShader || !mVertShader->IsCompiled()) {
-    mLinkLog.AssignLiteral("Must have a compiled vertex shader attached.");
+    mLinkLog = "Must have a compiled vertex shader attached.";
     return false;
   }
   const auto& vertInfo = *mVertShader->CompileResults();
 
   if (!mFragShader || !mFragShader->IsCompiled()) {
-    mLinkLog.AssignLiteral("Must have an compiled fragment shader attached.");
+    mLinkLog = "Must have an compiled fragment shader attached.";
     return false;
   }
   const auto& fragInfo = *mFragShader->CompileResults();
 
-  if (!fragInfo.CanLinkTo(vertInfo, &mLinkLog)) return false;
+  nsCString errInfo;
+  if (!fragInfo.CanLinkTo(vertInfo, &errInfo)) {
+    mLinkLog = errInfo.BeginReading();
+    return false;
+  }
 
   const auto& gl = mContext->gl;
 
@@ -563,18 +566,18 @@ bool WebGLProgram::ValidateForLink() {
         mVertShader->CalcNumSamplerUniforms() +
         mFragShader->CalcNumSamplerUniforms();
     if (numSamplerUniforms_upperBound > 16) {
-      mLinkLog.AssignLiteral(
+      mLinkLog =
           "Programs with more than 16 samplers are disallowed on"
-          " Mesa drivers to avoid crashing.");
+          " Mesa drivers to avoid crashing.";
       return false;
     }
 
     // Bug 1203135: Mesa crashes internally if we exceed the reported maximum
     // attribute count.
     if (mVertShader->NumAttributes() > mContext->MaxVertexAttribs()) {
-      mLinkLog.AssignLiteral(
+      mLinkLog =
           "Number of attributes exceeds Mesa's reported max"
-          " attribute count.");
+          " attribute count.";
       return false;
     }
   }
@@ -592,11 +595,11 @@ void WebGLProgram::LinkProgram() {
 
   // as some of the validation changes program state
 
-  mLinkLog.Truncate();
+  mLinkLog = {};
   mMostRecentLinkInfo = nullptr;
 
   if (!ValidateForLink()) {
-    mContext->GenerateWarning("%s", mLinkLog.BeginReading());
+    mContext->GenerateWarning("%s", mLinkLog.c_str());
     return;
   }
 
@@ -632,11 +635,11 @@ void WebGLProgram::LinkProgram() {
   LinkAndUpdate();
 
   if (mMostRecentLinkInfo) {
-    nsCString postLinkLog;
+    std::string postLinkLog;
     if (ValidateAfterTentativeLink(&postLinkLog)) return;
 
     mMostRecentLinkInfo = nullptr;
-    mLinkLog = postLinkLog;
+    mLinkLog = std::move(postLinkLog);
   }
 
   // Failed link.
@@ -646,11 +649,11 @@ void WebGLProgram::LinkProgram() {
     // which is why we can't do anything in compileShader. In practice we could
     // report in compileShader the translation errors generated by ANGLE,
     // but it seems saner to keep a single way of obtaining shader infologs.
-    if (!mLinkLog.IsEmpty()) {
+    if (!mLinkLog.empty()) {
       mContext->GenerateWarning(
           "Failed to link, leaving the following"
           " log:\n%s\n",
-          mLinkLog.BeginReading());
+          mLinkLog.c_str());
     }
   }
 }
@@ -750,7 +753,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
         *out_linkLog = nsPrintfCString(
             "Attrib name conflicts with uniform name:"
             " %s",
-            attribName.c_str()).BeginReading();
+            name.c_str()).BeginReading();
         return false;
       }
     }
@@ -783,7 +786,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
 
   // Forbid too many components for specified buffer mode
   const auto& activeTfVaryings = linkInfo->active.activeTfVaryings;
-  MOZ_ASSERT(mNextLink_TransformFeedbackVaryings.Length() == activeTfVaryings.size());
+  MOZ_ASSERT(mNextLink_TransformFeedbackVaryings.size() == activeTfVaryings.size());
   if (!activeTfVaryings.empty()) {
     GLuint maxComponentsPerIndex = 0;
     switch (linkInfo->transformFeedbackBufferMode) {

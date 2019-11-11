@@ -13,6 +13,8 @@
 #include "nsString.h"
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
+#include "WebGLSync.h"
+#include "WebGLTransformFeedback.h"
 #include "mozilla/dom/WebGLTypes.h"
 
 #ifndef WEBGL_BRIDGE_LOG_
@@ -107,6 +109,39 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
     AutoResolveT(const HostWebGLContext& parent, const ObjectId id) : mParent(parent), mId(id) {}
 
+    template<typename T>
+    T* As() const;// = delete;
+
+#define _(X) \
+    template<> \
+    WebGL##X* As<WebGL##X>() const { \
+      return Find(mParent.m ## X ## Map, mId).get(); \
+    }
+
+    _(Framebuffer)
+    _(Program)
+    _(Query)
+    _(Renderbuffer)
+    _(Sampler)
+    _(Shader)
+    _(Sync)
+    _(Texture)
+    _(TransformFeedback)
+    _(VertexArray)
+
+#undef _
+
+    template<typename T>
+    MOZ_IMPLICIT operator T*() const {
+      return As<T>();
+    }
+
+    template<typename T>
+    MOZ_IMPLICIT operator const T*() const {
+      return As<T>();
+    }
+
+    /*
     MOZ_IMPLICIT operator WebGLBuffer*() const {
       return Find(mParent.mBufferMap, mId).get();
     }
@@ -140,6 +175,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     MOZ_IMPLICIT operator WebGLVertexArray*() const {
       return Find(mParent.mVertexArrayMap, mId).get();
     }
+    */
 
     explicit operator bool() const { return static_cast<bool>(mId); }
 
@@ -150,7 +186,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
       template<typename T>
       MOZ_IMPLICIT operator T&() const {
-        const auto ptr = T*{mPtr};
+        //const auto ptr = mPtr.operator T*();
+        const auto ptr = mPtr.As<T>();
+        return *ptr;
+      }
+      template<typename T>
+      MOZ_IMPLICIT operator const T&() const {
+        const auto ptr = mPtr.As<T>();
         return *ptr;
       }
     };
@@ -552,11 +594,11 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void CompressedTexImage(bool sub, GLenum imageTarget,
                                         uint32_t level, GLenum format,
                                         const uvec3& offset, const uvec3& size,
-                                        const RawBuffer<>& src,
+                                        const RawBuffer<const uint8_t>& src,
                                         const uint32_t pboImageSize,
                                         const Maybe<uint64_t> pboOffset) const {
-    mContext->CompressedTexImage(sub, imageTarget, level, format, offset, size, src,
-                                        pboImageSize, pboOffset);
+    mContext->CompressedTexImage(sub, imageTarget, level, format, offset, size,
+                                  MakeRange(src), pboImageSize, pboOffset);
   }
 
   // CopyTexSubImage if `!respectFormat`
@@ -571,8 +613,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void TexImage(GLenum imageTarget, uint32_t level,
                               GLenum respecFormat, const uvec3& offset, const uvec3& size,
                               const webgl::PackingInfo& pi,
-                              webgl::TexUnpackBlob& src) const {
-    mContext->TexImage(imageTarget, level, respecFormat, offset, size, pi, src);
+                              const TexImageSource& src,
+                              const dom::HTMLCanvasElement& canvas) const {
+    mContext->TexImage(imageTarget, level, respecFormat, offset, size, pi, src, canvas);
   }
 
   void TexStorage(GLenum texTarget, uint32_t levels,
@@ -599,7 +642,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void ValidateProgram(ObjectId id) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->ValdiateProgram(*obj);
+    mContext->ValidateProgram(*obj);
   }
 
   // ------------------------ Uniforms and attributes ------------------------
@@ -650,9 +693,11 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     return mContext->GetVertexAttrib(index, pname);
   }
 
-  void VertexAttribAnyPointer(bool isFuncInt, GLuint index, GLint size,
-                              GLenum type, bool normalized, GLsizei stride,
-                              WebGLintptr byteOffset, FuncScopeId aFuncId);
+  void VertexAttribPointer(bool isFuncInt, GLuint index, GLint size,
+                              GLenum type, bool normalized, uint32_t stride,
+                              uint64_t byteOffset) const {
+    mContext->VertexAttribPointer(isFuncInt, index, size, type, normalized, stride, byteOffset);
+  }
 
   // --------------------------- Buffer Operations --------------------------
   void ClearBufferTv(GLenum buffer, GLint drawBuffer, const webgl::TypedQuad& data) const {
@@ -706,7 +751,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   GLenum ClientWaitSync(ObjectId id, GLbitfield flags,
                         GLuint64 timeout) const {
     const auto obj = ById(id);
-    if (!obj) return;
+    if (!obj) return LOCAL_GL_WAIT_FAILED;
     return GetWebGL2Context()->ClientWaitSync(*obj, flags, timeout);
   }
 
@@ -818,10 +863,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     return static_cast<WebGL2Context*>(mContext.get());
   }
 
-  mozilla::ipc::Shmem PopShmem() { return mShmemStack.PopLastElement(); }
-
-  nsTArray<mozilla::ipc::Shmem> mShmemStack;
-  ClientWebGLContext* mClientContext;
+  //mozilla::ipc::Shmem PopShmem() { return mShmemStack.PopLastElement(); }
+  //nsTArray<mozilla::ipc::Shmem> mShmemStack;
 };
 
 }  // namespace mozilla

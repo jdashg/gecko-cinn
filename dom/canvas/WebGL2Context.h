@@ -146,6 +146,7 @@ class WebGL2Context final : public WebGLContext {
                            WebGLintptr offset, WebGLsizeiptr size);
   */
   Maybe<double> GetParameter(GLenum pname) override;
+  Maybe<double> GetIndexedParameter(GLenum pname, uint32_t index) const;
 
   // Make the inline version from the superclass visible here.
   using WebGLContext::GetParameter;

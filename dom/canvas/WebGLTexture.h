@@ -193,14 +193,12 @@ class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
                          GLint zOffset, const webgl::PackingInfo& pi,
                          const webgl::TexUnpackBlob* blob);
 
-  bool ValidateTexImageSpecification(TexImageTarget target, GLint level,
-                                     uint32_t width, uint32_t height,
-                                     uint32_t depth,
+  bool ValidateTexImageSpecification(TexImageTarget target, uint32_t level,
+                                     const uvec3& size,
                                      webgl::ImageInfo** const out_imageInfo);
-  bool ValidateTexImageSelection(TexImageTarget target, GLint level,
-                                 GLint xOffset, GLint yOffset, GLint zOffset,
-                                 uint32_t width, uint32_t height,
-                                 uint32_t depth,
+  bool ValidateTexImageSelection(TexImageTarget target, uint32_t level,
+                                     const uvec3& offset,
+                                     const uvec3& size,
                                  webgl::ImageInfo** const out_imageInfo);
 
   bool ValidateUnpack(const webgl::TexUnpackBlob* blob, bool isFunc3D,
@@ -211,9 +209,10 @@ class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
 
   // TexSubImage iff `!respecFormat`
   void TexImage(GLenum imageTarget, uint32_t level,
-                            GLenum respecFormat, const uvec3& offset,
+                            GLenum respecFormat, const uvec3& offset, const uvec3& size,
                             const webgl::PackingInfo& pi,
-                            const webgl::TexUnpackBlob& src);
+                            const TexImageSource& src,
+                            const dom::HTMLCanvasElement& canvas);
 
   // CompressedTexSubImage iff `sub`
   void CompressedTexImage(bool sub, GLenum imageTarget,

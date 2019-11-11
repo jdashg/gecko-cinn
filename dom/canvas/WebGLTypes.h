@@ -15,6 +15,7 @@
 #include "GLDefs.h"
 #include "mozilla/Casting.h"
 #include "mozilla/CheckedInt.h"
+#include "mozilla/Range.h"
 #include "gfxTypes.h"
 
 #include "nsTArray.h"
@@ -520,7 +521,7 @@ struct InitContextResult final {
 
 struct ErrorInfo final {
   GLenum type;
-  nsCString info;
+  std::string info;
 };
 
 struct ShaderPrecisionFormat final {
@@ -768,7 +769,7 @@ inline auto GetFuncScopeName(const FuncScopeId id) {
 // -
 
 template<typename C, typename K>
-inline typename C::mapped_type* MaybeFind(const C& container, const K& key) {
+inline auto MaybeFind(C& container, const K& key) -> decltype(&(container.find(key)->second)) {
   const auto itr = container.find(key);
   if (itr == container.end()) return nullptr;
   return &(itr->second);
@@ -797,6 +798,62 @@ inline GLenum ImageToTexTarget(const GLenum imageTarget) {
       return imageTarget;
   }
 }
+
+// -
+
+namespace dom {
+class ImageBitmap;
+class ImageData;
+} // namespace dom
+
+struct TexImageSource {
+  const dom::ArrayBufferView* mView = nullptr;
+  GLuint mViewElemOffset = 0;
+  GLuint mViewElemLengthOverride = 0;
+
+  const WebGLintptr* mPboOffset = nullptr;
+
+  const dom::ImageBitmap* mImageBitmap = nullptr;
+  const dom::ImageData* mImageData = nullptr;
+
+  const dom::Element* mDomElem = nullptr;
+  ErrorResult* mOut_error = nullptr;
+};
+
+// ---------------------------------------
+// MakeRange
+
+template<typename T, size_t N>
+inline Range<const T> MakeRange(T (&arr)[N]) {
+  return {arr, N};
+}
+
+template<typename T>
+inline Range<T> MakeRange(const dom::Sequence<T>& seq) {
+  return {seq.Elements(), seq.Length()};
+}
+
+template<typename T>
+inline Range<const T> MakeRange(const RawBuffer<T>& from) {
+  return {from.Data(), from.Length()};
+}
+
+// abv = ArrayBufferView
+template<typename T>
+inline auto MakeRangeAbv(const T& abv) -> Range<const typename T::element_type> {
+  abv.ComputeLengthAndData();
+  return {abv.DataAllowShared(), abv.LengthAllowShared()};
+}
+
+template<typename T>
+inline Range<const uint8_t> MakeByteRange(const T& x) {
+  const auto typed = MakeRange(x);
+  return Range<const uint8_t>(typed);
+}
+
+Maybe<Range<const uint8_t>> GetRangeFromView(
+    const dom::ArrayBufferView& view, GLuint elemOffset,
+    GLuint elemCountOverride);
 
 }  // namespace mozilla
 

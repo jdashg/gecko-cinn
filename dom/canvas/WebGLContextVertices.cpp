@@ -71,12 +71,11 @@ void WebGLContext::VertexAttrib4T(GLuint index, const webgl::TypedQuad& src) {
 
   ////
 
-  mGenericVertexAttribTypes[index] = webgl::AttribBaseType::Float;
+  mGenericVertexAttribTypes[index] = src.type;
   mGenericVertexAttribTypeInvalidator.InvalidateCaches();
 
   if (!index) {
-    const float data[4] = {x, y, z, w};
-    memcpy(mGenericVertexAttrib0Data, data, sizeof(data));
+    memcpy(mGenericVertexAttrib0Data, src.data, sizeof(mGenericVertexAttrib0Data));
   }
 }
 
@@ -145,7 +144,6 @@ Maybe<double> WebGLContext::GetVertexAttrib(GLuint index, GLenum pname) {
             static_cast<int32_t>(mBoundVertexArray->mAttribs[index].mDivisor));
       }
       break;
-    }
 
     case LOCAL_GL_VERTEX_ATTRIB_ARRAY_ENABLED:
       return Some(mBoundVertexArray->mAttribs[index].mEnabled);
@@ -166,30 +164,17 @@ Maybe<double> WebGLContext::GetVertexAttrib(GLuint index, GLenum pname) {
 
 ////////////////////////////////////////
 
-void WebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
+Maybe<webgl::ErrorInfo> CheckVertexAttribPointer(bool webgl2, bool isFuncInt,
                                           GLint size, GLenum type,
-                                          bool normalized, GLsizei stride,
-                                          WebGLintptr byteOffset) {
-  if (IsContextLost()) return;
-
-  if (!ValidateAttribIndex(*this, index)) return;
-
-  ////
-
+                                          bool normalized, uint32_t stride,
+                                          uint64_t byteOffset) {
   if (size < 1 || size > 4) {
-    ErrorInvalidValue("Invalid element size.");
-    return;
+    return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_VALUE, "Invalid element size."});
   }
 
   // see WebGL spec section 6.6 "Vertex Attribute Data Stride"
-  if (stride < 0 || stride > 255) {
-    ErrorInvalidValue("Negative or too large stride.");
-    return;
-  }
-
-  if (byteOffset < 0) {
-    ErrorInvalidValue("Negative offset.");
-    return;
+  if (stride > 255) {
+    return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_VALUE, "Negative or too large stride."});
   }
 
   ////
@@ -218,21 +203,21 @@ void WebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
     // WebGL 2:
     case LOCAL_GL_INT:
     case LOCAL_GL_UNSIGNED_INT:
-      if (!IsWebGL2()) {
+      if (!webgl2) {
         isTypeValid = false;
       }
       typeAlignment = 4;
       break;
 
     case LOCAL_GL_HALF_FLOAT:
-      if (isFuncInt || !IsWebGL2()) {
+      if (isFuncInt || !webgl2) {
         isTypeValid = false;
       }
       typeAlignment = 2;
       break;
 
     case LOCAL_GL_FIXED:
-      if (isFuncInt || !IsWebGL2()) {
+      if (isFuncInt || !webgl2) {
         isTypeValid = false;
       }
       typeAlignment = 4;
@@ -240,13 +225,12 @@ void WebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
 
     case LOCAL_GL_INT_2_10_10_10_REV:
     case LOCAL_GL_UNSIGNED_INT_2_10_10_10_REV:
-      if (isFuncInt || !IsWebGL2()) {
+      if (isFuncInt || !webgl2) {
         isTypeValid = false;
         break;
       }
       if (size != 4) {
-        ErrorInvalidOperation("Size must be 4 for this type.");
-        return;
+        return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_OPERATION, "Size must be 4 for this type."});
       }
       typeAlignment = 4;
       break;
@@ -256,20 +240,36 @@ void WebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
       break;
   }
   if (!isTypeValid) {
-    ErrorInvalidEnumInfo("type", type);
-    return;
+    const auto info = nsPrintfCString("Bad `type`: %s", EnumString(type).c_str());
+    return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_ENUM, info.BeginReading()});
   }
 
   ////
 
   // `alignment` should always be a power of two.
   MOZ_ASSERT(IsPowerOfTwo(typeAlignment));
-  const GLsizei typeAlignmentMask = typeAlignment - 1;
+  const auto typeAlignmentMask = typeAlignment - 1;
 
   if (stride & typeAlignmentMask || byteOffset & typeAlignmentMask) {
-    ErrorInvalidOperation(
+    return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_OPERATION,
         "`stride` and `byteOffset` must satisfy the alignment"
-        " requirement of `type`.");
+        " requirement of `type`."});
+  }
+
+  return {};
+}
+
+void WebGLContext::VertexAttribPointer(bool isFuncInt, GLuint index,
+                                          GLint size, GLenum type,
+                                          bool normalized, uint32_t stride,
+                                          uint64_t byteOffset) {
+  if (IsContextLost()) return;
+  if (!ValidateAttribIndex(*this, index)) return;
+
+  const auto err = CheckVertexAttribPointer(IsWebGL2(), isFuncInt, size, type,
+        normalized, stride, byteOffset);
+  if (err) {
+    GenerateError(err->type, "%s", err->info.c_str());
     return;
   }
 
@@ -277,8 +277,7 @@ void WebGLContext::VertexAttribAnyPointer(bool isFuncInt, GLuint index,
 
   const auto& buffer = mBoundArrayBuffer;
   if (!buffer && byteOffset) {
-    ErrorInvalidOperation("If ARRAY_BUFFER is null, byteOffset must be zero.");
-    return;
+    byteOffset = 0;
   }
 
   ////

@@ -381,24 +381,29 @@ private:
 
 ////////////////////////////////////
 
-struct TexImageSource {
-  const dom::ArrayBufferView* mView;
-  GLuint mViewElemOffset;
-  GLuint mViewElemLengthOverride;
+typedef dom::Float32ArrayOrUnrestrictedFloatSequence Float32ListU;
+typedef dom::Int32ArrayOrLongSequence Int32ListU;
+typedef dom::Uint32ArrayOrUnsignedLongSequence Uint32ListU;
 
-  const WebGLsizeiptr* mPboOffset;
+inline Range<const float> MakeRange(const Float32ListU& list) {
+  if (list.IsFloat32Array()) return MakeRangeAbv(list.GetAsFloat32Array());
 
-  const dom::ImageBitmap* mImageBitmap;
-  const dom::ImageData* mImageData;
+  return MakeRange(list.GetAsUnrestrictedFloatSequence());
+}
 
-  const dom::Element* mDomElem;
-  ErrorResult* mOut_error;
+inline Range<const int32_t> MakeRange(const Int32ListU& list) {
+  if (list.IsInt32Array()) return MakeRangeAbv(list.GetAsInt32Array());
 
- protected:
-  TexImageSource() { memset(this, 0, sizeof(*this)); }
-};
+  return MakeRange(list.GetAsLongSequence());
+}
 
-////
+inline Range<const uint32_t> MakeRange(const Uint32ListU& list) {
+  if (list.IsUint32Array()) return MakeRangeAbv(list.GetAsUint32Array());
+
+  return MakeRange(list.GetAsUnsignedLongSequence());
+}
+
+// -
 
 struct TexImageSourceAdapter final : public TexImageSource {
   TexImageSourceAdapter(const dom::Nullable<dom::ArrayBufferView>* maybeView,
@@ -427,12 +432,12 @@ struct TexImageSourceAdapter final : public TexImageSource {
     mViewElemLengthOverride = viewElemLengthOverride;
   }
 
-  TexImageSourceAdapter(const WebGLsizeiptr* pboOffset, GLuint ignored1,
+  explicit TexImageSourceAdapter(const WebGLintptr* pboOffset, GLuint ignored1 = 0,
                         GLuint ignored2 = 0) {
     mPboOffset = pboOffset;
   }
 
-  TexImageSourceAdapter(const WebGLsizeiptr* pboOffset, ErrorResult* ignored) {
+  TexImageSourceAdapter(const WebGLintptr* pboOffset, ErrorResult* ignored) {
     mPboOffset = pboOffset;
   }
 
@@ -559,75 +564,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   template <typename WebGLObjectType>
   JSObject* WebGLObjectAsJSObject(JSContext* cx, const WebGLObjectType*,
                                   ErrorResult& rv) const;
-
- public:
-  // -------------------------------------------------------------------------
-  // Binary data access/conversion for IPC
-  // -------------------------------------------------------------------------
- protected:
-  typedef dom::Float32ArrayOrUnrestrictedFloatSequence Float32ListU;
-  typedef dom::Int32ArrayOrLongSequence Int32ListU;
-  typedef dom::Uint32ArrayOrUnsignedLongSequence Uint32ListU;
-
-  // -
-
-  template<typename T, size_t N>
-  static Range<const T> MakeRange(T (&arr)[N]) {
-    return {arr, N};
-  }
-
-  template<typename T>
-  static Range<T> MakeRange(const dom::Sequence<T>& seq) {
-    return {seq.Elements(), seq.Length()};
-  }
-
-  // abv = ArrayBufferView
-  template<typename T>
-  static auto MakeRangeAbv(const T& abv) -> Range<const typename T::element_type> {
-    abv.ComputeLengthAndData();
-    return {abv.DataAllowShared(), abv.LengthAllowShared()};
-  }
-
-  static Range<const float> MakeRange(const Float32ListU& list) {
-    if (list.IsFloat32Array()) return MakeRangeAbv(list.GetAsFloat32Array());
-
-    return MakeRange(list.GetAsUnrestrictedFloatSequence());
-  }
-
-  static Range<const int32_t> MakeRange(const Int32ListU& list) {
-    if (list.IsInt32Array()) return MakeRangeAbv(list.GetAsInt32Array());
-
-    return MakeRange(list.GetAsLongSequence());
-  }
-
-  static Range<const uint32_t> MakeRange(const Uint32ListU& list) {
-    if (list.IsUint32Array()) return MakeRangeAbv(list.GetAsUint32Array());
-
-    return MakeRange(list.GetAsUnsignedLongSequence());
-  }
-
-  template<typename T>
-  static Range<const uint8_t> MakeByteRange(const T& x) {
-    const auto typed = MakeRange(x);
-    return Range<const uint8_t>(typed);
-  }
-
-  // -
-
-  MaybeWebGLTexUnpackVariant From(TexImageTarget target, GLsizei rawWidth,
-                                  GLsizei rawHeight, GLsizei rawDepth,
-                                  GLint border, const TexImageSource& src);
-
-  MaybeWebGLTexUnpackVariant ClientFromDomElem(TexImageTarget target,
-                                               uint32_t width, uint32_t height,
-                                               uint32_t depth,
-                                               const dom::Element& elem,
-                                               ErrorResult* const out_error);
-
-  MaybeWebGLTexUnpackVariant FromCompressed(
-      TexImageTarget target, GLsizei rawWidth, GLsizei rawHeight,
-      GLsizei rawDepth, GLint border, const TexImageSource& src,
-      const Maybe<GLsizei>& expectedImageSize);
 
   // -------------------------------------------------------------------------
   // Client WebGL API call tracking and error message reporting
@@ -1068,7 +1004,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   void LineWidth(GLfloat width);
 
-
   void PixelStorei(GLenum pname, GLint param);
 
   void PolygonOffset(GLfloat factor, GLfloat units);
@@ -1231,7 +1166,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                 const webgl::PackingInfo& pi, const TexImageSource& src) const;
   void CompressedTexImage(bool sub, uint8_t funcDims, GLenum target, GLint level,
                           GLenum format, const ivec3& offset, const ivec3& size, GLint border,
-                          const TexImageSource& src) const;
+                          const TexImageSource& src, GLsizei pboImageSize) const;
   void CopyTexImage(uint8_t funcDims, GLenum target, GLint level, GLenum respecFormat,
                        const ivec3& dstOffset,
                        const ivec2& srcOffset, const ivec2& size, GLint border) const;
@@ -1308,7 +1243,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                   const dom::ArrayBufferView& view, GLuint viewElemOffset,
                   ErrorResult&) const {
     const TexImageSourceAdapter src(&view, viewElemOffset);
-    TexImage(3, target, level, internalFormat, {0,0,0} {width, height, depth}, border,
+    TexImage(3, target, level, internalFormat, {0,0,0}, {width, height, depth}, border,
                {unpackFormat, unpackType}, src);
   }
 
@@ -1342,7 +1277,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                             GLsizei imageSize, WebGLintptr offset) const {
     const TexImageSourceAdapter src(&offset);
     CompressedTexImage(false, 2, target, level, internalFormat, {0,0,0}, {width, height,
-                       depth}, border, src, imageSize);
+                       1}, border, src, imageSize);
   }
 
   void CompressedTexImage2D(GLenum target, GLint level, GLenum internalFormat,
@@ -1362,9 +1297,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                GLenum unpackFormat, GLsizei imageSize,
                                WebGLintptr offset) const {
     const TexImageSourceAdapter src(&offset);
-    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, 0},
-                          {width, height, 1}, 0, src,
-                          imageSize);
+    CompressedTexImage(true, 2, target, level, unpackFormat, {xOffset, yOffset, 0},
+                          {width, height, 1}, 0, src, imageSize);
   }
 
   void CompressedTexSubImage2D(GLenum target, GLint level, GLint xOffset,
@@ -1374,8 +1308,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                GLuint viewElemLengthOverride = 0) const {
     const TexImageSourceAdapter src(&view, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
-                          {width, height, depth}, 0, src, 0);
+    CompressedTexImage(true, 2, target, level, unpackFormat, {xOffset, yOffset, 0},
+                          {width, height, 1}, 0, src, 0);
   }
 
   // -
@@ -1385,7 +1319,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                             GLint border, GLsizei imageSize,
                             WebGLintptr offset) const {
     const TexImageSourceAdapter src(&offset);
-    CompressedTexImage(false, funcDims, target, level, internalFormat, {0,0,0}, {width, height,
+    CompressedTexImage(false, 3, target, level, internalFormat, {0,0,0}, {width, height,
                        depth}, border, src, imageSize);
   }
 
@@ -1396,7 +1330,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                             GLuint viewElemLengthOverride = 0) const {
     const TexImageSourceAdapter src(&view, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(false, funcDims, target, level, internalFormat, {0,0,0}, {width, height,
+    CompressedTexImage(false, 3, target, level, internalFormat, {0,0,0}, {width, height,
                        depth}, border, src, 0);
   }
 
@@ -1408,7 +1342,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                GLenum unpackFormat, GLsizei imageSize,
                                WebGLintptr offset) const {
     const TexImageSourceAdapter src(&offset);
-    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
+    CompressedTexImage(true, 3, target, level, unpackFormat, {xOffset, yOffset, zOffset},
                           {width, height, depth}, 0, src,
                           imageSize);
   }
@@ -1421,7 +1355,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                GLuint viewElemLengthOverride = 0) const {
     const TexImageSourceAdapter src(&view, viewElemOffset,
                                     viewElemLengthOverride);
-    CompressedTexImage(true, funcDims, target, level, unpackFormat, {xOffset, yOffset, zOffset},
+    CompressedTexImage(true, 3, target, level, unpackFormat, {xOffset, yOffset, zOffset},
                           {width, height, depth}, 0, src, 0);
   }
 
@@ -1665,11 +1599,22 @@ public:
     VertexAttrib4Tv(index, webgl::AttribBaseType::Uint, MakeByteRange(arr));
   }
 
+  private:
+  void VertexAttribPointerImpl(bool isFuncInt, GLuint index, GLint size,
+                                             GLenum type, WebGLboolean normalized,
+                                             GLsizei iStride,
+                                             WebGLintptr iByteOffset);
+  public:
   void VertexAttribIPointer(GLuint index, GLint size, GLenum type,
-                            GLsizei stride, WebGLintptr byteOffset) const;
+                            GLsizei stride, WebGLintptr byteOffset) {
+    VertexAttribPointerImpl(true, index, size, type, false, stride, byteOffset);
+  }
+
   void VertexAttribPointer(GLuint index, GLint size, GLenum type,
                            WebGLboolean normalized, GLsizei stride,
-                           WebGLintptr byteOffset) const;
+                           WebGLintptr byteOffset) {
+    VertexAttribPointerImpl(false, index, size, normalized, false, stride, byteOffset);
+  }
 
   // -------------------------------- Drawing -------------------------------
  public:
