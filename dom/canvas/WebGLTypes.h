@@ -635,7 +635,7 @@ class RawBuffer {
   // Pointer to the raw memory block
   T* mData = nullptr;
   // Length is the number of elements of size T in the array
-  size_t mLength = 0;
+  uint64_t mLength = 0;
   // true if we should delete[] the mData on destruction
   bool mOwnsData = false;
 
@@ -647,12 +647,12 @@ class RawBuffer {
   /**
    * If aTakeData is true, RawBuffer will delete[] the memory when destroyed.
    */
-  RawBuffer(size_t len, T* data, bool aTakeData = false)
+  RawBuffer(uint64_t len, T* data, bool aTakeData = false)
       : mData(data), mLength(len), mOwnsData(aTakeData) {
     MOZ_ASSERT(mData && mLength);
   }
 
-  RawBuffer(size_t len, RefPtr<mozilla::ipc::SharedMemoryBasic>& aSmem)
+  RawBuffer(uint64_t len, RefPtr<mozilla::ipc::SharedMemoryBasic>& aSmem)
       : mSmem(aSmem), mData(aSmem->memory()), mLength(len), mOwnsData(false) {
     MOZ_ASSERT(mData && mLength);
   }
@@ -668,7 +668,7 @@ class RawBuffer {
     }
   }
 
-  uint32_t Length() const { return mLength; }
+  auto Length() const { return mLength; }
 
   T* Data() { return mData; }
   const T* Data() const { return mData; }
@@ -681,8 +681,6 @@ class RawBuffer {
     MOZ_ASSERT(mData && (idx < mLength));
     return mData[idx];
   }
-
-  explicit operator bool() const { return mData && mLength; }
 
   RawBuffer() {}
   RawBuffer(const RawBuffer&) = delete;
@@ -844,6 +842,11 @@ inline Range<const T> MakeRange(const RawBuffer<T>& from) {
   return {from.Data(), from.Length()};
 }
 
+template<typename T>
+inline Range<T> MakeRange(RawBuffer<T>& from) {
+  return {from.Data(), from.Length()};
+}
+
 // abv = ArrayBufferView
 template<typename T>
 inline auto MakeRangeAbv(const T& abv) -> Range<const typename T::element_type> {
@@ -861,6 +864,13 @@ inline Range<const uint8_t> MakeByteRange(const T& x) {
 Maybe<Range<const uint8_t>> GetRangeFromView(
     const dom::ArrayBufferView& view, GLuint elemOffset,
     GLuint elemCountOverride);
+
+// -
+
+template<typename T>
+RawBuffer<T> RawBufferView(const Range<T>& range) {
+  return {range.length(), range.begin().get()};
+}
 
 // -
 

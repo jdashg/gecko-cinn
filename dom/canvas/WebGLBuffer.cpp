@@ -95,8 +95,17 @@ void WebGLBuffer::BufferData(GLenum target, uint64_t size, const void* data,
   }
 #endif
 
-  const void* uploadData = data;
+  UniqueBuffer maybeCalloc;
+  if (!data) {
+    maybeCalloc = calloc(1, AssertedCast<size_t>(size));
+    if (!maybeCalloc) {
+      mContext->ErrorOutOfMemory("Failed to alloc zeros.");
+      return;
+    }
+    data = maybeCalloc.get();
+  }
 
+  const void* uploadData = data;
   UniqueBuffer newIndexCache;
   if (target == LOCAL_GL_ELEMENT_ARRAY_BUFFER &&
       mContext->mNeedsIndexValidation) {

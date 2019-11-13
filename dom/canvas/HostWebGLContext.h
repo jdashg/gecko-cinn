@@ -7,16 +7,18 @@
 #define HOSTWEBGLCONTEXT_H_
 
 #include "mozilla/dom/BindingUtils.h"
-#include "mozilla/HashTable.h"
 #include "mozilla/GfxMessageUtils.h"
-#include "mozilla/HashTable.h"
-#include "nsString.h"
+#include "mozilla/Maybe.h"
+#include "mozilla/UniquePtr.h"
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
 #include "WebGLFramebuffer.h"
-#include "WebGLSync.h"
-#include "WebGLTransformFeedback.h"
-#include "mozilla/dom/WebGLTypes.h"
+//#include "WebGLSync.h"
+//#include "WebGLTransformFeedback.h"
+#include "WebGLTypes.h"
+
+#include <unordered_map>
+#include <vector>
 
 #ifndef WEBGL_BRIDGE_LOG_
 #  define WEBGL_BRIDGE_LOG_(lvl, ...) \
@@ -213,24 +215,48 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
  public:
   // ------------------------- Composition -------------------------
-  void Present();
 
-  Maybe<ICRData> InitializeCanvasRenderer(layers::LayersBackend backend);
+  void SetCompositableHost(
+      RefPtr<CompositableHost>& aCompositableHost) {
+    mContext->SetCompositableHost(aCompositableHost);
+  }
 
-  void Resize(const uvec2& size);
+  void Present() { mContext->Present(); }
 
-  uvec2 DrawingBufferSize();
+  Maybe<ICRData> InitializeCanvasRenderer(
+      layers::LayersBackend backend) {
+    return mContext->InitializeCanvasRenderer(backend);
+  }
 
-  void SetCompositableHost(RefPtr<layers::CompositableHost>& aCompositableHost);
+  void Resize(const uvec2& size) {
+    return mContext->Resize(size);
+  }
 
-  void OnMemoryPressure();
+  uvec2 DrawingBufferSize() {
+    return mContext->DrawingBufferSize();
+  }
+
+  void OnMemoryPressure() {
+    return mContext->OnMemoryPressure();
+  }
+
+  void DidRefresh() { mContext->DidRefresh(); }
+
+  void GenerateError(const GLenum error,
+                                       const std::string& text) const {
+    mContext->GenerateError(error, text.c_str());
+  }
+
   void OnContextLoss(webgl::ContextLossReason);
-
-  void DidRefresh();
 
   void RequestExtension(const WebGLExtensionID ext) {
     mContext->RequestExtension(ext);
   }
+
+  // -
+  // Child-ward
+
+  void JsWarning(const std::string&) const;
 
   // -
   // Creation and destruction
@@ -241,8 +267,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void CreateQuery(ObjectId);
   void CreateRenderbuffer(ObjectId);
   void CreateSampler(ObjectId);
-  void CreateShader(GLenum aType, ObjectId);
-  void FenceSync(ObjectId, GLenum condition, GLbitfield flags);
+  void CreateShader(ObjectId, GLenum type);
+  void CreateSync(ObjectId);
   void CreateTexture(ObjectId);
   void CreateTransformFeedback(ObjectId);
   void CreateVertexArray(ObjectId);
@@ -520,14 +546,19 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     GetWebGL2Context()->CopyBufferSubData(readTarget, writeTarget, readOffset, writeOffset, size);
   }
 
-  Maybe<UniquePtr<RawBuffer<>>> GetBufferSubData(GLenum target,
-                                                 GLintptr srcByteOffset,
-                                                 size_t byteLen);
+  void GetBufferSubData(GLenum target, uint64_t srcByteOffset, RawBuffer<uint8_t>& dest) const {
+    const auto range = MakeRange(dest);
+    GetWebGL2Context()->GetBufferSubData(target, srcByteOffset, range);
+  }
 
-  void BufferData(GLenum target, const RawBuffer<>& data, GLenum usage);
+  void BufferData(GLenum target, const RawBuffer<const uint8_t>& data, GLenum usage) const {
+    mContext->BufferData(target, data.Length(), data.Data(), usage);
+  }
 
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const RawBuffer<>& srcData);
+  void BufferSubData(GLenum target, uint64_t dstByteOffset,
+                     const RawBuffer<const uint8_t>& srcData) const {
+    mContext->BufferSubData(target, dstByteOffset, srcData.Length(), srcData.Data());
+  }
 
   // -------------------------- Framebuffer Objects --------------------------
   void BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1,
@@ -539,14 +570,15 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   void InvalidateFramebuffer(GLenum target,
-                             const std::vector<GLenum>& attachments) const {
-    GetWebGL2Context()->InvalidateFramebuffer(target, attachments);
+                             const RawBuffer<const GLenum>& attachments) const {
+    GetWebGL2Context()->InvalidateFramebuffer(target, MakeRange(attachments));
   }
 
   void InvalidateSubFramebuffer(GLenum target,
-                                const std::vector<GLenum>& attachments, GLint x,
+                                const RawBuffer<const GLenum>& attachments, GLint x,
                                 GLint y, GLsizei width, GLsizei height) const {
-    GetWebGL2Context()->InvalidateSubFramebuffer(target, attachments, x, y, width, height);
+    GetWebGL2Context()->InvalidateSubFramebuffer(target, MakeRange(attachments),
+                                                 x, y, width, height);
   }
 
   void ReadBuffer(GLenum mode) const {
@@ -772,11 +804,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     GetWebGL2Context()->TransformFeedbackVaryings(*obj, varyings, bufferMode);
   }
 
-  // ------------------------------ WebGL Debug
-  // ------------------------------------
-  void GenerateError(GLenum error, const std::string&) const;
-  void JsWarning(const std::string&) const;
-
   // -------------------------------------------------------------------------
   // Host-side extension methods.  Calls in the client are forwarded to the
   // host. Some extension methods are also available in WebGL2 Contexts.  For
@@ -835,8 +862,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // Client-side methods.  Calls in the Host are forwarded to the client.
   // -------------------------------------------------------------------------
  public:
-  void PostContextCreationError(const nsCString& aMsg);
-
   void OnLostContext();
 
   void OnRestoredContext();

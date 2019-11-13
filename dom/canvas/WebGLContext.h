@@ -648,27 +648,9 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buf,
                            uint64_t offset, uint64_t size);
 
-  void BufferDataImpl(GLenum target, uint64_t dataLen, const uint8_t* data,
-                      GLenum usage);
-
-  void BufferData(GLenum target, WebGLsizeiptr size, GLenum usage);
-  void BufferData(GLenum target,
-                  const dom::Nullable<dom::ArrayBuffer>& maybeSrc,
-                  GLenum usage);
-  void BufferData(GLenum target, const dom::ArrayBufferView& srcData,
-                  GLenum usage, GLuint srcElemOffset = 0,
-                  GLuint srcElemCountOverride = 0);
-
-  void BufferSubDataImpl(GLenum target, WebGLsizeiptr dstByteOffset,
-                         uint64_t srcDataLen, const uint8_t* srcData);
-
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::ArrayBufferView& src, GLuint srcElemOffset = 0,
-                     GLuint srcElemCountOverride = 0);
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::ArrayBuffer& src);
-  void BufferSubData(GLenum target, WebGLsizeiptr dstByteOffset,
-                     const dom::SharedArrayBuffer& src);
+  void BufferData(GLenum target, uint64_t dataLen, const uint8_t* data, GLenum usage) const;
+  void BufferSubData(GLenum target, uint64_t dstByteOffset,
+                         uint64_t srcDataLen, const uint8_t* srcData) const;
 
   already_AddRefed<WebGLBuffer> CreateBuffer();
   void DeleteBuffer(WebGLBuffer* buf);
@@ -1239,7 +1221,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   bool ValidateFramebufferTarget(GLenum target) const;
   bool ValidateInvalidateFramebuffer(GLenum target,
-                                     const std::vector<GLenum>& attachments,
+                                     const Range<const GLenum>& attachments,
                                      std::vector<GLenum>* const scopedVector,
                                      GLsizei* const out_glNumAttachments,
                                      const GLenum** const out_glAttachments);

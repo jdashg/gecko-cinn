@@ -798,46 +798,63 @@ static already_AddRefed<T> AsAddRefed(T* ptr) {
   return already_AddRefed<T>(ptr);
 }
 
+template<typename T>
+static RefPtr<T> AsRefPtr(T* ptr) {
+  return {ptr};
+}
+
 already_AddRefed<WebGLBufferJS> ClientWebGLContext::CreateBuffer() const {
   const FuncScope funcScope(*this, "createBuffer");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLBufferJS(*this));
+  auto ret = AsRefPtr(new WebGLBufferJS(*this));
+  Run<RPROC(CreateBuffer)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLFramebufferJS> ClientWebGLContext::CreateFramebuffer() const {
   const FuncScope funcScope(*this, "createFramebuffer");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLFramebufferJS(*this));
+  auto ret = AsRefPtr(new WebGLFramebufferJS(*this));
+  Run<RPROC(CreateFramebuffer)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLProgramJS> ClientWebGLContext::CreateProgram() const {
   const FuncScope funcScope(*this, "createProgram");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLProgramJS(*this));
+  auto ret = AsRefPtr(new WebGLProgramJS(*this));
+  Run<RPROC(CreateProgram)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLQueryJS> ClientWebGLContext::CreateQuery() const {
   const FuncScope funcScope(*this, "createQuery");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLQueryJS(*this));
+  auto ret = AsRefPtr(new WebGLQueryJS(*this));
+  Run<RPROC(CreateQuery)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLRenderbufferJS> ClientWebGLContext::CreateRenderbuffer() const {
   const FuncScope funcScope(*this, "createRenderbuffer");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLRenderbufferJS(*this));
+  auto ret = AsRefPtr(new WebGLRenderbufferJS(*this));
+  Run<RPROC(CreateRenderbuffer)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLSamplerJS> ClientWebGLContext::CreateSampler() const {
   const FuncScope funcScope(*this, "createSampler");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLSamplerJS(*this));
+  auto ret = AsRefPtr(new WebGLSamplerJS(*this));
+  Run<RPROC(CreateSampler)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLShaderJS> ClientWebGLContext::CreateShader(const GLenum type) const {
@@ -853,10 +870,13 @@ already_AddRefed<WebGLShaderJS> ClientWebGLContext::CreateShader(const GLenum ty
     return nullptr;
   }
 
-  return AsAddRefed(new WebGLShaderJS(*this, type));
+  auto ret = AsRefPtr(new WebGLShaderJS(*this, type));
+  Run<RPROC(CreateShader)>(ret->mId, ret->mType);
+  return ret.forget();
 }
 
-already_AddRefed<WebGLSyncJS> ClientWebGLContext::FenceSync(const GLenum condition, const GLbitfield flags) const {
+already_AddRefed<WebGLSyncJS> ClientWebGLContext::FenceSync(const GLenum condition,
+                        const GLbitfield flags) const {
   const FuncScope funcScope(*this, "fenceSync");
   if (IsContextLost()) return nullptr;
 
@@ -870,28 +890,36 @@ already_AddRefed<WebGLSyncJS> ClientWebGLContext::FenceSync(const GLenum conditi
     return nullptr;
   }
 
-  return AsAddRefed(new WebGLSyncJS(*this));
+  auto ret = AsRefPtr(new WebGLSyncJS(*this));
+  Run<RPROC(CreateSync)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLTextureJS> ClientWebGLContext::CreateTexture() const {
   const FuncScope funcScope(*this, "createTexture");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLTextureJS(*this));
+  auto ret = AsRefPtr(new WebGLTextureJS(*this));
+  Run<RPROC(CreateTexture)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLTransformFeedbackJS> ClientWebGLContext::CreateTransformFeedback() const {
   const FuncScope funcScope(*this, "createTransformFeedback");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLTransformFeedbackJS(*this));
+  auto ret = AsRefPtr(new WebGLTransformFeedbackJS(*this));
+  Run<RPROC(CreateTransformFeedback)>(ret->mId);
+  return ret.forget();
 }
 
 already_AddRefed<WebGLVertexArrayJS> ClientWebGLContext::CreateVertexArray() const {
   const FuncScope funcScope(*this, "createVertexArray");
   if (IsContextLost()) return nullptr;
 
-  return AsAddRefed(new WebGLVertexArrayJS(*this));
+  auto ret = AsRefPtr(new WebGLVertexArrayJS(*this));
+  Run<RPROC(CreateVertexArray)>(ret->mId);
+  return ret.forget();
 }
 
 // -
@@ -2147,7 +2175,7 @@ Maybe<const webgl::ErrorInfo> ValidateBindBuffer(const GLenum target,
   return {};
 }
 
-Maybe<const webgl::ErrorInfo> ValidateBindBufferRange(const GLenum target, const GLuint index,
+Maybe<webgl::ErrorInfo> ValidateBindBufferRange(const GLenum target, const GLuint index,
                                     const bool isBuffer,
                                     const uint64_t offset, const uint64_t size,
                                     const webgl::InitContextResult& limits)
@@ -2233,7 +2261,7 @@ void ClientWebGLContext::BindBuffer(const GLenum target,
   }
   const auto err = ValidateBindBuffer(target, kind);
   if (err) {
-    EnqueueError(err->type, "%s", err->info);
+    EnqueueError(err->type, "%s", err->info.c_str());
     return;
   }
 
@@ -2324,14 +2352,9 @@ void ClientWebGLContext::GetBufferSubData(GLenum target, GLintptr srcByteOffset,
                                LOCAL_GL_INVALID_VALUE, &bytes, &byteLen)) {
     return;
   }
+  auto view = RawBuffer<uint8_t>(byteLen, bytes);
 
-  Maybe<UniquePtr<RawBuffer<>>> result =
-      Run<RPROC(GetBufferSubData)>(target, srcByteOffset, byteLen);
-  if (!result) {
-    return;
-  }
-  MOZ_ASSERT(result.ref()->Length() == byteLen);
-  memcpy(bytes, result.ref()->Data(), byteLen);
+  Run<RPROC(GetBufferSubData)>(target, srcByteOffset, view);
 }
 
 ////
@@ -2341,12 +2364,8 @@ void ClientWebGLContext::BufferData(GLenum target, WebGLsizeiptr size,
   const FuncScope funcScope(*this, "bufferData");
   if (!ValidateNonNegative("size", size)) return;
 
-  UniqueBuffer zeroBuffer(calloc(size, 1));
-  if (!zeroBuffer)
-    return EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "Failed to allocate zeros.");
-
-  Run<RPROC(BufferData)>(
-      target, RawBuffer<>(size_t(size), (uint8_t*)zeroBuffer.get()), usage);
+  const auto view = RawBuffer<const uint8_t>(static_cast<uint64_t>(size), nullptr);
+  Run<RPROC(BufferData)>(target, view, usage);
 }
 
 void ClientWebGLContext::BufferData(
@@ -2357,9 +2376,9 @@ void ClientWebGLContext::BufferData(
   const auto& src = maybeSrc.Value();
 
   src.ComputeLengthAndData();
-  Run<RPROC(BufferData)>(
-      target, RawBuffer<>(src.LengthAllowShared(), src.DataAllowShared()),
-      usage);
+  const auto view = RawBuffer<const uint8_t>(src.LengthAllowShared(), src.DataAllowShared());
+
+  Run<RPROC(BufferData)>(target, view, usage);
 }
 
 void ClientWebGLContext::BufferData(GLenum target,
@@ -2374,7 +2393,7 @@ void ClientWebGLContext::BufferData(GLenum target,
     return;
   }
 
-  Run<RPROC(BufferData)>(target, RawBuffer<>(byteLen, bytes), usage);
+  Run<RPROC(BufferData)>(target, RawBuffer<const uint8_t>(byteLen, bytes), usage);
 }
 
 ////
@@ -2386,7 +2405,7 @@ void ClientWebGLContext::BufferSubData(GLenum target,
   src.ComputeLengthAndData();
   Run<RPROC(BufferSubData)>(
       target, dstByteOffset,
-      RawBuffer<>(src.LengthAllowShared(), src.DataAllowShared()));
+      RawBuffer<const uint8_t>(src.LengthAllowShared(), src.DataAllowShared()));
 }
 
 void ClientWebGLContext::BufferSubData(GLenum target,
@@ -2402,7 +2421,7 @@ void ClientWebGLContext::BufferSubData(GLenum target,
     return;
   }
 
-  Run<RPROC(BufferSubData)>(target, dstByteOffset, RawBuffer<>(byteLen, bytes));
+  Run<RPROC(BufferSubData)>(target, dstByteOffset, RawBuffer<const uint8_t>(byteLen, bytes));
 }
 
 void ClientWebGLContext::CopyBufferSubData(GLenum readTarget,
@@ -2642,7 +2661,9 @@ void ClientWebGLContext::BlitFramebuffer(GLint srcX0, GLint srcY0, GLint srcX1,
 void ClientWebGLContext::InvalidateFramebuffer(
     GLenum target, const dom::Sequence<GLenum>& attachments,
     ErrorResult& unused) {
-  Run<RPROC(InvalidateFramebuffer)>(target, nsTArray<GLenum>(attachments));
+  const auto range = MakeRange(attachments);
+  const auto& buffer = RawBufferView(range);
+  Run<RPROC(InvalidateFramebuffer)>(target, buffer);
 
   // Never invalidate the backbuffer, so never needs AfterDrawCall.
 }
@@ -2650,8 +2671,9 @@ void ClientWebGLContext::InvalidateFramebuffer(
 void ClientWebGLContext::InvalidateSubFramebuffer(
     GLenum target, const dom::Sequence<GLenum>& attachments, GLint x, GLint y,
     GLsizei width, GLsizei height, ErrorResult& unused) {
-  Run<RPROC(InvalidateSubFramebuffer)>(target, nsTArray<GLenum>(attachments), x,
-                                       y, width, height);
+  const auto range = MakeRange(attachments);
+  const auto& buffer = RawBufferView(range);
+  Run<RPROC(InvalidateSubFramebuffer)>(target, buffer, x, y, width, height);
 
   // Never invalidate the backbuffer, so never needs AfterDrawCall.
 }
@@ -3135,7 +3157,7 @@ void ClientWebGLContext::UniformNTv(const WebGLUniformLocationJS* const loc, con
 
   const auto ptr = bytes.begin().get() + (elemOffset * sizeof(float));
   const auto buffer = RawBuffer<const uint8_t>(availCount * sizeof(float), ptr);
-  Run<RPROC(UniformNTv)>(loc->mLocation, n, t, buffer);
+  Run<RPROC(UniformNTv)>(n, t, loc->mLocation, buffer);
 }
 
 void ClientWebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
@@ -3275,18 +3297,15 @@ void ClientWebGLContext::VertexAttribPointerImpl(bool isFuncInt, GLuint index, G
 // -------------------------------- Drawing -------------------------------
 
 void ClientWebGLContext::DrawArraysInstanced(GLenum mode, GLint first,
-                                             GLsizei count, GLsizei primcount,
-                                             FuncScopeId aFuncId) {
-  Run<RPROC(DrawArraysInstanced)>(mode, first, count, primcount, aFuncId);
+                                             GLsizei count, GLsizei primcount, FuncScopeId) {
+  Run<RPROC(DrawArraysInstanced)>(mode, first, count, primcount);
   AfterDrawCall();
 }
 
 void ClientWebGLContext::DrawElementsInstanced(GLenum mode, GLsizei count,
                                                GLenum type, WebGLintptr offset,
-                                               GLsizei primcount,
-                                               FuncScopeId aFuncId) {
-  Run<RPROC(DrawElementsInstanced)>(mode, count, type, offset, primcount,
-                                    aFuncId);
+                                               GLsizei primcount, FuncScopeId) {
+  Run<RPROC(DrawElementsInstanced)>(mode, count, type, offset, primcount);
   AfterDrawCall();
 }
 
@@ -3883,7 +3902,7 @@ void ClientWebGLContext::BindAttribLocation(WebGLProgramJS& prog,
                                             const GLuint location,
                                             const nsAString& name) const {
   const auto& nameU8 = NS_ConvertUTF16toUTF8(name);
-  Run<RPROC(BindAttribLocation)>(prog, location, nameU8.BeginReading());
+  Run<RPROC(BindAttribLocation)>(prog.mId, location, nameU8.BeginReading());
 }
 
 void ClientWebGLContext::DetachShader(WebGLProgramJS& prog,
@@ -4526,41 +4545,94 @@ bool WebGLShaderPrecisionFormatJS::WrapObject(JSContext* const cx,
 
 // -
 
-template<typename T>
+template<typename C>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const std::vector<T>& field,
+                                 const C& field,
                                  const char* name, uint32_t flags) {
   for (const auto& cur : field) {
     ImplCycleCollectionTraverse(callback, cur, name, flags);
   }
 }
 
-template<typename K, typename V>
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const std::unordered_map<K,V>& field,
-                                 const char* name, uint32_t flags) {
-  for (const auto& pair : field) {
-    ImplCycleCollectionTraverse(callback, pair.first, name, flags);
-    ImplCycleCollectionTraverse(callback, pair.second, name, flags);
-  }
-}
-
-template<typename K, typename V>
-void ImplCycleCollectionUnlink(std::unordered_map<K,V>& field) {
-  field.clear();
-}
-
-template<typename T>
-void ImplCycleCollectionUnlink(std::vector<T>& field) {
+template<typename C>
+void ImplCycleCollectionUnlink(C& field) {
   field.clear();
 }
 
 // -
 
+template<typename A, typename B>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::pair<A,B>& field,
+                                 const char* name, uint32_t flags) {
+  ImplCycleCollectionTraverse(callback, field.first, name, flags);
+  ImplCycleCollectionTraverse(callback, field.second, name, flags);
+}
+
+template<typename A, typename B>
+void ImplCycleCollectionUnlink(std::pair<A,B>& field) {
+  field = {};
+}
+
+// -
+
+template<typename T>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::shared_ptr<T>& field,
+                                 const char* name, uint32_t flags) {
+  if (field) {
+    ImplCycleCollectionTraverse(callback, *field, name, flags);
+  }
+}
+
+template<typename T>
+void ImplCycleCollectionUnlink(std::shared_ptr<T>& field) {
+  field = nullptr;
+}
+
+// -
+
+template<typename T>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const RefPtr<T>& field,
+                                 const char* name, uint32_t flags) {
+  if (field) {
+    ImplCycleCollectionTraverse(callback, *field, name, flags);
+  }
+}
+/*
+template<typename T>
+void ImplCycleCollectionUnlink(RefPtr<T>& field) {
+  field = nullptr;
+}
+*/
+// -
+
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const WebGLFramebufferJS::Attachment& field,
+                                 const char* name, uint32_t flags);
+
+void ImplCycleCollectionUnlink(WebGLFramebufferJS::Attachment& field) {
+  field = {};
+}
+
+// -
+
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 uint64_t field,
+                                 const char* name, uint32_t flags) {}
+
+template<typename T>
+void ImplCycleCollectionUnlink(uint64_t) {}
+
+// -----------------------------------------------------
+
+#error easier to write our own Traverse/Unlink funcs. :S
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLBufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, mAttachments)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, mNextLink_Shaders)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLQueryJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLRenderbufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSamplerJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLShaderJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSyncJS)
@@ -4582,5 +4654,18 @@ NS_IMPL_CYCLE_COLLECTING_ADDREF(ClientWebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(ClientWebGLContext)
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(ClientWebGLContext)
+
+// -
+
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const WebGLFramebufferJS::Attachment& field,
+                                 const char* name, uint32_t flags) {
+  if (field.rb) {
+    ImplCycleCollectionTraverse(callback, *field.rb, name, flags);
+  }
+  if (field.tex) {
+    ImplCycleCollectionTraverse(callback, *field.tex, name, flags);
+  }
+}
 
 }  // namespace mozilla

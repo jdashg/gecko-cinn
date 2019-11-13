@@ -35,17 +35,8 @@ class WebGL2Context final : public WebGLContext {
 
   void CopyBufferSubData(GLenum readTarget, GLenum writeTarget,
                          uint64_t readOffset, uint64_t writeOffset,
-                         uint64_t size);
-
- private:
-  template <typename BufferT>
-  void GetBufferSubDataT(GLenum target, WebGLintptr offset,
-                         const BufferT& data);
-
- public:
-  UniqueBuffer GetBufferSubData(GLenum target,
-                                                 WebGLintptr srcByteOffset,
-                                                 size_t byteLen);
+                         uint64_t size) const;
+  void GetBufferSubData(GLenum target, uint64_t srcByteOffset, const Range<uint8_t>& dest) const;
 
   // -------------------------------------------------------------------------
   // Framebuffer objects - WebGL2ContextFramebuffers.cpp
@@ -55,9 +46,9 @@ class WebGL2Context final : public WebGLContext {
                        GLbitfield mask, GLenum filter);
 
   void InvalidateFramebuffer(GLenum target,
-                             const std::vector<GLenum>& attachments);
+                             const Range<const GLenum>& attachments);
   void InvalidateSubFramebuffer(GLenum target,
-                                const std::vector<GLenum>& attachments, GLint x,
+                                const Range<const GLenum>& attachments, GLint x,
                                 GLint y, GLsizei width, GLsizei height);
   void ReadBuffer(GLenum mode);
 
