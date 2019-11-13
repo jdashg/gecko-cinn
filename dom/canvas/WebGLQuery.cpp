@@ -163,14 +163,6 @@ Maybe<double> WebGLQuery::GetQueryParameter(GLenum pname) const {
   }
 }
 
-bool WebGLQuery::IsQuery() const {
-  MOZ_ASSERT(!IsDeleted());
-
-  if (!mTarget) return false;
-
-  return true;
-}
-
 void WebGLQuery::DeleteQuery() {
   MOZ_ASSERT(!IsDeleteRequested());
 
@@ -181,12 +173,8 @@ void WebGLQuery::DeleteQuery() {
   RequestDelete();
 }
 
-void WebGLQuery::QueryCounter(GLenum target) {
-  if (target != LOCAL_GL_TIMESTAMP_EXT) {
-    mContext->ErrorInvalidEnum("`target` must be TIMESTAMP_EXT.");
-    return;
-  }
-
+void WebGLQuery::QueryCounter() {
+  const GLenum target = LOCAL_GL_TIMESTAMP_EXT;
   if (mTarget && target != mTarget) {
     mContext->ErrorInvalidOperation("Queries cannot change targets.");
     return;

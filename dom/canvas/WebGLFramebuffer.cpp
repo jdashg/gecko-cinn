@@ -1135,17 +1135,14 @@ void WebGLFramebuffer::ReadBuffer(GLenum attachPoint) {
 
 ////
 
-void WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
+bool WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
                                          const webgl::FbAttachInfo& toAttach) {
   MOZ_ASSERT(mContext->mBoundDrawFramebuffer == this ||
              mContext->mBoundReadFramebuffer == this);
 
   // `attachment`
   const auto maybeAttach = GetAttachPoint(attachEnum);
-  if (!maybeAttach || !maybeAttach.value()) {
-    mContext->ErrorInvalidEnum("Bad `attachment`: 0x%x.", attachEnum);
-    return;
-  }
+  if (!maybeAttach || !maybeAttach.value()) return false;
   const auto& attach = maybeAttach.value();
 
   const auto& gl = mContext->gl;
@@ -1157,6 +1154,7 @@ void WebGLFramebuffer::FramebufferAttach(const GLenum attachEnum,
     attach->Set(gl, toAttach);
   }
   InvalidateCaches();
+  return true;
 }
 
 Maybe<double> WebGLFramebuffer::GetAttachmentParameter(GLenum attachEnum,

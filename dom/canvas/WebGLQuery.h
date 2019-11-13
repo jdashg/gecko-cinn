@@ -55,8 +55,7 @@ class WebGLQuery final : public WebGLRefCountedObject<WebGLQuery>,
   void DeleteQuery();
   void EndQuery();
   Maybe<double> GetQueryParameter(GLenum pname) const;
-  bool IsQuery() const;
-  void QueryCounter(GLenum target);
+  void QueryCounter();
 };
 
 }  // namespace mozilla

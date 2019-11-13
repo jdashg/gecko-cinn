@@ -228,10 +228,11 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
           break;
       }
 
-      auto sui = std::make_unique<webgl::SamplerUniformInfo>(*texList, baseType, isShadowSampler);
-      sui->texUnits.resize(uniform.elemCount);
-      samplerInfo = sui.get();
-      info->samplerUniforms.push_back(std::move(sui));
+      auto curInfo = std::unique_ptr<webgl::SamplerUniformInfo>(
+        new webgl::SamplerUniformInfo{*texList, *baseType, isShadowSampler});
+      curInfo->texUnits.resize(uniform.elemCount);
+      samplerInfo = curInfo.get();
+      info->samplerUniforms.push_back(std::move(curInfo));
     }
 
     for (const auto& pair : uniform.locByIndex) {
@@ -245,7 +246,8 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
     const auto& activeBlocks = info->active.activeUniformBlocks;
     info->uniformBlocks.reserve(activeBlocks.size());
     for (const auto& cur : activeBlocks) {
-      info->uniformBlocks.emplace_back(cur, webgl->mIndexedUniformBufferBindings[0]);
+      const auto curInfo = webgl::UniformBlockInfo{cur, &webgl->mIndexedUniformBufferBindings[0]};
+      info->uniformBlocks.push_back(curInfo);
     }
   }
 
@@ -499,12 +501,6 @@ void WebGLProgram::DetachShader(const WebGLShader& shader) {
   *shaderSlot = nullptr;
 
   mContext->gl->fDetachShader(mGLName, shader.mGLName);
-}
-
-static GLint GetProgramiv(gl::GLContext* gl, GLuint program, GLenum pname) {
-  GLint ret = 0;
-  gl->fGetProgramiv(program, pname, &ret);
-  return ret;
 }
 
 void WebGLProgram::UniformBlockBinding(GLuint uniformBlockIndex,

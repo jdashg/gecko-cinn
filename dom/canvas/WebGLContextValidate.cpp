@@ -586,6 +586,10 @@ bool WebGLContext::InitAndValidateGL(FailureReason* const out_failReason) {
       break;
   }
 
+  for (auto& cur : mExtensions) {
+    cur = {};
+  }
+
   return true;
 }
 

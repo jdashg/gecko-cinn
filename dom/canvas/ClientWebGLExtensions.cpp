@@ -65,14 +65,15 @@ void ClientWebGLContext::AddCompressedFormat(const GLenum format) {
 
 // -
 
-JSObject* WebGLExtensionCompressedTextureASTC::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureASTC::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_astc##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_astc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
- const RefPtr<ClientWebGLContext>& webgl)
+
+ClientWebGLExtensionCompressedTextureASTC::ClientWebGLExtensionCompressedTextureASTC(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
 
   _(COMPRESSED_RGBA_ASTC_4x4_KHR)
   _(COMPRESSED_RGBA_ASTC_5x4_KHR)
@@ -88,7 +89,7 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
   _(COMPRESSED_RGBA_ASTC_10x10_KHR)
   _(COMPRESSED_RGBA_ASTC_12x10_KHR)
   _(COMPRESSED_RGBA_ASTC_12x12_KHR)
-  _
+
   _(COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR)
   _(COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR)
   _(COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR)
@@ -107,15 +108,17 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureBPTC::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureBPTC::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::EXT_texture_compression_bptc##_Binding::Wrap(cx, this, givenProto);
+  return dom::EXT_texture_compression_bptc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureBPTC::WebGLExtensionCompressedTextureBPTC(
- const RefPtr<ClientWebGLContext>& webgl)
+
+ClientWebGLExtensionCompressedTextureBPTC::ClientWebGLExtensionCompressedTextureBPTC(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_RGBA_BPTC_UNORM)
   _(COMPRESSED_SRGB_ALPHA_BPTC_UNORM)
   _(COMPRESSED_RGB_BPTC_SIGNED_FLOAT)
@@ -123,15 +126,17 @@ WebGLExtensionCompressedTextureBPTC::WebGLExtensionCompressedTextureBPTC(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureRGTC::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureRGTC::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::EXT_texture_compression_rgtc##_Binding::Wrap(cx, this, givenProto);
+  return dom::EXT_texture_compression_rgtc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureRGTC::WebGLExtensionCompressedTextureRGTC(
- const RefPtr<ClientWebGLContext>& webgl)
+
+ClientWebGLExtensionCompressedTextureRGTC::ClientWebGLExtensionCompressedTextureRGTC(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_RED_RGTC1)
   _(COMPRESSED_SIGNED_RED_RGTC1)
   _(COMPRESSED_RG_RGTC2)
@@ -139,15 +144,16 @@ WebGLExtensionCompressedTextureRGTC::WebGLExtensionCompressedTextureRGTC(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureES3::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureES3::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_etc##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_etc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureES3::WebGLExtensionCompressedTextureES3(
- const RefPtr<ClientWebGLContext>& webgl)
+ClientWebGLExtensionCompressedTextureES3::ClientWebGLExtensionCompressedTextureES3(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_R11_EAC)
   _(COMPRESSED_SIGNED_R11_EAC)
   _(COMPRESSED_RG11_EAC)
@@ -164,26 +170,28 @@ WebGLExtensionCompressedTextureES3::WebGLExtensionCompressedTextureES3(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureETC1::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureETC1::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_etc1##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_etc1_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureETC1::WebGLExtensionCompressedTextureETC1(
- const RefPtr<ClientWebGLContext>& webgl)
+ClientWebGLExtensionCompressedTextureETC1::ClientWebGLExtensionCompressedTextureETC1(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-  webgl->AddCompressedFormat(LOCAL_GL_ETC1_RGB8_OES);
+  webgl.AddCompressedFormat(LOCAL_GL_ETC1_RGB8_OES);
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTexturePVRTC::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTexturePVRTC::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_pvrtc##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_pvrtc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTexturePVRTC::WebGLExtensionCompressedTexturePVRTC(
- const RefPtr<ClientWebGLContext>& webgl)
+ClientWebGLExtensionCompressedTexturePVRTC::ClientWebGLExtensionCompressedTexturePVRTC(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_RGB_PVRTC_4BPPV1)
   _(COMPRESSED_RGB_PVRTC_2BPPV1)
   _(COMPRESSED_RGBA_PVRTC_4BPPV1)
@@ -191,15 +199,16 @@ WebGLExtensionCompressedTexturePVRTC::WebGLExtensionCompressedTexturePVRTC(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureS3TC::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureS3TC::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_s3tc##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_s3tc_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureS3TC::WebGLExtensionCompressedTextureS3TC(
- const RefPtr<ClientWebGLContext>& webgl)
+ClientWebGLExtensionCompressedTextureS3TC::ClientWebGLExtensionCompressedTextureS3TC(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_RGB_S3TC_DXT1_EXT)
   _(COMPRESSED_RGBA_S3TC_DXT1_EXT)
   _(COMPRESSED_RGBA_S3TC_DXT3_EXT)
@@ -207,15 +216,17 @@ WebGLExtensionCompressedTextureS3TC::WebGLExtensionCompressedTextureS3TC(
 #undef _
 }
 
+// -
 
-JSObject* WebGLExtensionCompressedTextureS3TC_SRGB::WrapObject(JSContext* cx,
+JSObject* ClientWebGLExtensionCompressedTextureS3TC_SRGB::WrapObject(JSContext* cx,
                                          JS::Handle<JSObject*> givenProto) {
-  return dom::WEBGL_compressed_texture_s3tc_srgb##_Binding::Wrap(cx, this, givenProto);
+  return dom::WEBGL_compressed_texture_s3tc_srgb_Binding::Wrap(cx, this, givenProto);
 }
-WebGLExtensionCompressedTextureS3TC_SRGB::WebGLExtensionCompressedTextureS3TC_SRGB(
- const RefPtr<ClientWebGLContext>& webgl)
+
+ClientWebGLExtensionCompressedTextureS3TC_SRGB::ClientWebGLExtensionCompressedTextureS3TC_SRGB(
+ ClientWebGLContext& webgl)
     : ClientWebGLExtensionBase(webgl) {
-#define _(X) webgl->AddCompressedFormat(LOCAL_GL_##X);
+#define _(X) webgl.AddCompressedFormat(LOCAL_GL_##X);
   _(COMPRESSED_SRGB_S3TC_DXT1_EXT)
   _(COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT)
   _(COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT)

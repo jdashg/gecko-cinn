@@ -79,6 +79,7 @@
 #include "WebGLQuery.h"
 #include "WebGLSampler.h"
 #include "WebGLShader.h"
+#include "WebGLShaderValidator.h"
 #include "WebGLSync.h"
 #include "WebGLTransformFeedback.h"
 #include "WebGLVertexArray.h"
@@ -2153,8 +2154,8 @@ Maybe<webgl::IndexedName> ParseIndexed(const std::string& str) {
   std::smatch match;
   if (!std::regex_match(str, match, kRegex)) return {};
 
-  const auto index = match[2].stoull();
-  return Some({match[1], index});
+  const auto index = std::stoull(match[2]);
+  return Some(webgl::IndexedName{match[1], index});
 }
 
 static std::vector<std::string> ExplodeName(const std::string& str) {
@@ -2169,7 +2170,7 @@ static std::vector<std::string> ExplodeName(const std::string& str) {
   for (; itr != end; ++itr) {
     const auto& part = itr->str();
     if (part.size()) {
-      ret.emplace_back(part);
+      ret.push_back(part);
     }
   }
   return ret;
@@ -2179,7 +2180,7 @@ static std::vector<std::string> ExplodeName(const std::string& str) {
 
 webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const bool webgl2,
                                  const std::unordered_map<std::string, std::string>& nameUnmap) {
-  webgl::LinkResult ret;
+  webgl::LinkActiveInfo ret;
   [&]() {
     const auto fnGetProgramui = [&](const GLenum pname) {
       GLint ret = 0;
@@ -2223,7 +2224,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
     {
       const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_ATTRIBUTES);
-      ret.active.activeAttribs.reserve(count);
+      ret.activeAttribs.reserve(count);
       for (const auto& i : IntegerRange(count)) {
         GLsizei lengthWithoutNull = 0;
         GLint elemCount = 0;  // `size`
@@ -2252,7 +2253,12 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         printf_stderr("[attrib %u/%u] @%i %s->%s\n", i, count, loc,
                       userName.c_str(), mappedName.c_str());
   #endif
-        ret.active.activeAttribs.emplace_back(elemType, elemCount, userName, loc);
+        webgl::ActiveAttribInfo info;
+        info.elemType = elemType;
+        info.elemCount = elemCount;
+        info.name = userName;
+        info.location = loc;
+        ret.activeAttribs.push_back(std::move(info));
       }
     }
 
@@ -2260,7 +2266,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
     {
       const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORMS);
-      ret.active.activeUniforms.reserve(count);
+      ret.activeUniforms.reserve(count);
 
       std::vector<GLint> blockIndexList(count, -1);
       std::vector<GLint> blockOffsetList(count, -1);
@@ -2295,11 +2301,11 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         GLsizei lengthWithoutNull = 0;
         GLint elemCount = 0;  // `size`
         GLenum elemType = 0;  // `type`
-        gl.fGetActiveUniform(prog->mGLName, i, stringBuffer.size(),
+        gl.fGetActiveUniform(prog, i, stringBuffer.size(),
                               &lengthWithoutNull, &elemCount, &elemType,
                               stringBuffer.data());
         if (!elemType) {
-          const auto error = gl->fGetError();
+          const auto error = gl.fGetError();
           if (error != LOCAL_GL_CONTEXT_LOST) {
             gfxCriticalError() << "Failed to do glGetActiveUniform: " << error;
           }
@@ -2336,7 +2342,10 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
         // -
 
-        auto& info = ret.active.activeUniforms.emplace_back(elemType, elemCount, userName);
+        webgl::ActiveUniformInfo info;
+        info.elemType = elemType;
+        info.elemCount = static_cast<uint32_t>(elemCount);
+        info.name = userName;
         info.block_index = blockIndexList[i];
         info.block_offset = blockOffsetList[i];
         info.block_arrayStride = blockArrayStrideList[i];
@@ -2351,7 +2360,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         // Get uniform locations
         {
           std::ostringstream locName;
-          for (const auto i : IntegerRange(static_cast<uint32_t>(elemCount)) {
+          for (const auto i : IntegerRange(info.elemCount)) {
             locName.str(baseMappedName);
             if (isArray) {
               locName << '"' << i << '"';
@@ -2366,6 +2375,9 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
             }
           }
         } // anon
+
+
+        ret.activeUniforms.push_back(std::move(info));
       } // for i
     } // anon
 
@@ -2374,7 +2386,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
       // active uniform blocks
       {
         const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORM_BLOCKS);
-        ret.active.activeUniformBlocks.reserve(count);
+        ret.activeUniformBlocks.reserve(count);
 
         for (const auto& i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
@@ -2385,7 +2397,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
 
           // -
 
-          auto& info = ret.active.activeUniformBlocks.emplace_back(userName);
+          auto info = webgl::ActiveUniformBlockInfo{userName};
           GLint val = 0;
 
           gl.fGetActiveUniformBlockiv(prog, i, LOCAL_GL_UNIFORM_BLOCK_DATA_SIZE, &val);
@@ -2403,6 +2415,8 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
           gl.fGetActiveUniformBlockiv(prog, i,
               LOCAL_GL_UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER, &val);
           info.referencedByFragmentShader = bool(val);
+
+          ret.activeUniformBlocks.push_back(std::move(info));
         } // for i
       } // anon
 
@@ -2410,7 +2424,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
       // active tf varyings
       {
         const auto count = fnGetProgramui(LOCAL_GL_TRANSFORM_FEEDBACK_VARYINGS);
-        ret.active.activeTfVaryings.reserve(count);
+        ret.activeTfVaryings.reserve(count);
 
         for (const auto& i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
@@ -2421,7 +2435,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
           const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
           const auto userName = fnUnmapName(mappedName);
 
-          ret.active.activeTfVaryings.emplace_back(elemType, elemCount, userName);
+          ret.activeTfVaryings.push_back({elemType, static_cast<uint32_t>(elemCount), userName});
         }
       }
     } // if webgl2
@@ -2429,18 +2443,32 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
   return ret;
 }
 
+webgl::CompileResult WebGLContext::GetCompileResult(const WebGLShader& shader) const {
+  webgl::CompileResult ret;
+  [&]() {
+    const auto& info = shader.CompileResults();
+    if (!info) return;
+    if (!info->mValid) {
+      ret.log = info->mInfoLog;
+      return;
+    }
+    ret.translatedSource = info->mObjectCode;
+    ret.log = shader.CompileLog();
+    if (!shader.IsCompiled()) return;
+    ret.success = true;
+  }();
+  return ret;
+}
+
 webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram& prog) const {
   webgl::LinkResult ret;
   [&]() {
+    ret.log = prog.LinkLog();
     const auto& info = prog.LinkInfo();
     if (!info) return;
-
+    ret.success = true;
     ret.active = info->active;
-
-    ret.numTfBuffers = 1;
-    if (info->transformFeedbackBufferMode == LOCAL_GL_SEPARATE_ATTRIBS) {
-      ret.numTfBuffers = static_cast<uint8_t>(ret.activeTfVaryings.size());
-    }
+    ret.tfBufferMode = info->transformFeedbackBufferMode;
   }();
   return ret;
 }
@@ -2454,6 +2482,13 @@ GLint WebGLContext::GetFragDataLocation(const WebGLProgram& prog, const std::str
 
   const auto mappedName = Find(nameMap, userName, userName);
   return gl->fGetFragDataLocation(prog.mGLName, mappedName.c_str());
+}
+
+// -
+
+void webgl::ScopedBindFailureGuard::OnFailure() {
+  gfxCriticalError() << "ScopedBindFailureGuard for " << mContext->FuncName();
+  mContext->LoseContext(webgl::ContextLossReason::None);
 }
 
 }  // namespace mozilla

@@ -99,7 +99,12 @@ void ClientWebGLContext::GetExtension(JSContext* cx, const nsAString& wideName,
   const auto& extObj = GetExtension(ext, callerType);
   if (!extObj) return;
 
-  retval.set(WebGLObjectAsJSObject(cx, extObj.get(), rv));
+  // Ugh, this would be easier returning `any` than `object`.
+  JS::Rooted<JS::Value> v(cx);
+  MOZ_ALWAYS_TRUE( ToJSValue(cx, extObj, &v) );
+  if (v.isObject()) {
+    retval.set(&v.toObject());
+  }
 }
 
 RefPtr<ClientWebGLExtensionBase> ClientWebGLContext::GetExtension(

@@ -44,8 +44,9 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
   size_t CalcNumSamplerUniforms() const;
   size_t NumAttributes() const;
 
-  bool IsCompiled() const { return mCompilationSuccessful; }
   const auto& CompileResults() const { return mCompileResults; }
+  const auto& CompileLog() const { return mCompilationLog; }
+  bool IsCompiled() const { return mCompilationSuccessful; }
 
  private:
   void BindAttribLocation(GLuint prog, const std::string& userName,

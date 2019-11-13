@@ -80,7 +80,8 @@ ScopedResolveTexturesForDraw::ScopedResolveTexturesForDraw(
 
   MOZ_ASSERT(mWebGL->mActiveProgramLinkInfo);
   const auto& samplerUniforms = mWebGL->mActiveProgramLinkInfo->samplerUniforms;
-  for (const auto& uniform : samplerUniforms) {
+  for (const auto& pUniform : samplerUniforms) {
+    const auto& uniform = *pUniform;
     const auto& texList = uniform.texListForType;
 
     const auto& uniformBaseType = uniform.texBaseType;
@@ -254,7 +255,7 @@ bool WebGLContext::ValidateBuffersForTf(
       break;
 
     case LOCAL_GL_SEPARATE_ATTRIBS:
-      numUsed = linkInfo.transformFeedbackVaryings.size();
+      numUsed = linkInfo.active.activeTfVaryings.size();
       break;
 
     default:

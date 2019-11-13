@@ -13,6 +13,7 @@
 #include "nsString.h"
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
+#include "WebGLFramebuffer.h"
 #include "WebGLSync.h"
 #include "WebGLTransformFeedback.h"
 #include "mozilla/dom/WebGLTypes.h"
@@ -377,25 +378,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->Finish();
   }
 
-  void FramebufferAttach(const GLenum target, const GLenum attachEnum,
-                         const GLenum attachTarget, const ObjectId id,
+  void FramebufferAttach(const GLenum target, const GLenum attachSlot,
+                         const GLenum bindImageTarget, const ObjectId id,
                          const GLint mipLevel, const GLint zLayerBase,
                          const GLsizei numViewLayers) const {
-    TexTarget bindTexTarget = 0;
-    switch (attachTarget) {
-      case LOCAL_GL_TEXTURE_2D:
-        bindTexTarget = LOCAL_GL_TEXTURE_2D;
-        break;
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
-      case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
-        bindTexTarget = LOCAL_GL_TEXTURE_CUBE_MAP;
-        break;
-    }
-
     webgl::FbAttachInfo toAttach;
     toAttach.rb = ById(id);
     toAttach.tex = ById(id);
@@ -406,7 +392,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
       toAttach.isMultiview = true;
     }
 
-    mContext->FramebufferAttach(target, attachEnum, bindTexTarget, toAttach);
+    mContext->FramebufferAttach(target, attachSlot, bindImageTarget, toAttach);
   }
 
   void FrontFace(GLenum mode) const {
@@ -415,6 +401,12 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   Maybe<double> GetBufferParameter(GLenum target, GLenum pname) const {
     return mContext->GetBufferParameter(target, pname);
+  }
+
+  webgl::CompileResult GetCompileResult(ObjectId id) const {
+    const auto obj = ById(id);
+    if (!obj) return {};
+    return mContext->GetCompileResult(*obj);
   }
 
   GLenum GetError() const {
@@ -647,18 +639,14 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // ------------------------ Uniforms and attributes ------------------------
 
-  void UniformNTv(ObjectId id, const uint8_t n,
-              const webgl::UniformBaseType t, const RawBuffer<>& data) const {
-    const auto obj = ById(id);
-    if (!obj) return;
-    mContext->UniformNTv(*obj, n, t, MakeRange(data));
+  void UniformNTv(const uint8_t n, const webgl::UniformBaseType t, uint32_t loc,
+          const RawBuffer<const uint8_t>& data) const {
+    mContext->UniformNTv(n, t, loc, MakeRange(data));
   }
 
-  void UniformMatrixAxBfv(uint8_t A, uint8_t B, const ObjectId id,
+  void UniformMatrixAxBfv(uint8_t a, uint8_t b, uint32_t loc,
                           bool transpose, const RawBuffer<const float>& data) const {
-    const auto obj = ById(id);
-    if (!obj) return;
-    mContext->UniformMatrixAxBfv(A, B, *obj, transpose, MakeRange(data));
+    mContext->UniformMatrixAxBfv(a, b, loc, transpose, MakeRange(data));
   }
 
   void VertexAttrib4T(GLuint index, const webgl::TypedQuad& data) const {
@@ -830,10 +818,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->EndQuery(target);
   }
 
-  void QueryCounter(ObjectId id, GLenum target) const {
+  void QueryCounter(ObjectId id) const {
     const auto obj = ById(id);
     if (!obj) return;
-    mContext->QueryCounter(*obj, target);
+    mContext->QueryCounter(*obj);
   }
 
   Maybe<double> GetQueryParameter(ObjectId id,

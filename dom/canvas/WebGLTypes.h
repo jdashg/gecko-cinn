@@ -507,7 +507,6 @@ struct InitContextResult final {
   ExtensionBits supportedExtensions;
   bool astcHdr = false;
   uint8_t maxColorDrawBuffers = 0;
-  uint8_t maxTfoBuffers = 0;
   uint16_t maxTexUnits = 0;
   uint16_t maxVertexAttribs = 0;
   uint8_t maxUniformBufferBindings = 0;
@@ -517,6 +516,12 @@ struct InitContextResult final {
   float lineWidthRange[2] = {};
   uint64_t queryCounterBitsTimeElapsed = 0;
   uint64_t queryCounterBitsTimestamp = 0;
+  uint32_t maxTransformFeedbackSeparateAttribs = 0;
+  uint32_t maxTex2dSize = 0;
+  uint32_t maxTexCubeSize = 0;
+  uint32_t maxTexArrayLayers = 0;
+  uint32_t maxTex3dSize = 0;
+  uint32_t maxMultiviewLayers = 0;
 };
 
 struct ErrorInfo final {
@@ -544,9 +549,9 @@ enum class LossStatus {
 
 struct CompileResult final {
   bool pending = true;
-  bool success = false;
   std::string log;
   std::string translatedSource;
+  bool success = false;
 };
 
 // -
@@ -588,9 +593,10 @@ struct LinkActiveInfo final {
 
 struct LinkResult final {
   bool pending = true;
+  std::string log;
   bool success = false;
   LinkActiveInfo active;
-  uint8_t numTfBuffers = 0;
+  GLenum tfBufferMode = 0;
 };
 
 // -
@@ -829,7 +835,7 @@ inline Range<const T> MakeRange(T (&arr)[N]) {
 }
 
 template<typename T>
-inline Range<T> MakeRange(const dom::Sequence<T>& seq) {
+inline Range<const T> MakeRange(const dom::Sequence<T>& seq) {
   return {seq.Elements(), seq.Length()};
 }
 
@@ -848,12 +854,24 @@ inline auto MakeRangeAbv(const T& abv) -> Range<const typename T::element_type> 
 template<typename T>
 inline Range<const uint8_t> MakeByteRange(const T& x) {
   const auto typed = MakeRange(x);
-  return Range<const uint8_t>(typed);
+  return Range<const uint8_t>(reinterpret_cast<const uint8_t*>(typed.begin().get()),
+                              typed.length() * sizeof(typed[0]));
 }
 
 Maybe<Range<const uint8_t>> GetRangeFromView(
     const dom::ArrayBufferView& view, GLuint elemOffset,
     GLuint elemCountOverride);
+
+// -
+
+Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
+        const GLenum curTexTarget, const uint32_t mipLevel, const uint32_t zLayerBase,
+        const uint32_t zLayerCount, const webgl::InitContextResult& limits);
+
+Maybe<webgl::ErrorInfo> CheckVertexAttribPointer(bool webgl2, bool isFuncInt,
+                                          GLint size, GLenum type,
+                                          bool normalized, uint32_t stride,
+                                          uint64_t byteOffset);
 
 }  // namespace mozilla
 

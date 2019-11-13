@@ -31,19 +31,6 @@
 
 namespace mozilla {
 
-static bool ValidateUnpackInfo(WebGLContext* webgl,
-                               const webgl::PackingInfo& pi) {
-  if (!webgl->mFormatUsage->AreUnpackEnumsValid(pi.format, pi.type)) {
-    webgl->ErrorInvalidEnum("Invalid unpack format/type: 0x%04x/0x%04x",
-                            pi.format, pi.type);
-    return false;
-  }
-
-  return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
 static UniquePtr<webgl::TexUnpackBytes> FromView(
     const WebGLContext* webgl, TexImageTarget target,
     const uvec3& size, const dom::ArrayBufferView* view, GLuint viewElemOffset,
@@ -1038,9 +1025,10 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
   if (respecFormat) {
     // It's tempting to do allocation first, and TexSubImage second, but this is
     // generally slower.
-    auto uninitializedSlices =
-        blob->HasData() ? Nothing() : Some(std::vector<bool>(blob->mDepth, true));
-    newImageInfo.emplace(dstUsage, size, std::move(uninitializedSlices));
+    newImageInfo = Some(webgl::ImageInfo{dstUsage, size.x, size.y, size.z});
+    if (!blob->HasData()) {
+      newImageInfo->mUninitializedSlices = Some(std::vector<bool>(blob->mDepth, true));
+    }
 
     if (imageInfo->mWidth == newImageInfo->mWidth &&
         imageInfo->mHeight == newImageInfo->mHeight &&

@@ -30,31 +30,7 @@ namespace mozilla {
 
 LazyLogModule gWebGLBridgeLog("webglbridge");
 
-#define DEFINE_OBJECT_ID_MAP_FUNCS(_WebGLType)                                 \
-  WebGLId<WebGL##_WebGLType> HostWebGLContext::Insert(                         \
-      RefPtr<WebGL##_WebGLType>&& aObj, const WebGLId<WebGL##_WebGLType>& aId) \
-      const {                                                                  \
-    return m##_WebGLType##Map.Insert(std::move(aObj), aId);                    \
-  }                                                                            \
-  WebGL##_WebGLType* HostWebGLContext::Find(                                   \
-      const WebGLId<WebGL##_WebGLType>& aId) const {                           \
-    return m##_WebGLType##Map.Find(aId);                                       \
-  }                                                                            \
-  void HostWebGLContext::Remove(const WebGLId<WebGL##_WebGLType>& aId) const { \
-    return m##_WebGLType##Map.Remove(aId);                                     \
-  }
-
-DEFINE_OBJECT_ID_MAP_FUNCS(Framebuffer);
-DEFINE_OBJECT_ID_MAP_FUNCS(Program);
-DEFINE_OBJECT_ID_MAP_FUNCS(Query);
-DEFINE_OBJECT_ID_MAP_FUNCS(Renderbuffer);
-DEFINE_OBJECT_ID_MAP_FUNCS(Sampler);
-DEFINE_OBJECT_ID_MAP_FUNCS(Shader);
-DEFINE_OBJECT_ID_MAP_FUNCS(Sync);
-DEFINE_OBJECT_ID_MAP_FUNCS(TransformFeedback);
-DEFINE_OBJECT_ID_MAP_FUNCS(VertexArray);
-DEFINE_OBJECT_ID_MAP_FUNCS(Buffer);
-DEFINE_OBJECT_ID_MAP_FUNCS(Texture);
+#error Handle create/delete
 
 /*static*/
 UniquePtr<HostWebGLContext> HostWebGLContext::Create(
@@ -96,7 +72,17 @@ void HostWebGLContext::OnContextLoss(const webgl::ContextLossReason reason) {
 
 void HostWebGLContext::Present() { mContext->Present(); }
 
-// -
+//////////////////////////////////////////////
+// Creation
+
+void HostWebGLContext::CreateBuffer(ObjectId id) {
+  auto& slot = mBufferMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateBuffer();
+}
 
 void HostWebGLContext::CreateFramebuffer(const WebGLId<WebGLFramebuffer>& aId) {
   Insert(mContext->CreateFramebuffer(), aId);
@@ -116,9 +102,6 @@ void HostWebGLContext::CreateShader(GLenum aType,
   Insert(mContext->CreateShader(aType), aId);
 }
 
-WebGLId<WebGLBuffer> HostWebGLContext::CreateBuffer() {
-  return Insert(RefPtr<WebGLBuffer>(mContext->CreateBuffer()));
-}
 
 WebGLId<WebGLTexture> HostWebGLContext::CreateTexture() {
   return Insert(RefPtr<WebGLTexture>(mContext->CreateTexture()));

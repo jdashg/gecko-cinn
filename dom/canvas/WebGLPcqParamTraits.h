@@ -158,6 +158,7 @@ struct PcqParamTraits<RawBuffer<T>> {
   }
 };
 
+/*
 enum TexUnpackTypes : uint8_t { Bytes, Surface, Image, Pbo };
 
 template <>
@@ -298,7 +299,7 @@ struct PcqParamTraits<WebGLTexUnpackVariant> {
     return ret + aArg->match(TexUnpackMinSizeMatcher{aView});
   }
 };
-
+*/
 template <>
 struct PcqParamTraits<webgl::ContextLossReason> {
   using ParamType = webgl::ContextLossReason;

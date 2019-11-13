@@ -167,9 +167,9 @@ bool WebGLContext::ValidateIndexedBufferBinding(
   return true;
 }
 
-void WebGLContext::BindBufferRangeImpl(GLenum target, GLuint index,
-                                       WebGLBuffer* buffer, WebGLintptr offset,
-                                       WebGLsizeiptr size) {
+void WebGLContext::BindBufferRange(GLenum target, GLuint index,
+                                       WebGLBuffer* buffer, uint64_t offset,
+                                       uint64_t size) {
   if (buffer && !ValidateObject("buffer", *buffer)) return;
 
   WebGLRefPtr<WebGLBuffer>* genericBinding;

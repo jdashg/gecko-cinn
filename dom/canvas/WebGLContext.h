@@ -507,6 +507,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   uvec2 DrawingBufferSize();
 
+  const webgl::InitContextResult& Limits() const;
+
  public:
   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
 
@@ -554,16 +556,14 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void Flush();
   void Finish();
 
-  void FramebufferAttach(GLenum target, GLenum attachEnum,
-                         TexTarget reqTexTarget,
-                         const webgl::FbAttachInfo& toAttach) const;
+  void FramebufferAttach(GLenum target, GLenum attachSlot, GLenum bindImageTarget,
+                         const webgl::FbAttachInfo& toAttach);
 
   void FrontFace(GLenum mode);
 
   Maybe<double> GetBufferParameter(GLenum target, GLenum pname);
-
+  webgl::CompileResult GetCompileResult(const WebGLShader&) const;
   GLenum GetError();
-
   GLint GetFragDataLocation(const WebGLProgram&, const std::string& name) const;
 
   Maybe<double> GetFramebufferAttachmentParameter(WebGLFramebuffer*,
@@ -571,7 +571,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                                       GLenum pname) const;
 
   Maybe<double> GetRenderbufferParameter(const WebGLRenderbuffer&, GLenum pname) const;
-
   webgl::LinkResult GetLinkResult(const WebGLProgram&) const;
 
   Maybe<webgl::ShaderPrecisionFormat> GetShaderPrecisionFormat(
@@ -628,10 +627,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   //////////////////////////
 
-  void UniformNTv(uint32_t loc, uint8_t n, webgl::UniformBaseType t,
-                  const Range<const uint8_t>& data) const;
+  void UniformNTv(uint8_t n, webgl::UniformBaseType t,
+                  uint32_t loc, const Range<const uint8_t>& data) const;
 
-  void UniformMatrixAxBfv(uint32_t loc, uint8_t A, uint8_t B,
+  void UniformMatrixAxBfv(uint8_t A, uint8_t B, uint32_t loc,
                           bool transpose,
                           const Range<const float>& data) const;
 
@@ -646,27 +645,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // -----------------------------------------------------------------------------
   // Buffer Objects (WebGLContextBuffers.cpp)
   void BindBuffer(GLenum target, WebGLBuffer* buffer);
-
- private:
-  void BindBufferRangeImpl(GLenum target, GLuint index, WebGLBuffer* buf,
-                           WebGLintptr offset, WebGLsizeiptr size);
-
- public:
   void BindBufferRange(GLenum target, GLuint index, WebGLBuffer* buf,
-                       WebGLintptr offset, WebGLsizeiptr size) {
-    const FuncScope funcScope(*this, "bindBufferRange");
-    if (IsContextLost()) return;
-
-    if (!ValidateNonNegative("offset", offset) ||
-        !ValidateNonNegative("size", size)) {
-      return;
-    }
-    if (buf && !size) {
-      ErrorInvalidValue("Size must be non-zero for non-null buffer.");
-      return;
-    }
-    BindBufferRangeImpl(target, index, buf, offset, size);
-  }
+                           uint64_t offset, uint64_t size);
 
   void BufferDataImpl(GLenum target, uint64_t dataLen, const uint8_t* data,
                       GLenum usage);
@@ -744,7 +724,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void BeginQuery(GLenum target, WebGLQuery& query);
   void EndQuery(GLenum target);
   Maybe<double> GetQueryParameter(const WebGLQuery& query, GLenum pname) const;
-  void QueryCounter(WebGLQuery&, const GLenum target) const;
+  void QueryCounter(WebGLQuery&) const;
 
   // -----------------------------------------------------------------------------
   // State and State Requests (WebGLContextState.cpp)
@@ -991,19 +971,18 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // WebGL extensions (implemented in WebGLContextExtensions.cpp)
 
   EnumeratedArray<WebGLExtensionID, WebGLExtensionID::Max,
-                  RefPtr<WebGLExtensionBase>>
-      mExtensions;
+                  std::unique_ptr<WebGLExtensionBase>> mExtensions;
 
  public:
   void RequestExtension(WebGLExtensionID, bool explicitly = true);
 
   // returns true if the extension has been enabled by calling getExtension.
-  bool IsExtensionEnabled(const WebGLExtensionID ext) const {
-    return mExtensions[ext];
+  bool IsExtensionEnabled(const WebGLExtensionID id) const {
+
+    return bool(mExtensions[id]);
   }
 
   bool IsExtensionExplicit(WebGLExtensionID) const;
-
   void WarnIfImplicit(WebGLExtensionID) const;
 
  protected:
@@ -1556,6 +1535,26 @@ class ScopedPrepForResourceClear final {
 struct IndexedName final {
   std::string name;
   uint64_t index;
+};
+
+class ScopedBindFailureGuard final {
+  WebGLContext* mContext; // LoseContext requires non-const.
+
+public:
+  explicit ScopedBindFailureGuard(WebGLContext& context) : mContext(&context) {}
+
+  ~ScopedBindFailureGuard() {
+    if (mContext) {
+      OnFailure();
+    }
+  }
+
+  void OnSuccess() {
+    mContext = nullptr;
+  }
+
+private:
+  void OnFailure();
 };
 
 }  // namespace webgl
