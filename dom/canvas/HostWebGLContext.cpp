@@ -30,8 +30,6 @@ namespace mozilla {
 
 LazyLogModule gWebGLBridgeLog("webglbridge");
 
-#error Handle create/delete
-
 /*static*/
 UniquePtr<HostWebGLContext> HostWebGLContext::Create(
     OwnerData&& ownerData, const webgl::InitContextDesc& desc,
@@ -51,15 +49,6 @@ HostWebGLContext::HostWebGLContext(OwnerData&& ownerData)
 
 HostWebGLContext::~HostWebGLContext() = default;
 
-CommandResult HostWebGLContext::RunCommandsForDuration(TimeDuration aDuration) {
-  return mOwnerData.outOfProcess->mCommandSink->ProcessUpToDuration(aDuration);
-}
-
-void HostWebGLContext::SetCompositableHost(
-    RefPtr<CompositableHost>& aCompositableHost) {
-  mContext->SetCompositableHost(aCompositableHost);
-}
-
 // -
 
 void HostWebGLContext::OnContextLoss(const webgl::ContextLossReason reason) {
@@ -70,12 +59,18 @@ void HostWebGLContext::OnContextLoss(const webgl::ContextLossReason reason) {
   }
 }
 
-void HostWebGLContext::Present() { mContext->Present(); }
+void HostWebGLContext::JsWarning(const std::string& text) const {
+  if (mOwnerData.inProcess) {
+    (*mOwnerData.inProcess)->JsWarning(text);
+    return;
+  }
+  (void)mOwnerData.outOfProcess->mParent.SendJsWarning(text);
+}
 
 //////////////////////////////////////////////
 // Creation
 
-void HostWebGLContext::CreateBuffer(ObjectId id) {
+void HostWebGLContext::CreateBuffer(const ObjectId id) {
   auto& slot = mBufferMap[id];
   if (slot) {
     MOZ_ASSERT(false, "duplicate ID");
@@ -84,203 +79,115 @@ void HostWebGLContext::CreateBuffer(ObjectId id) {
   slot = mContext->CreateBuffer();
 }
 
-void HostWebGLContext::CreateFramebuffer(const WebGLId<WebGLFramebuffer>& aId) {
-  Insert(mContext->CreateFramebuffer(), aId);
-}
-
-void HostWebGLContext::CreateProgram(const WebGLId<WebGLProgram>& aId) {
-  Insert(mContext->CreateProgram(), aId);
-}
-
-void HostWebGLContext::CreateRenderbuffer(
-    const WebGLId<WebGLRenderbuffer>& aId) {
-  Insert(mContext->CreateRenderbuffer(), aId);
-}
-
-void HostWebGLContext::CreateShader(GLenum aType,
-                                    const WebGLId<WebGLShader>& aId) {
-  Insert(mContext->CreateShader(aType), aId);
-}
-
-
-WebGLId<WebGLTexture> HostWebGLContext::CreateTexture() {
-  return Insert(RefPtr<WebGLTexture>(mContext->CreateTexture()));
-}
-
-void HostWebGLContext::CreateSampler(const WebGLId<WebGLSampler>& aId) {
-  Insert(GetWebGL2Context()->CreateSampler(), aId);
-}
-
-WebGLId<WebGLSync> HostWebGLContext::FenceSync(const WebGLId<WebGLSync>& aId,
-                                               GLenum condition,
-                                               GLbitfield flags) {
-  return Insert(GetWebGL2Context()->FenceSync(condition, flags), aId);
-}
-
-void HostWebGLContext::CreateTransformFeedback(
-    const WebGLId<WebGLTransformFeedback>& aId) {
-  Insert(GetWebGL2Context()->CreateTransformFeedback(), aId);
-}
-
-void HostWebGLContext::CreateVertexArray(const WebGLId<WebGLVertexArray>& aId) {
-  Insert(mContext->CreateVertexArray(), aId);
-}
-
-void HostWebGLContext::CreateQuery(const WebGLId<WebGLQuery>& aId) const {
-  Insert(const_cast<WebGL2Context*>(GetWebGL2Context())->CreateQuery(), aId);
-}
-
-// ------------------------- Composition -------------------------
-Maybe<ICRData> HostWebGLContext::InitializeCanvasRenderer(
-    layers::LayersBackend backend) {
-  return mContext->InitializeCanvasRenderer(backend);
-}
-
-void HostWebGLContext::Resize(const uvec2& size) {
-  return mContext->Resize(size);
-}
-
-uvec2 HostWebGLContext::DrawingBufferSize() {
-  return mContext->DrawingBufferSize();
-}
-
-void HostWebGLContext::OnMemoryPressure() {
-  return mContext->OnMemoryPressure();
-}
-
-void HostWebGLContext::DidRefresh() { mContext->DidRefresh(); }
-
-// ------------------------- GL State -------------------------
-
-void HostWebGLContext::CopyTexImage2D(GLenum target, GLint level,
-                                      GLenum internalFormat, GLint x, GLint y,
-                                      uint32_t width, uint32_t height,
-                                      uint32_t depth) {
-  mContext->CopyTexImage2D(target, level, internalFormat, x, y, width, height,
-                           depth);
-}
-
-void HostWebGLContext::TexStorage(uint8_t funcDims, GLenum target,
-                                  GLsizei levels, GLenum internalFormat,
-                                  GLsizei width, GLsizei height, GLsizei depth,
-                                  FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  GetWebGL2Context()->TexStorage(funcDims, target, levels, internalFormat,
-                                 width, height, depth);
-}
-
-template <typename TexUnpackType>
-struct ToTexUnpackTypeMatcher {
-  template <typename T, typename mozilla::EnableIf<
-                            mozilla::IsConvertible<T*, TexUnpackType*>::value,
-                            int>::Type = 0>
-  UniquePtr<TexUnpackType> operator()(UniquePtr<T>& x) {
-    return std::move(x);
-  }
-  template <typename T, typename mozilla::EnableIf<
-                            !mozilla::IsConvertible<T*, TexUnpackType*>::value,
-                            char>::Type = 0>
-  UniquePtr<TexUnpackType> operator()(UniquePtr<T>& x) {
-    MOZ_ASSERT_UNREACHABLE(
-        "Attempted to read TexUnpackBlob as something it was not");
-    return nullptr;
-  }
-  UniquePtr<TexUnpackType> operator()(WebGLTexPboOffset& aPbo) {
-    UniquePtr<webgl::TexUnpackBytes> bytes = mContext->ToTexUnpackBytes(aPbo);
-    return operator()(bytes);
-  }
-  WebGLContext* mContext;
-};
-
-template <typename TexUnpackType>
-UniquePtr<TexUnpackType> AsTexUnpackType(WebGLContext* aContext,
-                                         MaybeWebGLTexUnpackVariant&& src) {
-  if (!src) {
-    return nullptr;
-  }
-  if ((!src.ref().is<WebGLTexPboOffset>()) &&
-      (!aContext->ValidateNullPixelUnpackBuffer())) {
-    return nullptr;
-  }
-
-  return src.ref().match(ToTexUnpackTypeMatcher<TexUnpackType>{aContext});
-}
-
-void HostWebGLContext::TexImage(uint8_t funcDims, GLenum target, GLint level,
-                                GLenum internalFormat, GLsizei width,
-                                GLsizei height, GLsizei depth, GLint border,
-                                GLenum unpackFormat, GLenum unpackType,
-                                MaybeWebGLTexUnpackVariant&& src,
-                                FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  mContext->TexImage(
-      funcDims, target, level, internalFormat, width, height, depth, border,
-      unpackFormat, unpackType,
-      AsTexUnpackType<webgl::TexUnpackBlob>(mContext, std::move(src)));
-}
-
-void HostWebGLContext::TexSubImage(uint8_t funcDims, GLenum target, GLint level,
-                                   GLint xOffset, GLint yOffset, GLint zOffset,
-                                   GLsizei width, GLsizei height, GLsizei depth,
-                                   GLenum unpackFormat, GLenum unpackType,
-                                   MaybeWebGLTexUnpackVariant&& src,
-                                   FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  mContext->TexSubImage(
-      funcDims, target, level, xOffset, yOffset, zOffset, width, height, depth,
-      unpackFormat, unpackType,
-      AsTexUnpackType<webgl::TexUnpackBlob>(mContext, std::move(src)));
-}
-
-void HostWebGLContext::CompressedTexImage(
-    uint8_t funcDims, GLenum target, GLint level, GLenum internalFormat,
-    GLsizei width, GLsizei height, GLsizei depth, GLint border,
-    MaybeWebGLTexUnpackVariant&& src, const Maybe<GLsizei>& expectedImageSize,
-    FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  mContext->CompressedTexImage(
-      funcDims, target, level, internalFormat, width, height, depth, border,
-      AsTexUnpackType<webgl::TexUnpackBytes>(mContext, std::move(src)),
-      expectedImageSize);
-}
-
-void HostWebGLContext::CompressedTexSubImage(
-    uint8_t funcDims, GLenum target, GLint level, GLint xOffset, GLint yOffset,
-    GLint zOffset, GLsizei width, GLsizei height, GLsizei depth,
-    GLenum unpackFormat, MaybeWebGLTexUnpackVariant&& src,
-    const Maybe<GLsizei>& expectedImageSize, FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  mContext->CompressedTexSubImage(
-      funcDims, target, level, xOffset, yOffset, zOffset, width, height, depth,
-      unpackFormat,
-      AsTexUnpackType<webgl::TexUnpackBytes>(mContext, std::move(src)),
-      expectedImageSize);
-}
-
-void HostWebGLContext::CopyTexSubImage(uint8_t funcDims, GLenum target,
-                                       GLint level, GLint xOffset,
-                                       GLint yOffset, GLint zOffset, GLint x,
-                                       GLint y, uint32_t width, uint32_t height,
-                                       uint32_t depth, FuncScopeId aFuncId) {
-  const WebGLContext::FuncScope scope(*mContext, GetFuncScopeName(aFuncId));
-  mContext->CopyTexSubImage(funcDims, target, level, xOffset, yOffset, zOffset,
-                            x, y, width, height, depth);
-}
-
-// ------------------------------ WebGL Debug
-// ------------------------------------
-
-void HostWebGLContext::GenerateError(const GLenum error,
-                                     const std::string& text) const {
-  mContext->GenerateError(error, text.c_str());
-}
-
-void HostWebGLContext::JsWarning(const std::string& text) const {
-  if (mOwnerData.inProcess) {
-    (*mOwnerData.inProcess)->JsWarning(text);
+void HostWebGLContext::CreateFramebuffer(const ObjectId id) {
+  auto& slot = mFramebufferMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
     return;
   }
-  (void)mOwnerData.outOfProcess->mParent.SendJsWarning(text);
+  slot = mContext->CreateFramebuffer();
 }
+
+void HostWebGLContext::CreateProgram(const ObjectId id) {
+  auto& slot = mProgramMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateProgram();
+}
+
+void HostWebGLContext::CreateQuery(const ObjectId id) {
+  auto& slot = mQueryMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateQuery();
+}
+
+void HostWebGLContext::CreateRenderbuffer(const ObjectId id) {
+  auto& slot = mRenderbufferMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateRenderbuffer();
+}
+
+void HostWebGLContext::CreateSampler(const ObjectId id) {
+  auto& slot = mSamplerMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = GetWebGL2Context()->CreateSampler();
+}
+
+void HostWebGLContext::CreateShader(const ObjectId id, GLenum type) {
+  auto& slot = mShaderMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateShader(type);
+}
+
+void HostWebGLContext::CreateSync(const ObjectId id) {
+  auto& slot = mSyncMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = GetWebGL2Context()->FenceSync(LOCAL_GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+}
+
+void HostWebGLContext::CreateTexture(const ObjectId id) {
+  auto& slot = mTextureMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = mContext->CreateTexture();
+}
+
+void HostWebGLContext::CreateTransformFeedback(const ObjectId id) {
+  auto& slot = mTransformFeedbackMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = GetWebGL2Context()->CreateTransformFeedback();
+}
+
+void HostWebGLContext::CreateVertexArray(const ObjectId id) {
+  auto& slot = mVertexArrayMap[id];
+  if (slot) {
+    MOZ_ASSERT(false, "duplicate ID");
+    return;
+  }
+  slot = GetWebGL2Context()->CreateVertexArray();
+}
+
+////////////////////////
+
+#define _(X) \
+  void HostWebGLContext::Delete ## X(const ObjectId id) { \
+    m ## X ## Map.erase(id); \
+  }
+
+_(Buffer)
+_(Framebuffer)
+_(Program)
+_(Query)
+_(Renderbuffer)
+_(Sampler)
+_(Shader)
+_(Sync)
+_(Texture)
+_(TransformFeedback)
+_(VertexArray)
+
+#undef _
 
 }  // namespace mozilla

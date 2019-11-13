@@ -254,13 +254,14 @@ public:
 class WebGLFramebufferJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
-  GLenum mTarget = 0; // !IsFramebuffer until Bind
-
+public:
   struct Attachment final {
     RefPtr<WebGLRenderbufferJS> rb;
     RefPtr<WebGLTextureJS> tex;
   };
 
+private:
+  GLenum mTarget = 0; // !IsFramebuffer until Bind
   std::unordered_map<GLenum, Attachment> mAttachments;
 
  public:
@@ -279,6 +280,8 @@ public:
 
 struct WebGLProgramPreventDelete final {
   const RefPtr<WebGLProgramJS> js;
+
+  explicit WebGLProgramPreventDelete(const RefPtr<WebGLProgramJS>& _js) : js(_js) {}
 };
 
 struct WebGLShaderPreventDelete;
@@ -371,6 +374,8 @@ public:
 
 struct WebGLShaderPreventDelete final {
   const RefPtr<WebGLShaderJS> js;
+
+  explicit WebGLShaderPreventDelete(const RefPtr<WebGLShaderJS>& _js) : js(_js) {}
 };
 
 class WebGLShaderJS final : public webgl::ObjectJS {
