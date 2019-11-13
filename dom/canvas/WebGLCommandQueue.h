@@ -739,7 +739,7 @@ struct MethodDispatcher {
 // given method using the given synchronization protocol, and provide
 // compile-time lookup of the ID by class method.
 #define DEFINE_METHOD_DISPATCHER(_DISPATCHER, _ID, _METHOD, _SYNC)         \
-  template <>                                                              \
+/*  template <>                                                              \
   bool _DISPATCHER::DispatchCommand<_ID>(size_t aId, SinkType & aSink,     \
                                          ObjectType & aObj) {              \
     return CommandDispatchDriver<_DISPATCHER>::DispatchCommandHelper<_ID>( \
@@ -748,7 +748,7 @@ struct MethodDispatcher {
   template <>                                                              \
   bool _DISPATCHER::Dispatch<_ID>(SinkType & aSink, ObjectType & aObj) {   \
     return DispatchMethod<_SYNC>::Run(aSink, &_METHOD, aObj);              \
-  }                                                                        \
+  } */                                                                       \
   template <>                                                              \
   struct _DISPATCHER::MethodInfo<_ID> {                                    \
     using MethodType = decltype(&_METHOD);                                 \

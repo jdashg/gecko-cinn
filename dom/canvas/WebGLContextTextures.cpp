@@ -78,39 +78,6 @@ static bool IsValidTexTarget(WebGLContext* webgl, uint8_t funcDims,
   return true;
 }
 
-static bool IsValidTexImageTarget(WebGLContext* webgl, uint8_t funcDims,
-                                  GLenum rawTexImageTarget,
-                                  TexImageTarget* const out) {
-  uint8_t targetDims;
-
-  switch (rawTexImageTarget) {
-    case LOCAL_GL_TEXTURE_2D:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
-    case LOCAL_GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
-      targetDims = 2;
-      break;
-
-    case LOCAL_GL_TEXTURE_3D:
-    case LOCAL_GL_TEXTURE_2D_ARRAY:
-      if (!webgl->IsWebGL2()) return false;
-
-      targetDims = 3;
-      break;
-
-    default:
-      return false;
-  }
-
-  if (targetDims != funcDims) return false;
-
-  *out = rawTexImageTarget;
-  return true;
-}
-
 bool ValidateTexTarget(WebGLContext* webgl, uint8_t funcDims,
                        GLenum rawTexTarget, TexTarget* const out_texTarget,
                        WebGLTexture** const out_tex) {

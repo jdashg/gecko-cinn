@@ -374,110 +374,41 @@ void WebGLContext::DepthRange(GLfloat zNear, GLfloat zFar) {
 // -
 
 void WebGLContext::FramebufferAttach(
-    const GLenum target, const GLenum attachEnum, const TexTarget reqTexTarget,
-    const webgl::FbAttachInfo& toAttach) const {
+    const GLenum target, const GLenum attachSlot, const GLenum bindImageTarget,
+    const webgl::FbAttachInfo& toAttach) {
+  webgl::ScopedBindFailureGuard failureGuard(*this);
+  const auto& limits = Limits();
+
   if (!ValidateFramebufferTarget(target)) return;
 
-  WebGLFramebuffer* fb = mBoundDrawFramebuffer;
+  auto fb = mBoundDrawFramebuffer;
   if (target == LOCAL_GL_READ_FRAMEBUFFER) {
     fb = mBoundReadFramebuffer;
   }
-  if (!fb) return ErrorInvalidOperation("Cannot modify framebuffer 0.");
+  if (!fb) return;
 
-  // `rb`
-  if (toAttach.rb) {
-    if (!ValidateObject("rb", *toAttach.rb)) return;
-
-    if (!toAttach.rb->mHasBeenBound) {
-      ErrorInvalidOperation(
-          "bindRenderbuffer must be called before"
-          " attachment.");
-      return;
-    }
-  }
+  // `rb` needs no validation.
 
   // `tex`
-  if (toAttach.tex) {
-    if (!ValidateObject("tex", *toAttach.tex)) return;
-    const auto texTarget = toAttach.tex->Target();
-
-    bool targetOk = bool(texTarget);
-    if (reqTexTarget) {
-      targetOk = texTarget == reqTexTarget;
-    }
-    if (!targetOk) {
-      ErrorInvalidOperation("`tex`'s binding target type is not valid.");
-      return;
-    }
-
-    GLint maxMipLevel;
-    GLint maxZLayer;
-    const char* maxMipLevelText;
-    const char* maxZLayerText;
-
-    switch (texTarget.get()) {
-      case LOCAL_GL_TEXTURE_2D:
-        maxMipLevel = FloorLog2(mGLMaxTextureSize);
-        maxMipLevelText = "log2(MAX_TEXTURE_SIZE)";
-        maxZLayer = 1;
-        maxZLayerText = "1";
-        break;
-
-      case LOCAL_GL_TEXTURE_CUBE_MAP:
-        maxMipLevel = FloorLog2(mGLMaxCubeMapTextureSize);
-        maxMipLevelText = "log2(MAX_CUBE_MAP_TEXTURE_SIZE)";
-        maxZLayer = 6;
-        maxZLayerText = "6";
-        break;
-
-      case LOCAL_GL_TEXTURE_3D:
-        maxMipLevel = FloorLog2(mGLMax3DTextureSize);
-        maxMipLevelText = "log2(MAX_3D_TEXTURE_SIZE)";
-        maxZLayer = mGLMax3DTextureSize - 1;
-        maxZLayerText = "MAX_3D_TEXTURE_SIZE";
-        break;
-
-      case LOCAL_GL_TEXTURE_2D_ARRAY:
-        maxMipLevel = FloorLog2(mGLMaxTextureSize);
-        maxMipLevelText = "log2(MAX_TEXTURE_SIZE)";
-        maxZLayer = mGLMaxArrayTextureLayers;
-        maxZLayerText = "MAX_ARRAY_TEXTURE_LAYERS";
-        break;
-
-      default:
-        MOZ_CRASH();
-    }
-    if (!IsWebGL2() &&
-        !IsExtensionEnabled(WebGLExtensionID::OES_fbo_render_mipmap)) {
-      maxMipLevel = 0;
-      maxMipLevelText = "0";
-    }
-
-    if (toAttach.mipLevel < 0)
-      return ErrorInvalidValue("`level` must be >= 0.");
-    if (toAttach.mipLevel > maxMipLevel) {
-      ErrorInvalidValue("`level` must be <= %s.", maxMipLevelText);
-      return;
-    }
-
-    if (toAttach.zLayer < 0) return ErrorInvalidValue("`layer` must be >= 0.");
-    if (toAttach.zLayerCount < 1)
-      return ErrorInvalidValue("`numViews` must be >= 1.");
-    if (AssertedCast<uint32_t>(toAttach.zLayerCount) > mGLMaxMultiviewViews)
-      return ErrorInvalidValue("`numViews` must be <= MAX_VIEWS_OVR.");
-
-    const auto lastZLayer = toAttach.zLayer + toAttach.zLayerCount;
-    if (lastZLayer > maxZLayer) {
-      const char* formatText = "`layer` must be < %s.";
-      if (toAttach.zLayerCount != 1) {
-        formatText = "`layer` + `numViews` must be <= %s.";
-      }
-      ErrorInvalidValue(formatText, maxZLayerText);
-      return;
-    }
+  const auto& tex = toAttach.tex;
+  if (tex) {
+    const auto err = CheckFramebufferAttach(bindImageTarget, tex->mTarget.get(),
+          toAttach.mipLevel, toAttach.zLayer, toAttach.zLayerCount, limits);
+    if (err) return;
   }
 
-  fb->FramebufferAttach(attachEnum, toAttach);
+  auto safeToAttach = toAttach;
+  if (!IsWebGL2() &&
+      !IsExtensionEnabled(WebGLExtensionID::OES_fbo_render_mipmap)) {
+    safeToAttach.mipLevel = 0;
+  }
+  if (!IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
+    safeToAttach.isMultiview = false;
+  }
+
+  if (!fb->FramebufferAttach(attachSlot, safeToAttach)) return;
+
+  failureGuard.OnSuccess();
 }
 
 // -
@@ -1399,8 +1330,8 @@ void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
 ////////////////////////////////////////////////////////////////////////////////
 // Uniform setters.
 
-void WebGLContext::UniformNTv(const uint32_t loc, const uint8_t n, const webgl::UniformBaseType t,
-                              const Range<const uint8_t>& data) const {
+void WebGLContext::UniformNTv(const uint8_t n, const webgl::UniformBaseType t,
+                              const uint32_t loc, const Range<const uint8_t>& data) const {
   const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
   const auto& link = mActiveProgramLinkInfo;
   if (!link) return;
@@ -1511,8 +1442,8 @@ static inline void MatrixAxBToRowMajor(const uint8_t width,
   }
 }
 
-void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const uint8_t a,
-                                      const uint8_t b, const bool transpose,
+void WebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
+                                      const uint32_t loc, const bool transpose,
                                       const Range<const float>& data) const {
   const FuncScope funcScope(*this, "UniformMatrix[1234]x[1234]fv");
   const auto& link = mActiveProgramLinkInfo;

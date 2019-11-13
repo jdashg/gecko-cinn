@@ -14,6 +14,7 @@
 #include "nsWrapperCache.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
+#include "WebGLFormats.h"
 #include "WebGLStrongTypes.h"
 #include "WebGLTypes.h"
 
@@ -22,6 +23,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifndef WEBGL_BRIDGE_LOG_
@@ -53,19 +55,19 @@ class TexUnpackBytes;
 
 ////////////////////////////////////
 
-class WebGLActiveInfoJS final : public nsWrapperCache {
+class WebGLActiveInfoJS final {
  public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLActiveInfoJS)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLActiveInfoJS)
 
  private:
-  const WeakPtr<const ClientWebGLContext> mParent;
+  const WeakPtr<ClientWebGLContext> mParent;
  public:
   const uint32_t mElemCount; // `size`
   const GLenum mElemType;    // `type`
   const nsString mName;  // `name`, with any final "[0]".
 
-  WebGLActiveInfoJS(const ClientWebGLContext&, uint32_t elemCount, GLenum elemType, const nsAString& name);
+  WebGLActiveInfoJS(ClientWebGLContext&, const webgl::ActiveInfo&);
 
   // -
   // WebIDL attributes
@@ -84,31 +86,36 @@ class WebGLActiveInfoJS final : public nsWrapperCache {
   auto GetParentObject() const { return mParent.get(); }
 
 private:
-  virtual ~WebGLActiveInfoJS() {}
-  virtual JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  virtual ~WebGLActiveInfoJS() = default;
+
+public:
+  bool WrapObject(JSContext*, JS::Handle<JSObject*>,
+      JS::MutableHandle<JSObject*>);
 };
 
-class WebGLShaderPrecisionFormatJS final : public nsWrapperCache {
+class WebGLShaderPrecisionFormatJS final {
  public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderPrecisionFormatJS)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLShaderPrecisionFormatJS)
 
  private:
-  const WeakPtr<const ClientWebGLContext> mParent;
+  const WeakPtr<ClientWebGLContext> mParent;
  public:
   const webgl::ShaderPrecisionFormat mInfo;
 
-  WebGLShaderPrecisionFormatJS(const ClientWebGLContext& webgl,
+  WebGLShaderPrecisionFormatJS(ClientWebGLContext& webgl,
       const webgl::ShaderPrecisionFormat& info)
       : mParent(&webgl), mInfo(info) {}
 
   auto GetParentObject() const { return mParent.get(); }
 
 private:
-  virtual ~WebGLShaderPrecisionFormatJS() {}
-  JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  virtual ~WebGLShaderPrecisionFormatJS() = default;
 
 public:
+  bool WrapObject(JSContext*, JS::Handle<JSObject*>,
+      JS::MutableHandle<JSObject*>);
+
   GLint RangeMin() const { return mInfo.rangeMin; }
   GLint RangeMax() const { return mInfo.rangeMax; }
   GLint Precision() const { return mInfo.precision; }
@@ -117,6 +124,14 @@ public:
 // -----------------------
 
 struct WebGLProgramPreventDelete;
+class WebGLBufferJS;
+class WebGLFramebufferJS;
+class WebGLQueryJS;
+class WebGLRenderbufferJS;
+class WebGLSamplerJS;
+class WebGLTextureJS;
+class WebGLTransformFeedbackJS;
+class WebGLVertexArrayJS;
 
 namespace webgl {
 
@@ -126,8 +141,9 @@ class ContextGenerationInfo final {
 public:
   ClientWebGLContext& mContext;
 private:
-  Atomic<ObjectId> mLastId;
+  ObjectId mLastId = 0;
 public:
+  webgl::ExtensionBits mEnabledExtensions;
   std::shared_ptr<webgl::LinkResult> mActiveLinkResult;
   std::shared_ptr<WebGLProgramPreventDelete> mCurrentProgram;
 
@@ -164,7 +180,8 @@ public:
   std::vector<GLenum> mCompressedTextureFormats;
 
 public:
-  explicit ContextGenerationInfo(ClientWebGLContext& context) : mContext(context), mLastId(0) {}
+  explicit ContextGenerationInfo(ClientWebGLContext& context);
+  ~ContextGenerationInfo();
 
   ObjectId NextId() {
     return mLastId += 1;
@@ -174,17 +191,18 @@ public:
 class ObjectJS : public nsWrapperCache {
   friend ClientWebGLContext;
  public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ObjectJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(ObjectJS)
+  //NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ObjectJS)
+  //NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(ObjectJS)
 
   const std::weak_ptr<ContextGenerationInfo> mGeneration;
   const ObjectId mId;
  protected:
   bool mDeleteRequested = false;
 
- public:
-  explicit ObjectJS(ClientWebGLContext&);
+  explicit ObjectJS(const ClientWebGLContext&);
+  virtual ~ObjectJS() = default;
 
+ public:
   ClientWebGLContext* Context() const {
     const auto locked = mGeneration.lock();
     if (!locked) return nullptr;
@@ -208,23 +226,30 @@ class ObjectJS : public nsWrapperCache {
   virtual bool IsDeleted() const {
     return mDeleteRequested;
   }
-
- protected:
-  virtual ~ObjectJS() = default;
 };
 
 } // namespace webgl
 
-// -
+// -------------------------
 
 class WebGLBufferJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   webgl::BufferKind mKind = webgl::BufferKind::Undefined; // !IsBuffer until Bind
 
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLBufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLBufferJS)
+
+  explicit WebGLBufferJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLBufferJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLFramebufferJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
@@ -239,15 +264,22 @@ class WebGLFramebufferJS final : public webgl::ObjectJS {
   std::unordered_map<GLenum, Attachment> mAttachments;
 
  public:
-  explicit WebGLFramebufferJS(ClientWebGLContext&);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLFramebufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLFramebufferJS)
+
+  explicit WebGLFramebufferJS(const ClientWebGLContext&);
 private:
+  ~WebGLFramebufferJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 struct WebGLProgramPreventDelete final {
   const RefPtr<WebGLProgramJS> js;
 };
-
 
 struct WebGLShaderPreventDelete;
 
@@ -260,41 +292,82 @@ class WebGLProgramJS final : public webgl::ObjectJS {
   std::unordered_map<GLenum, std::shared_ptr<WebGLShaderPreventDelete>> mNextLink_Shaders;
   bool mLastValidate = false;
   mutable std::shared_ptr<webgl::LinkResult> mResult; // Never null, often defaulted.
-  Maybe<std::unordered_map<std::string, RefPtr<WebGLUniformLocationJS>>> mUniformLocs;
+  mutable Maybe<std::unordered_map<std::string, uint32_t>> mUniformLocByName;
+  mutable std::vector<uint32_t> mUniformBlockBindings;
+
+  std::unordered_set<const WebGLTransformFeedbackJS*> mActiveTfos;
 
  public:
-  explicit WebGLProgramJS(ClientWebGLContext&);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLProgramJS)
+
+  explicit WebGLProgramJS(const ClientWebGLContext&);
+private:
+  ~WebGLProgramJS() = default;
+public:
 
   bool IsDeleted() const override {
     return !mInnerWeak.lock();
   }
-private:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLQueryJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   GLenum mTarget = 0; // !IsQuery until Bind
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLQueryJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLQueryJS)
+
+  explicit WebGLQueryJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLQueryJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLRenderbufferJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsRenderbuffer until Bind
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLRenderbufferJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLRenderbufferJS)
+
+  explicit WebGLRenderbufferJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLRenderbufferJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
 
+// -
+
 class WebGLSamplerJS final : public webgl::ObjectJS {
   // IsSampler without Bind
- public:
-  explicit WebGLSamplerJS(ClientWebGLContext&);
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLSamplerJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLSamplerJS)
+
+  explicit WebGLSamplerJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLSamplerJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 struct WebGLShaderPreventDelete final {
   const RefPtr<WebGLShaderJS> js;
@@ -303,42 +376,68 @@ struct WebGLShaderPreventDelete final {
 class WebGLShaderJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
-  const GLenum type;
+  const GLenum mType;
   std::shared_ptr<WebGLShaderPreventDelete> mInnerRef;
   const std::weak_ptr<WebGLShaderPreventDelete> mInnerWeak;
-  nsCString mSource;
+  std::string mSource;
 
   mutable webgl::CompileResult mResult;
 
-
  public:
-  explicit WebGLShaderJS(ClientWebGLContext&, GLenum type);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLShaderJS)
+
+  WebGLShaderJS(const ClientWebGLContext&, GLenum type);
+private:
+  ~WebGLShaderJS() = default;
+public:
 
   bool IsDeleted() const override {
     return !mInnerWeak.lock();
   }
-private:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLSyncJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   bool mSignaled = false;
 
- public:
-  explicit WebGLSyncJS(ClientWebGLContext&);
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLSyncJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLSyncJS)
+
+  explicit WebGLSyncJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLSyncJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLTextureJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   GLenum mTarget = 0; // !IsTexture until Bind
+
+ public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLTextureJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLTextureJS)
+
+  explicit WebGLTextureJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
+  ~WebGLTextureJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLTransformFeedbackJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
@@ -346,12 +445,21 @@ class WebGLTransformFeedbackJS final : public webgl::ObjectJS {
   bool mHasBeenBound = false; // !IsTransformFeedback until Bind
   bool mActiveOrPaused = false;
   std::vector<RefPtr<WebGLBufferJS>> mAttribBuffers;
+  std::shared_ptr<WebGLProgramPreventDelete> mActiveProgram;
 
  public:
-  explicit WebGLTransformFeedbackJS(ClientWebGLContext&);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLTransformFeedbackJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLTransformFeedbackJS)
+
+  explicit WebGLTransformFeedbackJS(const ClientWebGLContext&);
 private:
+  ~WebGLTransformFeedbackJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLUniformLocationJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
@@ -360,11 +468,20 @@ class WebGLUniformLocationJS final : public webgl::ObjectJS {
   const uint32_t mLocation;
 
 public:
-  WebGLUniformLocationJS(ClientWebGLContext&,
-        std::weak_ptr<webgl::LinkResult>, uint32_t loc);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLUniformLocationJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLUniformLocationJS)
+
+  WebGLUniformLocationJS(const ClientWebGLContext& webgl,
+        std::weak_ptr<webgl::LinkResult> parent, uint32_t loc) : webgl::ObjectJS(webgl),
+        mParent(parent), mLocation(loc) {}
 private:
+  ~WebGLUniformLocationJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
+
+// -
 
 class WebGLVertexArrayJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
@@ -374,8 +491,14 @@ class WebGLVertexArrayJS final : public webgl::ObjectJS {
   std::vector<RefPtr<WebGLBufferJS>> mAttribBuffers;
 
  public:
-  explicit WebGLVertexArrayJS(ClientWebGLContext&);
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLVertexArrayJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLVertexArrayJS)
+
+  explicit WebGLVertexArrayJS(const ClientWebGLContext&);
 private:
+  ~WebGLVertexArrayJS() = default;
+public:
+
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
 
@@ -465,6 +588,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                  public SupportsWeakPtr<ClientWebGLContext>,
                                  public nsWrapperCache {
   friend class WebGLContextUserData;
+  friend class webgl::ObjectJS;
 
  public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(ClientWebGLContext)
@@ -524,6 +648,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  private:
   Maybe<NotLostData> mNotLost;
 
+ public:
+  const auto& Limits() const { return mNotLost->info; }
+
   // -
 
  public:
@@ -547,23 +674,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     if (!mNotLost->outOfProcess) return nullptr;
     return mNotLost->outOfProcess->mWebGLChild.get();
   }
-
-  // -------------------------------------------------------------------------
-  // Client WebGL Object Tracking
-  // -------------------------------------------------------------------------
- protected:
-  template <typename WebGLObjectType>
-  JS::Value WebGLObjectAsJSValue(JSContext* cx,
-                                 RefPtr<WebGLObjectType>&& object,
-                                 ErrorResult& rv) const;
-
-  template <typename WebGLObjectType>
-  JS::Value WebGLObjectAsJSValue(JSContext* cx, const WebGLObjectType*,
-                                 ErrorResult& rv) const;
-
-  template <typename WebGLObjectType>
-  JSObject* WebGLObjectAsJSObject(JSContext* cx, const WebGLObjectType*,
-                                  ErrorResult& rv) const;
 
   // -------------------------------------------------------------------------
   // Client WebGL API call tracking and error message reporting
@@ -790,17 +900,15 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   // ------------------------- GL State -------------------------
  public:
-  bool IsContextLost() const;
+  bool IsContextLost() const { return !mNotLost; }
 
-  void Disable(GLenum cap);
-
-  void Enable(GLenum cap);
-
+  void Disable(GLenum cap) const;
+  void Enable(GLenum cap) const;
   bool IsEnabled(GLenum cap) const;
 
   void GetParameter(JSContext* cx, GLenum pname,
                     JS::MutableHandle<JS::Value> retval, ErrorResult& rv,
-                    bool debug = false) const;
+                    bool debug = false);
 
   void GetBufferParameter(JSContext* cx, GLenum target, GLenum pname,
                           JS::MutableHandle<JS::Value> retval) const;
@@ -816,37 +924,37 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void GetIndexedParameter(JSContext* cx, GLenum target, GLuint index,
                            JS::MutableHandleValue retval, ErrorResult& rv) const;
 
-  RefPtr<WebGLShaderPrecisionFormatJS> GetShaderPrecisionFormat(
-      GLenum shadertype, GLenum precisiontype) const;
+  already_AddRefed<WebGLShaderPrecisionFormatJS> GetShaderPrecisionFormat(
+      GLenum shadertype, GLenum precisiontype);
 
-  void UseProgram(const WebGLProgramJS&);
-  void ValidateProgram(const WebGLProgramJS&) const;
+  void UseProgram(const WebGLProgramJS*);
+  void ValidateProgram(WebGLProgramJS&) const;
 
   // -
 
-  RefPtr<WebGLBufferJS> CreateBuffer() const;
-  RefPtr<WebGLFramebufferJS> CreateFramebuffer() const;
-  RefPtr<WebGLProgramJS> CreateProgram() const;
-  RefPtr<WebGLQueryJS> CreateQuery() const;
-  RefPtr<WebGLRenderbufferJS> CreateRenderbuffer() const;
-  RefPtr<WebGLSamplerJS> CreateSampler() const;
-  RefPtr<WebGLShaderJS> CreateShader(GLenum type) const;
-  RefPtr<WebGLSyncJS> FenceSync(GLenum condition, GLbitfield flags) const;
-  RefPtr<WebGLTextureJS> CreateTexture() const;
-  RefPtr<WebGLTransformFeedbackJS> CreateTransformFeedback() const;
-  RefPtr<WebGLVertexArrayJS> CreateVertexArray() const;
+  already_AddRefed<WebGLBufferJS> CreateBuffer() const;
+  already_AddRefed<WebGLFramebufferJS> CreateFramebuffer() const;
+  already_AddRefed<WebGLProgramJS> CreateProgram() const;
+  already_AddRefed<WebGLQueryJS> CreateQuery() const;
+  already_AddRefed<WebGLRenderbufferJS> CreateRenderbuffer() const;
+  already_AddRefed<WebGLSamplerJS> CreateSampler() const;
+  already_AddRefed<WebGLShaderJS> CreateShader(GLenum type) const;
+  already_AddRefed<WebGLSyncJS> FenceSync(GLenum condition, GLbitfield flags) const;
+  already_AddRefed<WebGLTextureJS> CreateTexture() const;
+  already_AddRefed<WebGLTransformFeedbackJS> CreateTransformFeedback() const;
+  already_AddRefed<WebGLVertexArrayJS> CreateVertexArray() const;
 
   void DeleteBuffer(WebGLBufferJS*);
   void DeleteFramebuffer(WebGLFramebufferJS*);
-  void DeleteProgram(WebGLProgramJS*);
+  void DeleteProgram(WebGLProgramJS*) const;
   void DeleteQuery(WebGLQueryJS*) const;
   void DeleteRenderbuffer(WebGLRenderbufferJS*);
-  void DeleteSampler(WebGLSamplerJS*) const;
+  void DeleteSampler(WebGLSamplerJS*);
   void DeleteShader(WebGLShaderJS*) const;
   void DeleteSync(WebGLSyncJS*) const;
   void DeleteTexture(WebGLTextureJS*);
   void DeleteTransformFeedback(WebGLTransformFeedbackJS*) const;
-  void DeleteVertexArray(WebGLVertexArrayJS*) const;
+  void DeleteVertexArray(WebGLVertexArrayJS*);
 
   // -
 
@@ -881,40 +989,40 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                            GLuint blockBinding) const;
 
   // Link result reflection
-  RefPtr<WebGLActiveInfoJS> GetActiveAttrib(const WebGLProgramJS&, GLuint index) const;
-  RefPtr<WebGLActiveInfoJS> GetActiveUniform(const WebGLProgramJS&, GLuint index) const;
+  already_AddRefed<WebGLActiveInfoJS> GetActiveAttrib(const WebGLProgramJS&, GLuint index);
+  already_AddRefed<WebGLActiveInfoJS> GetActiveUniform(const WebGLProgramJS&, GLuint index);
   void GetActiveUniformBlockName(const WebGLProgramJS&, GLuint uniformBlockIndex,
                                  nsAString& retval) const;
   void GetActiveUniformBlockParameter(JSContext* cx, const WebGLProgramJS&,
                                       GLuint uniformBlockIndex, GLenum pname,
                                       JS::MutableHandle<JS::Value> retval,
-                                      ErrorResult& rv) const;
+                                      ErrorResult& rv);
   void GetActiveUniforms(JSContext*, const WebGLProgramJS&,
                          const dom::Sequence<GLuint>& uniformIndices,
                          GLenum pname, JS::MutableHandle<JS::Value> retval) const;
   GLint GetAttribLocation(const WebGLProgramJS&, const nsAString& name) const;
   GLint GetFragDataLocation(const WebGLProgramJS&, const nsAString& name) const;
   void GetProgramInfoLog(const WebGLProgramJS& prog, nsAString& retval) const;
-  void GetProgramParameter(JSContext*, const WebGLProgram&, GLenum pname,
+  void GetProgramParameter(JSContext*, const WebGLProgramJS&, GLenum pname,
                            JS::MutableHandle<JS::Value> retval) const;
-  RefPtr<WebGLActiveInfoJS> GetTransformFeedbackVarying(
-      const WebGLProgramJS&, GLuint index) const;
+  already_AddRefed<WebGLActiveInfoJS> GetTransformFeedbackVarying(
+      const WebGLProgramJS&, GLuint index);
   GLuint GetUniformBlockIndex(const WebGLProgramJS&, const nsAString& uniformBlockName) const;
   void GetUniformIndices(const WebGLProgramJS&,
                          const dom::Sequence<nsString>& uniformNames,
                          dom::Nullable<nsTArray<GLuint>>& retval) const;
 
   // WebGLUniformLocationJS
-  RefPtr<WebGLUniformLocationJS> GetUniformLocation(const WebGLProgramJS&,
+  already_AddRefed<WebGLUniformLocationJS> GetUniformLocation(const WebGLProgramJS&,
            const nsAString& name) const;
   void GetUniform(JSContext*, const WebGLProgramJS&, const WebGLUniformLocationJS&,
-                  JS::MutableHandle<JS::Value> retval) const;
+                  JS::MutableHandle<JS::Value> retval);
 
   // -
   // WebGLShaderJS
 
  private:
-  const webgl::CompileResult& GetShaderResult(const WebGLShaderJS&) const;
+  const webgl::CompileResult& GetCompileResult(const WebGLShaderJS&) const;
 
  public:
   void CompileShader(WebGLShaderJS&) const;
@@ -954,26 +1062,26 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   void ClearBufferTv(GLenum buffer, GLint drawBuffer, webgl::AttribBaseType,
-      const Range<const uint8_t>& view, GLuint srcElemOffset) const;
+      const Range<const uint8_t>& view, GLuint srcElemOffset);
 
  public:
   void ClearBufferfv(GLenum buffer, GLint drawBuffer, const Float32ListU& list,
-                     GLuint srcElemOffset) const {
+                     GLuint srcElemOffset) {
     ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Float, MakeByteRange(list), srcElemOffset);
   }
   void ClearBufferiv(GLenum buffer, GLint drawBuffer, const Int32ListU& list,
-                     GLuint srcElemOffset) const {
+                     GLuint srcElemOffset) {
     ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Int, MakeByteRange(list), srcElemOffset);
   }
   void ClearBufferuiv(GLenum buffer, GLint drawBuffer, const Uint32ListU& list,
-                      GLuint srcElemOffset) const {
+                      GLuint srcElemOffset) {
     ClearBufferTv(buffer, drawBuffer, webgl::AttribBaseType::Uint, MakeByteRange(list), srcElemOffset);
   }
 
   // -
 
   void ClearBufferfi(GLenum buffer, GLint drawBuffer, GLfloat depth,
-                     GLint stencil) const;
+                     GLint stencil);
 
   void ClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a);
 
@@ -1036,32 +1144,36 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // ------------------------- Buffer Objects -------------------------
  public:
 
-  void BindBuffer(GLenum target, const WebGLBufferJS*);
+  void BindBuffer(GLenum target, WebGLBufferJS*);
 
   // -
 
  private:
   void BindBufferRangeImpl(const GLenum target, const GLuint index,
-                       const WebGLBufferJS* const buffer, const uint64_t offset,
+                       WebGLBufferJS* const buffer, const uint64_t offset,
                        const uint64_t size);
  public:
   void BindBufferBase(const GLenum target, const GLuint index,
-                      const WebGLBufferJS* const buffer) {
+                      WebGLBufferJS* const buffer) {
     const FuncScope funcScope(*this, "bindBufferBase");
     if (IsContextLost()) return;
 
-    BindBufferRangeImpl(target, index, buffer, 0, -1);
+    BindBufferRangeImpl(target, index, buffer, 0, 0);
   }
 
   void BindBufferRange(const GLenum target, const GLuint index,
-                       const WebGLBufferJS* const buffer, const WebGLintptr offset,
+                       WebGLBufferJS* const buffer, const WebGLintptr offset,
                        const WebGLsizeiptr size) {
     const FuncScope funcScope(*this, "bindBufferRange");
     if (IsContextLost()) return;
 
     if (buffer) {
       if (!ValidateNonNegative("offset", offset)) return;
-      if (!ValidateNonNegative("size", size)) return;
+
+      if (size < 1) {
+        EnqueueError(LOCAL_GL_INVALID_VALUE, "`size` must be positive for non-null `buffer`.");
+        return;
+      }
     }
 
     BindBufferRangeImpl(target, index, buffer, static_cast<uint64_t>(offset),
@@ -1098,19 +1210,53 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1,
                        GLbitfield mask, GLenum filter);
 
-  void FramebufferRenderbuffer(GLenum target, GLenum attachEnum,
+  // -
+
+ private:
+  // `bindTarget` if non-zero allows initializing the rb/tex with that target.
+  void FramebufferAttach(GLenum target, GLenum attachEnum, GLenum bindTarget,
+                         WebGLRenderbufferJS*, WebGLTextureJS*, uint32_t mipLevel,
+                         uint32_t zLayer, uint32_t numViewLayers) const;
+ public:
+  void FramebufferRenderbuffer(GLenum target, GLenum attachSlot,
                                GLenum rbTarget,
-                               const WebGLRenderbufferJS&) const;
-  void FramebufferTexture2D(GLenum target, GLenum attachEnum,
+                               WebGLRenderbufferJS* rb) const {
+    const FuncScope funcScope(*this, "framebufferRenderbuffer");
+    if (IsContextLost()) return;
+    if (rbTarget != LOCAL_GL_RENDERBUFFER) {
+      EnqueueError_ArgEnum("rbTarget", rbTarget);
+      return;
+    }
+    FramebufferAttach(target, attachSlot, rbTarget, rb, nullptr, 0, 0, 0);
+  }
+
+  void FramebufferTexture2D(GLenum target, GLenum attachSlot,
                             GLenum texImageTarget,
-                            const WebGLTextureJS&, GLint mipLevel) const;
-  void FramebufferTextureLayer(GLenum target, GLenum attachment,
-                               const WebGLTextureJS&,
-                               GLint mipLevel, GLint zLayer) const;
-  void FramebufferTextureMultiview(GLenum target, GLenum attachEnum,
-                                   const WebGLTextureJS*,
+                            WebGLTextureJS*, GLint mipLevel) const;
+
+  void FramebufferTextureLayer(GLenum target, GLenum attachSlot,
+                               WebGLTextureJS* tex,
+                               GLint mipLevel, GLint zLayer) const {
+    FramebufferAttach(target, attachSlot, 0, nullptr, tex, static_cast<uint32_t>(mipLevel),
+                      static_cast<uint32_t>(zLayer), 0);
+  }
+
+  void FramebufferTextureMultiview(GLenum target, GLenum attachSlot,
+                                   WebGLTextureJS* tex,
                                    GLint mipLevel, GLint zLayerBase,
-                                   GLsizei numViewLayers) const;
+                                   GLsizei numViewLayers) const {
+    const FuncScope funcScope(*this, "framebufferTextureMultiview");
+    if (IsContextLost()) return;
+    if (numViewLayers < 1) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "`numViewLayers` must be >=1.");
+      return;
+    }
+    FramebufferAttach(target, attachSlot, 0, nullptr, tex, static_cast<uint32_t>(mipLevel),
+                      static_cast<uint32_t>(zLayerBase),
+                      static_cast<uint32_t>(numViewLayers));
+  }
+
+  // -
 
   void InvalidateFramebuffer(GLenum target,
                              const dom::Sequence<GLenum>& attachments,
@@ -1126,9 +1272,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void GetInternalformatParameter(JSContext* cx, GLenum target,
                                   GLenum internalformat, GLenum pname,
                                   JS::MutableHandleValue retval,
-                                  ErrorResult& rv) const;
+                                  ErrorResult& rv);
 
-  void BindRenderbuffer(GLenum target, const WebGLRenderbufferJS*);
+  void BindRenderbuffer(GLenum target, WebGLRenderbufferJS*);
 
   void RenderbufferStorage(GLenum target, GLenum internalFormat, GLsizei width,
                            GLsizei height) const {
@@ -1407,7 +1553,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
-    const Range<const uint8_t>& bytes) const;
+    const Range<const uint8_t>& bytes, GLuint elemOffset = 0,
+                            GLuint elemCountOverride = 0) const;
 
   // -
 
@@ -1462,8 +1609,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
   #define _(N,T,BaseType,TypeListU) \
-    void Uniform ## N ## T ## v(const WebGLUniformLocationJS* const loc, const TypeListU& list) const { \
-      UniformNTv(loc, N, BaseType, MakeByteRange(list)); \
+    void Uniform ## N ## T ## v(const WebGLUniformLocationJS* const loc, \
+                                const TypeListU& list, \
+                                GLuint elemOffset = 0, \
+                                GLuint elemCountOverride = 0) const { \
+      UniformNTv(loc, N, BaseType, MakeByteRange(list), elemOffset, elemCountOverride); \
     }
 
   _(1,f,webgl::UniformBaseType::Float,Float32ListU)
@@ -1485,7 +1635,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   private:
   void UniformMatrixAxBfv(uint8_t a, uint8_t b, const WebGLUniformLocationJS*, bool transpose,
-                          const Range<const float>&, GLuint elemOffset, GLuint elemCountOverride) const;
+                          const Range<const float>&, GLuint elemOffset,
+                          GLuint elemCountOverride) const;
   public:
 
 #define _(X, A, B)                                                           \
@@ -1685,10 +1836,10 @@ public:
  public:
   void GetQuery(JSContext*, GLenum target, GLenum pname,
                 JS::MutableHandleValue retval) const;
-  void GetQueryParameter(JSContext*, const WebGLQueryJS&,
+  void GetQueryParameter(JSContext*, WebGLQueryJS&,
                          GLenum pname, JS::MutableHandleValue retval) const;
-  void BeginQuery(GLenum target, WebGLQueryJS&) const;
-  void EndQuery(GLenum target) const;
+  void BeginQuery(GLenum target, WebGLQueryJS&);
+  void EndQuery(GLenum target);
   void QueryCounter(WebGLQueryJS&, GLenum target) const;
 
   // -------------------------------- Sampler -------------------------------
@@ -1696,15 +1847,15 @@ public:
   void GetSamplerParameter(JSContext*, const WebGLSamplerJS&,
                            GLenum pname, JS::MutableHandleValue retval) const;
 
-  void BindSampler(GLuint unit, const WebGLSamplerJS*);
-  void SamplerParameteri(const WebGLSamplerJS&, GLenum pname, GLint param) const;
-  void SamplerParameterf(const WebGLSamplerJS&, GLenum pname, GLfloat param) const;
+  void BindSampler(GLuint unit, WebGLSamplerJS*);
+  void SamplerParameteri(WebGLSamplerJS&, GLenum pname, GLint param) const;
+  void SamplerParameterf(WebGLSamplerJS&, GLenum pname, GLfloat param) const;
 
   // ------------------------------- GL Sync ---------------------------------
 
-  GLenum ClientWaitSync(const WebGLSyncJS&, GLbitfield flags,
+  GLenum ClientWaitSync(WebGLSyncJS&, GLbitfield flags,
                         GLuint64 timeout) const;
-  void GetSyncParameter(JSContext*, const WebGLSyncJS&,
+  void GetSyncParameter(JSContext*, WebGLSyncJS&,
                         GLenum pname, JS::MutableHandleValue retval) const;
   void WaitSync(const WebGLSyncJS&, GLbitfield flags,
                 GLint64 timeout) const;
@@ -1712,10 +1863,10 @@ public:
   // -------------------------- Transform Feedback ---------------------------
 
   void BindTransformFeedback(GLenum target, WebGLTransformFeedbackJS*);
-  void BeginTransformFeedback(GLenum primitiveMode) const;
-  void EndTransformFeedback() const;
-  void PauseTransformFeedback() const;
-  void ResumeTransformFeedback() const;
+  void BeginTransformFeedback(GLenum primitiveMode);
+  void EndTransformFeedback();
+  void PauseTransformFeedback();
+  void ResumeTransformFeedback();
 
   // ------------------------------ Extensions ------------------------------
  public:
@@ -1734,6 +1885,10 @@ public:
                                                 dom::CallerType callerType);
   void RequestExtension(WebGLExtensionID) const;
 
+  bool IsExtensionEnabled(const WebGLExtensionID id) const {
+    return bool(mNotLost->extensions[EnumValue(id)]);
+  }
+
  public:
   void AddCompressedFormat(GLenum);
 
@@ -1746,7 +1901,7 @@ public:
 
   void MOZDebugGetParameter(JSContext* cx, GLenum pname,
                             JS::MutableHandle<JS::Value> retval,
-                            ErrorResult& rv) const {
+                            ErrorResult& rv) {
     GetParameter(cx, pname, retval, rv, true);
   }
 
@@ -1760,6 +1915,7 @@ public:
   // The cross-process communication mechanism
   // -------------------------------------------------------------------------
  protected:
+ /*
   template <size_t command, typename... Args>
   void DispatchAsync(Args&&... aArgs) const {
     const auto& oop = *mNotLost->outOfProcess;
@@ -1812,6 +1968,7 @@ public:
           "TODO: Make this shut down the context, actors, everything.");
     }
   }
+  */
 
   template <typename ReturnType>
   friend struct WebGLClientDispatcher;
@@ -1850,48 +2007,6 @@ public:
   Maybe<const WebGLContextOptions> mInitialOptions;
   WebGLPixelStore mPixelStore;
 };
-
-template <typename WebGLObjectType>
-JS::Value ClientWebGLContext::WebGLObjectAsJSValue(
-    JSContext* cx, RefPtr<WebGLObjectType>&& object, ErrorResult& rv) const {
-  if (!object) return JS::NullValue();
-
-  MOZ_ASSERT(this == object->GetParentObject());
-  JS::Rooted<JS::Value> v(cx);
-  JS::Rooted<JSObject*> wrapper(cx, GetWrapper());
-  JSAutoRealm ar(cx, wrapper);
-  if (!dom::GetOrCreateDOMReflector(cx, object, &v)) {
-    rv.Throw(NS_ERROR_FAILURE);
-    return JS::NullValue();
-  }
-  return v;
-}
-
-template <typename WebGLObjectType>
-JS::Value ClientWebGLContext::WebGLObjectAsJSValue(
-    JSContext* cx, const WebGLObjectType* object, ErrorResult& rv) const {
-  if (!object) return JS::NullValue();
-
-  MOZ_ASSERT(this == object->GetParentObject());
-  JS::Rooted<JS::Value> v(cx);
-  JS::Rooted<JSObject*> wrapper(cx, GetWrapper());
-  JSAutoRealm ar(cx, wrapper);
-  if (!dom::GetOrCreateDOMReflector(cx, const_cast<WebGLObjectType*>(object),
-                                    &v)) {
-    rv.Throw(NS_ERROR_FAILURE);
-    return JS::NullValue();
-  }
-  return v;
-}
-
-template <typename WebGLObjectType>
-JSObject* ClientWebGLContext::WebGLObjectAsJSObject(
-    JSContext* cx, const WebGLObjectType* object, ErrorResult& rv) const {
-  JS::Value v = WebGLObjectAsJSValue(cx, object, rv);
-  if (v.isNull()) return nullptr;
-
-  return &v.toObject();
-}
 
 // used by DOM bindings in conjunction with GetParentObject
 inline nsISupports* ToSupports(ClientWebGLContext* webgl) {

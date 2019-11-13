@@ -39,7 +39,7 @@ enum class TextureBaseType : uint8_t;
 
 struct UniformBlockInfo final {
   const ActiveUniformBlockInfo& info;
-  const IndexedBufferBinding* binding;
+  const IndexedBufferBinding* binding = nullptr;
 };
 
 struct FragOutputInfo final {
@@ -154,6 +154,8 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
 
   const auto& VertShader() const { return mVertShader; }
   const auto& FragShader() const { return mFragShader; }
+
+  const auto& LinkLog() const { return mLinkLog; }
 
  private:
   ~WebGLProgram();

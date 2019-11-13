@@ -106,11 +106,11 @@ Maybe<double> WebGLContext::GetQueryParameter(const WebGLQuery& query,
 
 // disjoint_timer_queries
 
-void WebGLContext::QueryCounter(WebGLQuery& query, const GLenum target) const {
+void WebGLContext::QueryCounter(WebGLQuery& query) const {
   const WebGLContext::FuncScope funcScope(*this, "queryCounterEXT");
   if (IsContextLost()) return;
 
-  query.QueryCounter(target);
+  query.QueryCounter();
 }
 
 }  // namespace mozilla

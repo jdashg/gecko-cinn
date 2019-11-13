@@ -28,7 +28,6 @@ class WebGLRenderbuffer final : public WebGLRefCountedObject<WebGLRenderbuffer>,
 
  public:
   const GLuint mPrimaryRB;
-  bool mHasBeenBound = false;
 
  protected:
   const bool mEmulatePackedDepthStencil;

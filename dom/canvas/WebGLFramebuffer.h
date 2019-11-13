@@ -35,9 +35,9 @@ namespace webgl {
 struct FbAttachInfo final {
   WebGLRenderbuffer* rb = nullptr;
   WebGLTexture* tex = nullptr;
-  GLint mipLevel = 0;
-  GLint zLayer = 0;
-  GLsizei zLayerCount = 1;
+  uint32_t mipLevel = 0;
+  uint32_t zLayer = 0;
+  uint32_t zLayerCount = 1;
   bool isMultiview = false;
 };
 }  // namespace webgl
@@ -263,7 +263,7 @@ class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
   }
 
   FBStatus CheckFramebufferStatus() const;
-  void FramebufferAttach(GLenum attachEnum,
+  bool FramebufferAttach(GLenum attachEnum,
                          const webgl::FbAttachInfo& toAttach);
   void DrawBuffers(const std::vector<GLenum>& buffers);
   void ReadBuffer(GLenum attachPoint);
