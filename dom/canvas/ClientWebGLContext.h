@@ -230,6 +230,15 @@ class ObjectJS : public nsWrapperCache {
 
 } // namespace webgl
 
+class CcMethods {
+public:
+  virtual void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const;
+  virtual void CcUnlink();
+
+  CcMethods& CcViaMethods() { return *this; }
+  const CcMethods& CcViaMethods() const { return *this; }
+};
+
 // -------------------------
 
 class WebGLBufferJS final : public webgl::ObjectJS {
@@ -251,7 +260,7 @@ public:
 
 // -
 
-class WebGLFramebufferJS final : public webgl::ObjectJS {
+class WebGLFramebufferJS final : public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
 public:
@@ -274,6 +283,8 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcUnlink() override;
 };
 
 // -
@@ -286,7 +297,7 @@ struct WebGLProgramPreventDelete final {
 
 struct WebGLShaderPreventDelete;
 
-class WebGLProgramJS final : public webgl::ObjectJS {
+class WebGLProgramJS final : public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
   std::shared_ptr<WebGLProgramPreventDelete> mInnerRef;
@@ -314,6 +325,8 @@ public:
   }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcUnlink() override;
 };
 
 // -
@@ -444,7 +457,7 @@ public:
 
 // -
 
-class WebGLTransformFeedbackJS final : public webgl::ObjectJS {
+class WebGLTransformFeedbackJS final : public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsTransformFeedback until Bind
@@ -462,6 +475,8 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcUnlink() override;
 };
 
 // -
@@ -488,7 +503,7 @@ public:
 
 // -
 
-class WebGLVertexArrayJS final : public webgl::ObjectJS {
+class WebGLVertexArrayJS final : public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsVertexArray until Bind
@@ -505,6 +520,8 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcUnlink() override;
 };
 
 ////////////////////////////////////
@@ -591,7 +608,8 @@ struct TexImageSourceAdapter final : public TexImageSource {
  */
 class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                  public SupportsWeakPtr<ClientWebGLContext>,
-                                 public nsWrapperCache {
+                                 public nsWrapperCache,
+                                 public CcMethods {
   friend class WebGLContextUserData;
   friend class webgl::ObjectJS;
 
@@ -610,6 +628,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
       return dom::WebGLRenderingContext_Binding::Wrap(cx, this, givenProto);
     return dom::WebGL2RenderingContext_Binding::Wrap(cx, this, givenProto);
   }
+
+  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcUnlink() override;
 
   // -
 

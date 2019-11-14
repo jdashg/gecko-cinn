@@ -31,6 +31,4 @@ WebGLExtensionCompressedTextureETC1::WebGLExtensionCompressedTextureETC1(
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureETC1::~WebGLExtensionCompressedTextureETC1() {}
-
 }  // namespace mozilla

@@ -4543,38 +4543,7 @@ bool WebGLShaderPrecisionFormatJS::WrapObject(JSContext* const cx,
   return dom::WebGLShaderPrecisionFormat_Binding::Wrap(cx, this, givenProto, reflector);
 }
 
-// -
-
-template<typename C>
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const C& field,
-                                 const char* name, uint32_t flags) {
-  for (const auto& cur : field) {
-    ImplCycleCollectionTraverse(callback, cur, name, flags);
-  }
-}
-
-template<typename C>
-void ImplCycleCollectionUnlink(C& field) {
-  field.clear();
-}
-
-// -
-
-template<typename A, typename B>
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const std::pair<A,B>& field,
-                                 const char* name, uint32_t flags) {
-  ImplCycleCollectionTraverse(callback, field.first, name, flags);
-  ImplCycleCollectionTraverse(callback, field.second, name, flags);
-}
-
-template<typename A, typename B>
-void ImplCycleCollectionUnlink(std::pair<A,B>& field) {
-  field = {};
-}
-
-// -
+// ---------------------
 
 template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
@@ -4596,52 +4565,37 @@ template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
                                  const RefPtr<T>& field,
                                  const char* name, uint32_t flags) {
-  if (field) {
-    ImplCycleCollectionTraverse(callback, *field, name, flags);
-  }
-}
-/*
-template<typename T>
-void ImplCycleCollectionUnlink(RefPtr<T>& field) {
-  field = nullptr;
-}
-*/
-// -
-
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const WebGLFramebufferJS::Attachment& field,
-                                 const char* name, uint32_t flags);
-
-void ImplCycleCollectionUnlink(WebGLFramebufferJS::Attachment& field) {
-  field = {};
+  ImplCycleCollectionTraverse(callback, RefPtr<T>(field), name, flags);
 }
 
 // -
 
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 uint64_t field,
-                                 const char* name, uint32_t flags) {}
+                                 const CcMethods& field,
+                                 const char* name, uint32_t flags) {
+  field.CcTraverse(callback, name, flags);
+}
 
-template<typename T>
-void ImplCycleCollectionUnlink(uint64_t) {}
+void ImplCycleCollectionUnlink(CcMethods& field) {
+  field.CcUnlink();
+}
 
 // -----------------------------------------------------
 
-#error easier to write our own Traverse/Unlink funcs. :S
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLBufferJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, mAttachments)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, mNextLink_Shaders)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, CcViaMethods())
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLQueryJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLRenderbufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSamplerJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLShaderJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSyncJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLTextureJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, mAttribBuffers)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, CcViaMethods())
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLUniformLocationJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, mIndexBuffer, mAttribBuffers)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, CcViaMethods())
 
-// -----------------------------
+// -
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(ClientWebGLContext)
   NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
@@ -4653,19 +4607,103 @@ NS_INTERFACE_MAP_END
 NS_IMPL_CYCLE_COLLECTING_ADDREF(ClientWebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(ClientWebGLContext)
 
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(ClientWebGLContext)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ClientWebGLContext, CcViaMethods())
 
-// -
+// -----------------------------
 
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const WebGLFramebufferJS::Attachment& field,
-                                 const char* name, uint32_t flags) {
-  if (field.rb) {
-    ImplCycleCollectionTraverse(callback, *field.rb, name, flags);
+void WebGLFramebufferJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
+              const char* const name, const uint32_t flags) const {
+  for (const auto& pair : mAttachments) {
+    const auto& attach = pair.second;
+    ImplCycleCollectionTraverse(callback, attach.rb, name, flags);
+    ImplCycleCollectionTraverse(callback, attach.tex, name, flags);
   }
-  if (field.tex) {
-    ImplCycleCollectionTraverse(callback, *field.tex, name, flags);
+}
+void WebGLFramebufferJS::CcUnlink() {
+  mAttachments = {};
+}
+
+void WebGLProgramJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
+              const char* const name, const uint32_t flags) const {
+  for (const auto& pair : mNextLink_Shaders) {
+    ImplCycleCollectionTraverse(callback, pair.second->js, name, flags);
   }
+}
+void WebGLProgramJS::CcUnlink() {
+  mNextLink_Shaders = {};
+}
+
+
+void WebGLTransformFeedbackJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
+              const char* const name, const uint32_t flags) const {
+  for (const auto& cur : mAttribBuffers) {
+    ImplCycleCollectionTraverse(callback, cur, name, flags);
+  }
+}
+void WebGLTransformFeedbackJS::CcUnlink() {
+  mAttribBuffers = {};
+}
+
+void WebGLVertexArrayJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
+              const char* const name, const uint32_t flags) const {
+  ImplCycleCollectionTraverse(callback, mIndexBuffer, name, flags);
+
+  for (const auto& cur : mAttribBuffers) {
+    ImplCycleCollectionTraverse(callback, cur, name, flags);
+  }
+}
+void WebGLVertexArrayJS::CcUnlink() {
+  mIndexBuffer = nullptr;
+  mAttribBuffers = {};
+}
+
+// --------------------------------
+
+void ClientWebGLContext::CcTraverse(nsCycleCollectionTraversalCallback& callback,
+              const char* const name, const uint32_t flags) const {
+  ImplCycleCollectionTraverse(callback, mExtLoseContext, name, flags);
+
+  if (mNotLost) {
+    const auto& state = *(mNotLost->generation);
+
+    if (state.mCurrentProgram) {
+      ImplCycleCollectionTraverse(callback, state.mCurrentProgram->js, name, flags);
+    }
+
+    for (const auto& pair : state.mBoundBufferByTarget) {
+      ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+    }
+    for (const auto& cur : state.mBoundUbos) {
+      ImplCycleCollectionTraverse(callback, cur, name, flags);
+    }
+    ImplCycleCollectionTraverse(callback, state.mBoundDrawFb, name, flags);
+    ImplCycleCollectionTraverse(callback, state.mBoundReadFb, name, flags);
+    ImplCycleCollectionTraverse(callback, state.mBoundRb, name, flags);
+    ImplCycleCollectionTraverse(callback, state.mBoundTfo, name, flags);
+    for (const auto& pair : state.mCurrentQueryByTarget) {
+      ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+    }
+    ImplCycleCollectionTraverse(callback, state.mBoundVao, name, flags);
+
+    for (const auto& texUnit : state.mTexUnits) {
+      ImplCycleCollectionTraverse(callback, texUnit.sampler, name, flags);
+      for (const auto& pair : texUnit.texByTarget) {
+        ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+      }
+    }
+
+    // -
+
+    for (const auto& cur : mNotLost->extensions) {
+      ImplCycleCollectionTraverse(callback, cur, name, flags);
+    }
+  }
+}
+
+void ClientWebGLContext::CcUnlink() {
+  const_cast<RefPtr<ClientWebGLExtensionLoseContext>&>(mExtLoseContext) = nullptr;
+
+  mNotLost = {};
 }
 
 }  // namespace mozilla

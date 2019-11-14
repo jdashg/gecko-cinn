@@ -291,12 +291,8 @@ void WebGLContext::DestroyResourcesAndContext() {
   // spec: http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
   for (size_t i = 0; i < size_t(WebGLExtensionID::Max); ++i) {
     WebGLExtensionID extension = WebGLExtensionID(i);
-
-    if (!IsExtensionEnabled(extension) ||
-        (extension == WebGLExtensionID::WEBGL_lose_context))
+    if (extension == WebGLExtensionID::WEBGL_lose_context)
       continue;
-
-    mExtensions[extension]->MarkLost();
     mExtensions[extension] = nullptr;
   }
 

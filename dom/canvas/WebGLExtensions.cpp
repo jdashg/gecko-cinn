@@ -12,24 +12,16 @@
 
 namespace mozilla {
 
-WebGLExtensionBase::WebGLExtensionBase(WebGLContext* webgl)
-    : WebGLContextBoundObject(webgl) {}
-
-WebGLExtensionBase::~WebGLExtensionBase() {}
-
-void WebGLExtensionBase::MarkLost() {
-  mIsLost = true;
-
-  OnMarkLost();
+WebGLExtensionBlendMinMax::WebGLExtensionBlendMinMax(WebGLContext* webgl)
+    : WebGLExtensionBase(webgl) {
+  MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-// -
+bool WebGLExtensionBlendMinMax::IsSupported(const WebGLContext* webgl) {
+  if (webgl->IsWebGL2()) return false;
 
-WebGLExtensionDebugShaders::WebGLExtensionDebugShaders(
-    WebGLContext* const webgl)
-    : WebGLExtensionBase(webgl) {}
-
-WebGLExtensionDebugShaders::~WebGLExtensionDebugShaders() = default;
+  return webgl->GL()->IsSupported(gl::GLFeature::blend_minmax);
+}
 
 // -
 
@@ -51,8 +43,6 @@ WebGLExtensionFloatBlend::WebGLExtensionFloatBlend(WebGLContext* const webgl)
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-WebGLExtensionFloatBlend::~WebGLExtensionFloatBlend() = default;
-
 bool WebGLExtensionFloatBlend::IsSupported(const WebGLContext* const webgl) {
   if (!WebGLExtensionColorBufferFloat::IsSupported(webgl) &&
       !WebGLExtensionEXTColorBufferFloat::IsSupported(webgl))
@@ -72,8 +62,6 @@ WebGLExtensionFBORenderMipmap::WebGLExtensionFBORenderMipmap(
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-WebGLExtensionFBORenderMipmap::~WebGLExtensionFBORenderMipmap() = default;
-
 bool WebGLExtensionFBORenderMipmap::IsSupported(
     const WebGLContext* const webgl) {
   if (webgl->IsWebGL2()) return false;
@@ -89,26 +77,10 @@ bool WebGLExtensionFBORenderMipmap::IsSupported(
 
 // -
 
-WebGLExtensionLoseContext::WebGLExtensionLoseContext(WebGLContext* const webgl)
-    : WebGLExtensionBase(webgl) {}
-
-WebGLExtensionLoseContext::~WebGLExtensionLoseContext() = default;
-
-// -
-
-WebGLExtensionMOZDebug::WebGLExtensionMOZDebug(WebGLContext* const webgl)
-    : WebGLExtensionBase(webgl) {}
-
-WebGLExtensionMOZDebug::~WebGLExtensionMOZDebug() = default;
-
-// -
-
 WebGLExtensionMultiview::WebGLExtensionMultiview(WebGLContext* const webgl)
     : WebGLExtensionBase(webgl) {
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
-
-WebGLExtensionMultiview::~WebGLExtensionMultiview() = default;
 
 bool WebGLExtensionMultiview::IsSupported(const WebGLContext* const webgl) {
   if (!webgl->IsWebGL2()) return false;

@@ -22,8 +22,6 @@ WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
   webgl->UpdateMaxDrawBuffers();
 }
 
-WebGLExtensionDrawBuffers::~WebGLExtensionDrawBuffers() {}
-
 bool WebGLExtensionDrawBuffers::IsSupported(const WebGLContext* webgl) {
   if (webgl->IsWebGL2()) return false;
 

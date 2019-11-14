@@ -17,8 +17,6 @@ WebGLExtensionInstancedArrays::WebGLExtensionInstancedArrays(
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-WebGLExtensionInstancedArrays::~WebGLExtensionInstancedArrays() {}
-
 bool WebGLExtensionInstancedArrays::IsSupported(const WebGLContext* webgl) {
   if (webgl->IsWebGL2()) return false;
 

@@ -61,8 +61,6 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureASTC::~WebGLExtensionCompressedTextureASTC() {}
-
 bool WebGLExtensionCompressedTextureASTC::IsSupported(
     const WebGLContext* webgl) {
   gl::GLContext* gl = webgl->GL();

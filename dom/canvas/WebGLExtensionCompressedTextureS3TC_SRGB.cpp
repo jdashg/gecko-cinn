@@ -34,9 +34,6 @@ WebGLExtensionCompressedTextureS3TC_SRGB::
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureS3TC_SRGB::
-    ~WebGLExtensionCompressedTextureS3TC_SRGB() {}
-
 bool WebGLExtensionCompressedTextureS3TC_SRGB::IsSupported(
     const WebGLContext* webgl) {
   gl::GLContext* gl = webgl->GL();

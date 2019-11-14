@@ -35,11 +35,16 @@ class WebGLTexture;
 class WebGLVertexArray;
 
 class WebGLExtensionBase {
+protected:
+  WebGLContext* const mContext;
+private:
   bool mIsExplicit = false;
 
  protected:
-  explicit WebGLExtensionBase(WebGLContext*) {}
+  explicit WebGLExtensionBase(WebGLContext* context) : mContext(context) {}
+ public:
   virtual ~WebGLExtensionBase() = default;
+ private:
   virtual void OnSetExplicit() {}
 
  public:
@@ -56,163 +61,130 @@ class WebGLExtensionBase {
 class WebGLExtensionCompressedTextureASTC : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureASTC(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext* webgl);
 };
 
 class WebGLExtensionCompressedTextureBPTC final : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureBPTC(WebGLContext* webgl);
-
   static bool IsSupported(const WebGLContext* webgl);
 };
 
 class WebGLExtensionCompressedTextureES3 : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureES3(WebGLContext*);
-
 };
 
 class WebGLExtensionCompressedTextureETC1 : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureETC1(WebGLContext*);
-
 };
 
 class WebGLExtensionCompressedTexturePVRTC : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTexturePVRTC(WebGLContext*);
-
 };
 
 class WebGLExtensionCompressedTextureRGTC final : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureRGTC(WebGLContext* webgl);
-
   static bool IsSupported(const WebGLContext* webgl);
 };
 
 class WebGLExtensionCompressedTextureS3TC : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureS3TC(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionCompressedTextureS3TC_SRGB : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionCompressedTextureS3TC_SRGB(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionDebugRendererInfo : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionDebugRendererInfo(WebGLContext*);
-
+  explicit WebGLExtensionDebugRendererInfo(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionDebugShaders : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionDebugShaders(WebGLContext*);
-
+  explicit WebGLExtensionDebugShaders(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionDepthTexture : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionDepthTexture(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionElementIndexUint : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionElementIndexUint(WebGLContext*);
-
+  explicit WebGLExtensionElementIndexUint(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionExplicitPresent : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionExplicitPresent(WebGLContext*);
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionEXTColorBufferFloat : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionEXTColorBufferFloat(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionFBORenderMipmap : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionFBORenderMipmap(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionFloatBlend : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionFloatBlend(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionFragDepth : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionFragDepth(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext* context);
 };
 
 class WebGLExtensionLoseContext : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionLoseContext(WebGLContext*);
-
+  explicit WebGLExtensionLoseContext(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionMultiview : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionMultiview(WebGLContext*);
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionSRGB : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionSRGB(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext* context);
 };
 
 class WebGLExtensionStandardDerivatives : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionStandardDerivatives(WebGLContext*);
-
+  explicit WebGLExtensionStandardDerivatives(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionShaderTextureLod : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionShaderTextureLod(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext* context);
 };
 
 class WebGLExtensionTextureFilterAnisotropic : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionTextureFilterAnisotropic(WebGLContext*);
-
+  explicit WebGLExtensionTextureFilterAnisotropic(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionTextureFloat : public WebGLExtensionBase {
@@ -220,15 +192,12 @@ class WebGLExtensionTextureFloat : public WebGLExtensionBase {
   static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
 
   explicit WebGLExtensionTextureFloat(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionTextureFloatLinear : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionTextureFloatLinear(WebGLContext*);
-
 };
 
 class WebGLExtensionTextureHalfFloat : public WebGLExtensionBase {
@@ -236,22 +205,17 @@ class WebGLExtensionTextureHalfFloat : public WebGLExtensionBase {
   static void InitWebGLFormats(webgl::FormatUsageAuthority* authority);
 
   explicit WebGLExtensionTextureHalfFloat(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionTextureHalfFloatLinear : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionTextureHalfFloatLinear(WebGLContext*);
-
 };
 
 class WebGLExtensionColorBufferFloat : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionColorBufferFloat(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 
   void SetRenderable(const webgl::FormatRenderableState);
@@ -261,8 +225,6 @@ class WebGLExtensionColorBufferFloat : public WebGLExtensionBase {
 class WebGLExtensionColorBufferHalfFloat : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionColorBufferHalfFloat(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 
   void SetRenderable(const webgl::FormatRenderableState);
@@ -272,45 +234,35 @@ class WebGLExtensionColorBufferHalfFloat : public WebGLExtensionBase {
 class WebGLExtensionDrawBuffers : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionDrawBuffers(WebGLContext*);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionVertexArray : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionVertexArray(WebGLContext* webgl);
-
 };
 
 class WebGLExtensionInstancedArrays : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionInstancedArrays(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext* webgl);
 };
 
 class WebGLExtensionBlendMinMax : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionBlendMinMax(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionDisjointTimerQuery : public WebGLExtensionBase {
  public:
   explicit WebGLExtensionDisjointTimerQuery(WebGLContext* webgl);
-
-
   static bool IsSupported(const WebGLContext*);
 };
 
 class WebGLExtensionMOZDebug final : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionMOZDebug(WebGLContext* webgl);
-
+  explicit WebGLExtensionMOZDebug(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 }  // namespace mozilla

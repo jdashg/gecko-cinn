@@ -118,7 +118,9 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 #define _(X) \
     template<> \
     WebGL##X* As<WebGL##X>() const { \
-      return Find(mParent.m ## X ## Map, mId).get(); \
+      const auto maybe = MaybeFind(mParent.m ## X ## Map, mId); \
+      if (!maybe) return nullptr; \
+      return maybe->get(); \
     }
 
     _(Framebuffer)
@@ -143,42 +145,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     MOZ_IMPLICIT operator const T*() const {
       return As<T>();
     }
-
-    /*
-    MOZ_IMPLICIT operator WebGLBuffer*() const {
-      return Find(mParent.mBufferMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLFramebuffer*() const {
-      return Find(mParent.mFramebufferMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLProgram*() const {
-      return Find(mParent.mProgramMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLQuery*() const {
-      return Find(mParent.mQueryMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLRenderbuffer*() const {
-      return Find(mParent.mRenderbufferMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLSampler*() const {
-      return Find(mParent.mSamplerMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLShader*() const {
-      return Find(mParent.mShaderMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLSync*() const {
-      return Find(mParent.mSyncMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLTexture*() const {
-      return Find(mParent.mTextureMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLTransformFeedback*() const {
-      return Find(mParent.mTransformFeedbackMap, mId).get();
-    }
-    MOZ_IMPLICIT operator WebGLVertexArray*() const {
-      return Find(mParent.mVertexArrayMap, mId).get();
-    }
-    */
 
     explicit operator bool() const { return static_cast<bool>(mId); }
 
@@ -217,8 +183,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // ------------------------- Composition -------------------------
 
   void SetCompositableHost(
-      RefPtr<CompositableHost>& aCompositableHost) {
-    mContext->SetCompositableHost(aCompositableHost);
+      RefPtr<layers::CompositableHost>& compositableHost) {
+    mContext->SetCompositableHost(compositableHost);
   }
 
   void Present() { mContext->Present(); }
@@ -242,8 +208,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void DidRefresh() { mContext->DidRefresh(); }
 
-  void GenerateError(const GLenum error,
-                                       const std::string& text) const {
+  void GenerateError(const GLenum error, const std::string& text) const {
     mContext->GenerateError(error, text.c_str());
   }
 

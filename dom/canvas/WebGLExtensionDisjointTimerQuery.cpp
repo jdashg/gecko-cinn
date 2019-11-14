@@ -22,8 +22,6 @@ WebGLExtensionDisjointTimerQuery::WebGLExtensionDisjointTimerQuery(
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
 }
 
-WebGLExtensionDisjointTimerQuery::~WebGLExtensionDisjointTimerQuery() {}
-
 bool WebGLExtensionDisjointTimerQuery::IsSupported(
     const WebGLContext* const webgl) {
   if (!StaticPrefs::webgl_enable_privileged_extensions()) return false;

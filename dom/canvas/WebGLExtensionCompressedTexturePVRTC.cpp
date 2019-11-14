@@ -34,6 +34,4 @@ WebGLExtensionCompressedTexturePVRTC::WebGLExtensionCompressedTexturePVRTC(
 #undef FOO
 }
 
-WebGLExtensionCompressedTexturePVRTC::~WebGLExtensionCompressedTexturePVRTC() {}
-
 }  // namespace mozilla
