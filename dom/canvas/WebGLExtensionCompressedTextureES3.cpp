@@ -55,6 +55,4 @@ WebGLExtensionCompressedTextureES3::WebGLExtensionCompressedTextureES3(
 #undef FOO
 }
 
-WebGLExtensionCompressedTextureES3::~WebGLExtensionCompressedTextureES3() {}
-
 }  // namespace mozilla

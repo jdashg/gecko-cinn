@@ -370,7 +370,7 @@ class HTMLCanvasElement final : public nsGenericHTMLElement,
                                           bool aNotify) override;
 
  public:
-  ClientWebGLContext* GetClientWebGLContext();
+  ClientWebGLContext* GetWebGLContext();
 
  protected:
   bool mResetLayer;

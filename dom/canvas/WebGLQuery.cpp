@@ -7,6 +7,7 @@
 
 #include "GLContext.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
+#include "mozilla/StaticPrefs_webgl.h"
 #include "nsContentUtils.h"
 #include "WebGLContext.h"
 

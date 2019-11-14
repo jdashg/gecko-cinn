@@ -124,83 +124,83 @@ RefPtr<ClientWebGLExtensionBase> ClientWebGLContext::GetExtension(
       switch (ext) {
         // ANGLE_
         case WebGLExtensionID::ANGLE_instanced_arrays:
-          return new ClientWebGLExtensionInstancedArrays(this);
+          return new ClientWebGLExtensionInstancedArrays(*this);
 
         // EXT_
         case WebGLExtensionID::EXT_blend_minmax:
-          return new ClientWebGLExtensionBlendMinMax(this);
+          return new ClientWebGLExtensionBlendMinMax(*this);
         case WebGLExtensionID::EXT_color_buffer_float:
-          return new ClientWebGLExtensionEXTColorBufferFloat(this);
+          return new ClientWebGLExtensionEXTColorBufferFloat(*this);
         case WebGLExtensionID::EXT_color_buffer_half_float:
-          return new ClientWebGLExtensionColorBufferHalfFloat(this);
+          return new ClientWebGLExtensionColorBufferHalfFloat(*this);
         case WebGLExtensionID::EXT_disjoint_timer_query:
-          return new ClientWebGLExtensionDisjointTimerQuery(this);
+          return new ClientWebGLExtensionDisjointTimerQuery(*this);
         case WebGLExtensionID::EXT_float_blend:
-          return new ClientWebGLExtensionFloatBlend(this);
+          return new ClientWebGLExtensionFloatBlend(*this);
         case WebGLExtensionID::EXT_frag_depth:
-          return new ClientWebGLExtensionFragDepth(this);
+          return new ClientWebGLExtensionFragDepth(*this);
         case WebGLExtensionID::EXT_shader_texture_lod:
-          return new ClientWebGLExtensionShaderTextureLod(this);
+          return new ClientWebGLExtensionShaderTextureLod(*this);
         case WebGLExtensionID::EXT_sRGB:
-          return new ClientWebGLExtensionSRGB(this);
+          return new ClientWebGLExtensionSRGB(*this);
         case WebGLExtensionID::EXT_texture_compression_bptc:
-          return new ClientWebGLExtensionCompressedTextureBPTC(this);
+          return new ClientWebGLExtensionCompressedTextureBPTC(*this);
         case WebGLExtensionID::EXT_texture_compression_rgtc:
-          return new ClientWebGLExtensionCompressedTextureRGTC(this);
+          return new ClientWebGLExtensionCompressedTextureRGTC(*this);
         case WebGLExtensionID::EXT_texture_filter_anisotropic:
-          return new ClientWebGLExtensionTextureFilterAnisotropic(this);
+          return new ClientWebGLExtensionTextureFilterAnisotropic(*this);
 
         // MOZ_
         case WebGLExtensionID::MOZ_debug:
-          return new ClientWebGLExtensionMOZDebug(this);
+          return new ClientWebGLExtensionMOZDebug(*this);
 
         // OES_
         case WebGLExtensionID::OES_element_index_uint:
-          return new ClientWebGLExtensionElementIndexUint(this);
+          return new ClientWebGLExtensionElementIndexUint(*this);
         case WebGLExtensionID::OES_fbo_render_mipmap:
-          return new ClientWebGLExtensionFBORenderMipmap(this);
+          return new ClientWebGLExtensionFBORenderMipmap(*this);
         case WebGLExtensionID::OES_standard_derivatives:
-          return new ClientWebGLExtensionStandardDerivatives(this);
+          return new ClientWebGLExtensionStandardDerivatives(*this);
         case WebGLExtensionID::OES_texture_float:
-          return new ClientWebGLExtensionTextureFloat(this);
+          return new ClientWebGLExtensionTextureFloat(*this);
         case WebGLExtensionID::OES_texture_float_linear:
-          return new ClientWebGLExtensionTextureFloatLinear(this);
+          return new ClientWebGLExtensionTextureFloatLinear(*this);
         case WebGLExtensionID::OES_texture_half_float:
-          return new ClientWebGLExtensionTextureHalfFloat(this);
+          return new ClientWebGLExtensionTextureHalfFloat(*this);
         case WebGLExtensionID::OES_texture_half_float_linear:
-          return new ClientWebGLExtensionTextureHalfFloatLinear(this);
+          return new ClientWebGLExtensionTextureHalfFloatLinear(*this);
         case WebGLExtensionID::OES_vertex_array_object:
-          return new ClientWebGLExtensionVertexArray(this);
+          return new ClientWebGLExtensionVertexArray(*this);
 
         // OVR_
         case WebGLExtensionID::OVR_multiview2:
-          return new ClientWebGLExtensionMultiview(this);
+          return new ClientWebGLExtensionMultiview(*this);
 
         // WEBGL_
         case WebGLExtensionID::WEBGL_color_buffer_float:
-          return new ClientWebGLExtensionColorBufferFloat(this);
+          return new ClientWebGLExtensionColorBufferFloat(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_astc:
-          return new ClientWebGLExtensionCompressedTextureASTC(this);
+          return new ClientWebGLExtensionCompressedTextureASTC(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_etc:
-          return new ClientWebGLExtensionCompressedTextureES3(this);
+          return new ClientWebGLExtensionCompressedTextureES3(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_etc1:
-          return new ClientWebGLExtensionCompressedTextureETC1(this);
+          return new ClientWebGLExtensionCompressedTextureETC1(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_pvrtc:
-          return new ClientWebGLExtensionCompressedTexturePVRTC(this);
+          return new ClientWebGLExtensionCompressedTexturePVRTC(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_s3tc:
-          return new ClientWebGLExtensionCompressedTextureS3TC(this);
+          return new ClientWebGLExtensionCompressedTextureS3TC(*this);
         case WebGLExtensionID::WEBGL_compressed_texture_s3tc_srgb:
-          return new ClientWebGLExtensionCompressedTextureS3TC_SRGB(this);
+          return new ClientWebGLExtensionCompressedTextureS3TC_SRGB(*this);
         case WebGLExtensionID::WEBGL_debug_renderer_info:
-          return new ClientWebGLExtensionDebugRendererInfo(this);
+          return new ClientWebGLExtensionDebugRendererInfo(*this);
         case WebGLExtensionID::WEBGL_debug_shaders:
-          return new ClientWebGLExtensionDebugShaders(this);
+          return new ClientWebGLExtensionDebugShaders(*this);
         case WebGLExtensionID::WEBGL_depth_texture:
-          return new ClientWebGLExtensionDepthTexture(this);
+          return new ClientWebGLExtensionDepthTexture(*this);
         case WebGLExtensionID::WEBGL_draw_buffers:
-          return new ClientWebGLExtensionDrawBuffers(this);
+          return new ClientWebGLExtensionDrawBuffers(*this);
         case WebGLExtensionID::WEBGL_explicit_present:
-          return new ClientWebGLExtensionExplicitPresent(this);
+          return new ClientWebGLExtensionExplicitPresent(*this);
 
         case WebGLExtensionID::WEBGL_lose_context:
         case WebGLExtensionID::Max:
@@ -368,119 +368,119 @@ void WebGLContext::RequestExtension(const WebGLExtensionID ext,
   switch (ext) {
     // ANGLE_
     case WebGLExtensionID::ANGLE_instanced_arrays:
-      slot = new WebGLExtensionInstancedArrays(this);
+      slot.reset(new WebGLExtensionInstancedArrays(this));
       break;
 
     // EXT_
     case WebGLExtensionID::EXT_blend_minmax:
-      slot = new WebGLExtensionBlendMinMax(this);
+      slot.reset(new WebGLExtensionBlendMinMax(this));
       break;
     case WebGLExtensionID::EXT_color_buffer_float:
-      slot = new WebGLExtensionEXTColorBufferFloat(this);
+      slot.reset(new WebGLExtensionEXTColorBufferFloat(this));
       break;
     case WebGLExtensionID::EXT_color_buffer_half_float:
-      slot = new WebGLExtensionColorBufferHalfFloat(this);
+      slot.reset(new WebGLExtensionColorBufferHalfFloat(this));
       break;
     case WebGLExtensionID::EXT_disjoint_timer_query:
-      slot = new WebGLExtensionDisjointTimerQuery(this);
+      slot.reset(new WebGLExtensionDisjointTimerQuery(this));
       break;
     case WebGLExtensionID::EXT_float_blend:
-      slot = new WebGLExtensionFloatBlend(this);
+      slot.reset(new WebGLExtensionFloatBlend(this));
       break;
     case WebGLExtensionID::EXT_frag_depth:
-      slot = new WebGLExtensionFragDepth(this);
+      slot.reset(new WebGLExtensionFragDepth(this));
       break;
     case WebGLExtensionID::EXT_shader_texture_lod:
-      slot = new WebGLExtensionShaderTextureLod(this);
+      slot.reset(new WebGLExtensionShaderTextureLod(this));
       break;
     case WebGLExtensionID::EXT_sRGB:
-      slot = new WebGLExtensionSRGB(this);
+      slot.reset(new WebGLExtensionSRGB(this));
       break;
     case WebGLExtensionID::EXT_texture_compression_bptc:
-      slot = new WebGLExtensionCompressedTextureBPTC(this);
+      slot.reset(new WebGLExtensionCompressedTextureBPTC(this));
       break;
     case WebGLExtensionID::EXT_texture_compression_rgtc:
-      slot = new WebGLExtensionCompressedTextureRGTC(this);
+      slot.reset(new WebGLExtensionCompressedTextureRGTC(this));
       break;
     case WebGLExtensionID::EXT_texture_filter_anisotropic:
-      slot = new WebGLExtensionTextureFilterAnisotropic(this);
+      slot.reset(new WebGLExtensionTextureFilterAnisotropic(this));
       break;
 
     // MOZ_
     case WebGLExtensionID::MOZ_debug:
-      slot = new WebGLExtensionMOZDebug(this);
+      slot.reset(new WebGLExtensionMOZDebug(this));
       break;
 
     // OES_
     case WebGLExtensionID::OES_element_index_uint:
-      slot = new WebGLExtensionElementIndexUint(this);
+      slot.reset(new WebGLExtensionElementIndexUint(this));
       break;
     case WebGLExtensionID::OES_fbo_render_mipmap:
-      slot = new WebGLExtensionFBORenderMipmap(this);
+      slot.reset(new WebGLExtensionFBORenderMipmap(this));
       break;
     case WebGLExtensionID::OES_standard_derivatives:
-      slot = new WebGLExtensionStandardDerivatives(this);
+      slot.reset(new WebGLExtensionStandardDerivatives(this));
       break;
     case WebGLExtensionID::OES_texture_float:
-      slot = new WebGLExtensionTextureFloat(this);
+      slot.reset(new WebGLExtensionTextureFloat(this));
       break;
     case WebGLExtensionID::OES_texture_float_linear:
-      slot = new WebGLExtensionTextureFloatLinear(this);
+      slot.reset(new WebGLExtensionTextureFloatLinear(this));
       break;
     case WebGLExtensionID::OES_texture_half_float:
-      slot = new WebGLExtensionTextureHalfFloat(this);
+      slot.reset(new WebGLExtensionTextureHalfFloat(this));
       break;
     case WebGLExtensionID::OES_texture_half_float_linear:
-      slot = new WebGLExtensionTextureHalfFloatLinear(this);
+      slot.reset(new WebGLExtensionTextureHalfFloatLinear(this));
       break;
     case WebGLExtensionID::OES_vertex_array_object:
-      slot = new WebGLExtensionVertexArray(this);
+      slot.reset(new WebGLExtensionVertexArray(this));
       break;
 
     // WEBGL_
     case WebGLExtensionID::OVR_multiview2:
-      slot = new WebGLExtensionMultiview(this);
+      slot.reset(new WebGLExtensionMultiview(this));
       break;
 
     // WEBGL_
     case WebGLExtensionID::WEBGL_color_buffer_float:
-      slot = new WebGLExtensionColorBufferFloat(this);
+      slot.reset(new WebGLExtensionColorBufferFloat(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_astc:
-      slot = new WebGLExtensionCompressedTextureASTC(this);
+      slot.reset(new WebGLExtensionCompressedTextureASTC(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_etc:
-      slot = new WebGLExtensionCompressedTextureES3(this);
+      slot.reset(new WebGLExtensionCompressedTextureES3(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_etc1:
-      slot = new WebGLExtensionCompressedTextureETC1(this);
+      slot.reset(new WebGLExtensionCompressedTextureETC1(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_pvrtc:
-      slot = new WebGLExtensionCompressedTexturePVRTC(this);
+      slot.reset(new WebGLExtensionCompressedTexturePVRTC(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_s3tc:
-      slot = new WebGLExtensionCompressedTextureS3TC(this);
+      slot.reset(new WebGLExtensionCompressedTextureS3TC(this));
       break;
     case WebGLExtensionID::WEBGL_compressed_texture_s3tc_srgb:
-      slot = new WebGLExtensionCompressedTextureS3TC_SRGB(this);
+      slot.reset(new WebGLExtensionCompressedTextureS3TC_SRGB(this));
       break;
     case WebGLExtensionID::WEBGL_debug_renderer_info:
-      slot = new WebGLExtensionDebugRendererInfo(this);
+      slot.reset(new WebGLExtensionDebugRendererInfo(this));
       break;
     case WebGLExtensionID::WEBGL_debug_shaders:
-      slot = new WebGLExtensionDebugShaders(this);
+      slot.reset(new WebGLExtensionDebugShaders(this));
       break;
     case WebGLExtensionID::WEBGL_depth_texture:
-      slot = new WebGLExtensionDepthTexture(this);
+      slot.reset(new WebGLExtensionDepthTexture(this));
       break;
     case WebGLExtensionID::WEBGL_draw_buffers:
-      slot = new WebGLExtensionDrawBuffers(this);
+      slot.reset(new WebGLExtensionDrawBuffers(this));
       break;
     case WebGLExtensionID::WEBGL_explicit_present:
-      slot = new WebGLExtensionExplicitPresent(this);
+      slot.reset(new WebGLExtensionExplicitPresent(this));
       break;
     case WebGLExtensionID::WEBGL_lose_context:
-      slot = new WebGLExtensionLoseContext(this);
+      slot.reset(new WebGLExtensionLoseContext(this));
       break;
 
     case WebGLExtensionID::Max:

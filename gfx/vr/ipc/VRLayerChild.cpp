@@ -47,7 +47,7 @@ void VRLayerChild::SubmitFrame(const VRDisplayInfo& aDisplayInfo) {
 
   mLastSubmittedFrameId = frameId;
 
-  const auto webgl = mCanvasElement->GetClientWebGLContext();
+  const auto webgl = mCanvasElement->GetWebGLContext();
   if (!webgl) {
     return;
   }
@@ -64,7 +64,10 @@ void VRLayerChild::SubmitFrame(const VRDisplayInfo& aDisplayInfo) {
 bool VRLayerChild::IsIPCOpen() { return mIPCOpen; }
 
 void VRLayerChild::ClearSurfaces() {
-  mCanvasElement->ClearVRFrame();
+  const auto webgl = mCanvasElement->GetWebGLContext();
+  if (webgl) {
+    webgl->ClearVRFrame();
+  }
   SendClearSurfaces();
 }
 

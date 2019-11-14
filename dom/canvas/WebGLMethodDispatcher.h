@@ -51,6 +51,8 @@ DEFINE_ASYNC(HostWebGLContext::DeleteTexture)
 DEFINE_ASYNC(HostWebGLContext::DeleteTransformFeedback)
 DEFINE_ASYNC(HostWebGLContext::DeleteVertexArray)
 
+DEFINE_ASYNC(HostWebGLContext::ClearVRFrame)
+
 DEFINE_ASYNC(HostWebGLContext::Disable)
 DEFINE_ASYNC(HostWebGLContext::Enable)
 DEFINE_ASYNC(HostWebGLContext::GenerateError)
