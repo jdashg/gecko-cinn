@@ -16,7 +16,7 @@ namespace mozilla {
 WebGLTransformFeedback::WebGLTransformFeedback(WebGLContext* webgl, GLuint tf)
     : WebGLRefCountedObject(webgl),
       mGLName(tf),
-      mIndexedBindings(webgl->mGLMaxTransformFeedbackSeparateAttribs),
+      mIndexedBindings(webgl->Limits().maxTransformFeedbackSeparateAttribs),
       mIsPaused(false),
       mIsActive(false) {
   mContext->mTransformFeedbacks.insertBack(this);

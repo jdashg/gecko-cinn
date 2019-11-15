@@ -117,18 +117,12 @@ bool WebGLContext::InitWebGL2(FailureReason* const out_failReason) {
     return false;
   }
 
-  // we initialise WebGL 2 related stuff.
-  gl->GetUIntegerv(LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS,
-                   &mGLMaxTransformFeedbackSeparateAttribs);
-  gl->GetUIntegerv(LOCAL_GL_MAX_UNIFORM_BUFFER_BINDINGS,
-                   &mGLMaxUniformBufferBindings);
-
   mGLMinProgramTexelOffset =
       gl->GetIntAs<uint32_t>(LOCAL_GL_MIN_PROGRAM_TEXEL_OFFSET);
   mGLMaxProgramTexelOffset =
       gl->GetIntAs<uint32_t>(LOCAL_GL_MAX_PROGRAM_TEXEL_OFFSET);
 
-  mIndexedUniformBufferBindings.resize(mGLMaxUniformBufferBindings);
+  mIndexedUniformBufferBindings.resize(mLimits->maxUniformBufferBindings);
 
   mDefaultTransformFeedback = new WebGLTransformFeedback(this, 0);
   mBoundTransformFeedback = mDefaultTransformFeedback;

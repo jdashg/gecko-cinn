@@ -9,6 +9,7 @@
 #include "GLConsts.h"
 #include "mozilla/dom/ImageData.h"
 #include "mozilla/Range.h"
+#include "mozilla/RefCounted.h"
 #include "nsICanvasRenderingContextInternal.h"
 #include "nsWeakReference.h"
 #include "nsWrapperCache.h"
@@ -55,70 +56,48 @@ class TexUnpackBytes;
 
 ////////////////////////////////////
 
-class WebGLActiveInfoJS final {
+class WebGLActiveInfoJS final : public RefCounted<WebGLActiveInfoJS> {
  public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLActiveInfoJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLActiveInfoJS)
+  MOZ_DECLARE_REFCOUNTED_TYPENAME(WebGLActiveInfoJS)
 
- private:
-  const WeakPtr<ClientWebGLContext> mParent;
- public:
-  const uint32_t mElemCount; // `size`
-  const GLenum mElemType;    // `type`
-  const nsString mName;  // `name`, with any final "[0]".
+  const webgl::ActiveInfo mInfo;
 
-  WebGLActiveInfoJS(ClientWebGLContext&, const webgl::ActiveInfo&);
+  explicit WebGLActiveInfoJS(const webgl::ActiveInfo& info)
+       : mInfo(info) {}
+
+  virtual ~WebGLActiveInfoJS() = default;
 
   // -
   // WebIDL attributes
 
-  GLint Size() const { return static_cast<GLint>(mElemCount); }
-  GLenum Type() const { return mElemType; }
+  GLint Size() const { return static_cast<GLint>(mInfo.elemCount); }
+  GLenum Type() const { return mInfo.elemType; }
 
   void GetName(nsString& retval) const {
-    retval = mName;
-    //CopyASCIItoUTF16(mBaseUserName, retval);
-    //if (mIsArray) retval.AppendLiteral("[0]");
+    retval = NS_ConvertUTF8toUTF16(mInfo.name.c_str());
   }
 
-  // -
-
-  auto GetParentObject() const { return mParent.get(); }
-
-private:
-  virtual ~WebGLActiveInfoJS() = default;
-
-public:
   bool WrapObject(JSContext*, JS::Handle<JSObject*>,
       JS::MutableHandle<JSObject*>);
 };
 
-class WebGLShaderPrecisionFormatJS final {
+class WebGLShaderPrecisionFormatJS final : public RefCounted<WebGLShaderPrecisionFormatJS> {
  public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderPrecisionFormatJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLShaderPrecisionFormatJS)
+  MOZ_DECLARE_REFCOUNTED_TYPENAME(WebGLShaderPrecisionFormatJS)
 
- private:
-  const WeakPtr<ClientWebGLContext> mParent;
- public:
   const webgl::ShaderPrecisionFormat mInfo;
 
-  WebGLShaderPrecisionFormatJS(ClientWebGLContext& webgl,
-      const webgl::ShaderPrecisionFormat& info)
-      : mParent(&webgl), mInfo(info) {}
+  explicit WebGLShaderPrecisionFormatJS(const webgl::ShaderPrecisionFormat& info)
+      : mInfo(info) {}
 
-  auto GetParentObject() const { return mParent.get(); }
-
-private:
   virtual ~WebGLShaderPrecisionFormatJS() = default;
-
-public:
-  bool WrapObject(JSContext*, JS::Handle<JSObject*>,
-      JS::MutableHandle<JSObject*>);
 
   GLint RangeMin() const { return mInfo.rangeMin; }
   GLint RangeMax() const { return mInfo.rangeMax; }
   GLint Precision() const { return mInfo.precision; }
+
+  bool WrapObject(JSContext*, JS::Handle<JSObject*>,
+      JS::MutableHandle<JSObject*>);
 };
 
 // -----------------------
@@ -232,8 +211,8 @@ class ObjectJS : public nsWrapperCache {
 
 class CcMethods {
 public:
-  virtual void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const;
-  virtual void CcUnlink();
+  virtual void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const = 0;
+  virtual void CcUnlink() = 0;
 
   CcMethods& CcViaMethods() { return *this; }
   const CcMethods& CcViaMethods() const { return *this; }
@@ -675,14 +654,18 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   Maybe<NotLostData> mNotLost;
 
  public:
-  const auto& Limits() const { return mNotLost->info; }
+  const auto& Limits() const { return mNotLost->info.limits; }
 
   // -
 
  public:
-  void LoseContext(webgl::ContextLossReason);
-  void RestoreContext();
+  void LoseContext(const webgl::ContextLossReason reason) {
+    OnContextLoss(reason);
+    MOZ_ASSERT(!mNotLost);
+  }
+
   void OnContextLoss(webgl::ContextLossReason);
+  void RestoreContext();
 
  private:
   bool DispatchEvent(const nsAString&) const;
@@ -2042,6 +2025,15 @@ inline nsISupports* ToSupports(ClientWebGLContext* webgl) {
 }
 
 const char* GetExtensionName(WebGLExtensionID);
+
+// -
+
+inline bool webgl::ObjectJS::IsUsable(const ClientWebGLContext& context) const {
+  const auto& notLost = context.mNotLost;
+  if (!notLost) return false;
+  if (notLost->generation.get() != mGeneration.lock().get()) return false;
+  return !IsDeleted();
+}
 
 }  // namespace mozilla
 

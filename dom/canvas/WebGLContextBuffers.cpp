@@ -181,28 +181,9 @@ void WebGLContext::BindBufferRange(GLenum target, GLuint index,
 
   if (buffer && !buffer->ValidateCanBindToTarget(target)) return;
 
-  ////
-
-  switch (target) {
-    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
-      if (offset % 4 != 0 || size % 4 != 0) {
-        ErrorInvalidValue("For %s, `offset` and `size` must be multiples of 4.",
-                          "TRANSFORM_FEEDBACK_BUFFER");
-        return;
-      }
-      break;
-
-    case LOCAL_GL_UNIFORM_BUFFER: {
-      GLuint offsetAlignment = 0;
-      gl->GetUIntegerv(LOCAL_GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT,
-                       &offsetAlignment);
-      if (offset % offsetAlignment != 0) {
-        ErrorInvalidValue("For %s, `offset` must be a multiple of %s.",
-                          "UNIFORM_BUFFER", "UNIFORM_BUFFER_OFFSET_ALIGNMENT");
-        return;
-      }
-    } break;
-  }
+  const auto& limits = Limits();
+  auto err = CheckBindBufferRange(target, index, bool(buffer), offset, size, limits);
+  if (err) return;
 
   ////
 

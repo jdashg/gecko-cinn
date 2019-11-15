@@ -110,10 +110,11 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     const HostWebGLContext& mParent;
     const ObjectId mId;
 
+  public:
     AutoResolveT(const HostWebGLContext& parent, const ObjectId id) : mParent(parent), mId(id) {}
 
     template<typename T>
-    T* As() const;// = delete;
+    T* As() const = delete;
 
 #define _(X) \
     template<> \
@@ -123,6 +124,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
       return maybe->get(); \
     }
 
+    _(Buffer)
     _(Framebuffer)
     _(Program)
     _(Query)
@@ -135,7 +137,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     _(VertexArray)
 
 #undef _
-
     template<typename T>
     MOZ_IMPLICIT operator T*() const {
       return As<T>();
@@ -148,10 +149,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
     explicit operator bool() const { return static_cast<bool>(mId); }
 
-    class AutoResolveRefT final {
+    class RefT final {
       const AutoResolveT& mPtr;
     public:
-      AutoResolveRefT(const AutoResolveT& ptr) : mPtr(ptr) {}
+      RefT(const AutoResolveT& ptr) : mPtr(ptr) {}
 
       template<typename T>
       MOZ_IMPLICIT operator T&() const {
@@ -166,8 +167,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
       }
     };
 
-    AutoResolveRefT operator*() const {
-      return AutoResolveRefT(*this);
+    RefT operator*() const {
+      return RefT(*this);
     }
   };
 
@@ -616,7 +617,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   Maybe<double> GetTexParameter(ObjectId id, GLenum pname) const {
     const auto obj = ById(id);
     if (!obj) return {};
-    return GetTexParameter(*obj, pname);
+    return mContext->GetTexParameter(*obj, pname);
   }
 
   void TexParameter_base(GLenum texTarget, GLenum pname,
@@ -697,13 +698,16 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // ------------------------------ Readback -------------------------------
   void ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
-                     GLenum format, GLenum type, WebGLsizeiptr offset) const {
+                     GLenum format, GLenum type, uint64_t offset) const {
     mContext->ReadPixelsPbo(x, y, width, height, format, type, offset);
   }
 
-  Maybe<UniquePtr<RawBuffer<>>> ReadPixels(GLint x, GLint y, GLsizei width,
-                                            GLsizei height, GLenum format,
-                                            GLenum type, size_t byteLen);
+  void ReadPixels(GLint x, GLint y, GLsizei width,
+                  GLsizei height, GLenum format, GLenum type,
+                  RawBuffer<uint8_t>& dest) const {
+    const auto range = MakeRange(dest);
+    mContext->ReadPixels(x, y, width, height, format, type, range);
+  }
 
   // ----------------------------- Sampler -----------------------------------
 
@@ -782,8 +786,6 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
     mContext->DrawBuffers(buffers);
   }
 
-  void LoseContext(webgl::ContextLossReason);
-
   // VertexArrayObjectEXT
   void BindVertexArray(ObjectId id) const {
     mContext->BindVertexArray(ById(id));
@@ -829,12 +831,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // -------------------------------------------------------------------------
  public:
   void OnLostContext();
-
   void OnRestoredContext();
 
   // Etc
  public:
-  already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame();
+  already_AddRefed<layers::SharedSurfaceTextureClient> GetVRFrame() const {
+    return mContext->GetVRFrame();
+  }
 
  protected:
   WebGL2Context* GetWebGL2Context() const {

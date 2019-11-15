@@ -18,8 +18,6 @@ namespace mozilla {
 WebGLExtensionDrawBuffers::WebGLExtensionDrawBuffers(WebGLContext* webgl)
     : WebGLExtensionBase(webgl) {
   MOZ_ASSERT(IsSupported(webgl), "Don't construct extension if unsupported.");
-
-  webgl->UpdateMaxDrawBuffers();
 }
 
 bool WebGLExtensionDrawBuffers::IsSupported(const WebGLContext* webgl) {

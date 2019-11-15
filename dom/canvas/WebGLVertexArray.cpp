@@ -17,7 +17,7 @@ namespace mozilla {
 WebGLVertexArray::WebGLVertexArray(WebGLContext* const webgl, const GLuint name)
     : WebGLRefCountedObject(webgl),
       mGLName(name),
-      mAttribs(mContext->mGLMaxVertexAttribs) {
+      mAttribs(mContext->Limits().maxVertexAttribs) {
   mContext->mVertexArrays.insertBack(this);
 }
 

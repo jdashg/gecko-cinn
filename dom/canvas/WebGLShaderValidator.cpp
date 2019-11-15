@@ -150,10 +150,12 @@ std::unique_ptr<webgl::ShaderValidator> WebGLContext::CreateShaderValidator(
 
   resources.HashFunction = webgl::IdentifierHashFunc;
 
-  resources.MaxVertexAttribs = mGLMaxVertexAttribs;
+  const auto& limits = Limits();
+
+  resources.MaxVertexAttribs = limits.maxVertexAttribs;
   resources.MaxVertexUniformVectors = mGLMaxVertexUniformVectors;
   resources.MaxVertexTextureImageUnits = mGLMaxVertexTextureImageUnits;
-  resources.MaxCombinedTextureImageUnits = mGLMaxCombinedTextureImageUnits;
+  resources.MaxCombinedTextureImageUnits = limits.maxTexUnits;
   resources.MaxTextureImageUnits = mGLMaxFragmentTextureImageUnits;
   resources.MaxFragmentUniformVectors = mGLMaxFragmentUniformVectors;
 
@@ -166,9 +168,7 @@ std::unique_ptr<webgl::ShaderValidator> WebGLContext::CreateShaderValidator(
     resources.MaxProgramTexelOffset = mGLMaxProgramTexelOffset;
   }
 
-  const bool hasMRTs =
-      (IsWebGL2() || IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers));
-  resources.MaxDrawBuffers = (hasMRTs ? mGLMaxDrawBuffers : 1);
+  resources.MaxDrawBuffers = MaxValidDrawBuffers();
 
   if (IsExtensionEnabled(WebGLExtensionID::EXT_frag_depth))
     resources.EXT_frag_depth = 1;
@@ -184,7 +184,7 @@ std::unique_ptr<webgl::ShaderValidator> WebGLContext::CreateShaderValidator(
 
   if (IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
     resources.OVR_multiview2 = 1;
-    resources.MaxViewsOVR = mGLMaxMultiviewViews;
+    resources.MaxViewsOVR = limits.maxMultiviewLayers;
   }
 
   // Tell ANGLE to allow highp in frag shaders. (unless disabled)

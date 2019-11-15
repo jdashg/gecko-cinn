@@ -32,11 +32,9 @@ webgl::ContextGenerationInfo::~ContextGenerationInfo() = default;
 
 // -
 
-bool webgl::ObjectJS::IsUsable(const ClientWebGLContext& context) const {
-  const auto& notLost = context.mNotLost;
-  if (!notLost) return false;
-  if (notLost->generation.get() != mGeneration.lock().get()) return false;
-  return !IsDeleted();
+void webgl::ObjectJS::WarnInvalidUse(const ClientWebGLContext& targetContext,
+                                      const char* const argName) const {
+  targetContext.EnqueueError(LOCAL_GL_INVALID_VALUE, "`%s` is from a different WebGL context.");
 }
 
 static bool GetJSScalarFromGLType(GLenum type,
@@ -1292,7 +1290,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
                                       const bool debug) {
   const FuncScope funcScope(*this, "getParameter");
   if (IsContextLost()) return;
-  const auto& limits = mNotLost->info;
+  const auto& limits = Limits();
   const auto& state = *(mNotLost->generation);
 
   // -
@@ -1335,6 +1333,27 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
     case LOCAL_GL_TEXTURE_BINDING_CUBE_MAP:
       fnSetRetval_Tex(LOCAL_GL_TEXTURE_CUBE_MAP);
       return;
+
+    case LOCAL_GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS:
+      retval.set(JS::NumberValue(limits.maxTexUnits));
+      return;
+    case LOCAL_GL_MAX_TEXTURE_SIZE:
+      retval.set(JS::NumberValue(limits.maxTex2dSize));
+      return;
+    case LOCAL_GL_MAX_CUBE_MAP_TEXTURE_SIZE:
+      retval.set(JS::NumberValue(limits.maxTexCubeSize));
+      return;
+    case LOCAL_GL_MAX_VERTEX_ATTRIBS:
+      retval.set(JS::NumberValue(limits.maxVertexAttribs));
+      return;
+
+    case LOCAL_GL_MAX_VIEWS_OVR:
+      if (IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
+        retval.set(JS::NumberValue(limits.maxMultiviewLayers));
+        return;
+      }
+      break;
+
 
     // -
     // Array returns
@@ -1386,7 +1405,8 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
 
     // 2 ints
     case LOCAL_GL_MAX_VIEWPORT_DIMS: {
-      JSObject* obj = dom::Int32Array::Create(cx, this, 2, limits.maxViewportDims);
+      JSObject* obj = dom::Int32Array::Create(cx, this, 2,
+          reinterpret_cast<const int32_t*>(limits.maxViewportDims));
       if (!obj) {
         rv = NS_ERROR_OUT_OF_MEMORY;
       }
@@ -1500,6 +1520,22 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         (void)ToJSValue(cx, ret, retval);
         return;
       }
+
+      case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS:
+        retval.set(JS::NumberValue(limits.maxTransformFeedbackSeparateAttribs));
+        return;
+      case LOCAL_GL_MAX_UNIFORM_BUFFER_BINDINGS:
+        retval.set(JS::NumberValue(limits.maxUniformBufferBindings));
+        return;
+      case LOCAL_GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT:
+        retval.set(JS::NumberValue(limits.uniformBufferOffsetAlignment));
+        return;
+      case LOCAL_GL_MAX_3D_TEXTURE_SIZE:
+        retval.set(JS::NumberValue(limits.maxTex3dSize));
+        return;
+      case LOCAL_GL_MAX_ARRAY_TEXTURE_LAYERS:
+        retval.set(JS::NumberValue(limits.maxTexArrayLayers));
+        return;
     } // switch pname
   } // if webgl2
 
@@ -1922,7 +1958,7 @@ ClientWebGLContext::GetShaderPrecisionFormat(const GLenum shadertype,
                                              const GLenum precisiontype) {
   const auto info = Run<RPROC(GetShaderPrecisionFormat)>(shadertype, precisiontype);
   if (!info) return nullptr;
-  return AsAddRefed(new WebGLShaderPrecisionFormatJS(*this, *info));
+  return AsAddRefed(new WebGLShaderPrecisionFormatJS(*info));
 }
 
 void ClientWebGLContext::BlendColor(GLclampf r, GLclampf g, GLclampf b,
@@ -2179,10 +2215,10 @@ Maybe<const webgl::ErrorInfo> ValidateBindBuffer(const GLenum target,
   return {};
 }
 
-Maybe<webgl::ErrorInfo> ValidateBindBufferRange(const GLenum target, const GLuint index,
+Maybe<webgl::ErrorInfo> CheckBindBufferRange(const GLenum target, const GLuint index,
                                     const bool isBuffer,
                                     const uint64_t offset, const uint64_t size,
-                                    const webgl::InitContextResult& limits)
+                                    const webgl::Limits& limits)
 {
   const auto fnSome = [&](const GLenum type, const nsACString& info) {
     return Some(webgl::ErrorInfo{type, info.BeginReading()});
@@ -2295,8 +2331,8 @@ void ClientWebGLContext::BindBufferRangeImpl(const GLenum target, const GLuint i
 
   // -
 
-  const auto& limits = mNotLost->info;
-  auto err = ValidateBindBufferRange(target, index, bool(buffer), offset, size, limits);
+  const auto& limits = Limits();
+  auto err = CheckBindBufferRange(target, index, bool(buffer), offset, size, limits);
   if (err) {
     EnqueueError(err->type, "%s", err->info.c_str());
     return;
@@ -2512,7 +2548,7 @@ void ClientWebGLContext::FramebufferTexture2D(GLenum target, GLenum attachSlot,
 
 Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
         const GLenum curTexTarget, const uint32_t mipLevel, const uint32_t zLayerBase,
-        const uint32_t zLayerCount, const webgl::InitContextResult& limits) {
+        const uint32_t zLayerCount, const webgl::Limits& limits) {
   auto texTarget = curTexTarget;
   if (bindImageTarget) {
     // FramebufferTexture2D
@@ -2585,7 +2621,7 @@ void ClientWebGLContext::FramebufferAttach(
   if (rb && !rb->ValidateUsable(*this, "rb")) return;
   if (tex && !tex->ValidateUsable(*this, "tex")) return;
   const auto& state = *(mNotLost->generation);
-  const auto& limits = mNotLost->info;
+  const auto& limits = Limits();
 
   if (!IsFramebufferTarget(mIsWebGL2, target)) {
     EnqueueError_ArgEnum("target", target);
@@ -3321,7 +3357,8 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
                                     ErrorResult& out_error) const {
   const FuncScope funcScope(*this, "readPixels");
   if (!ReadPixels_SharedPrecheck(aCallerType, out_error)) return;
-  Run<RPROC(ReadPixelsPbo)>(x, y, width, height, format, type, offset);
+  if (!ValidateNonNegative("offset", offset)) return;
+  Run<RPROC(ReadPixelsPbo)>(x, y, width, height, format, type, static_cast<uint64_t>(offset));
 }
 
 void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
@@ -3357,14 +3394,9 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
                                LOCAL_GL_INVALID_VALUE, &bytes, &byteLen)) {
     return;
   }
-
-  Maybe<UniquePtr<RawBuffer<>>> result =
-      Run<RPROC(ReadPixels)>(x, y, width, height, format, type, byteLen);
-  if (!result) {
-    return;
-  }
-  MOZ_ASSERT(result.ref()->Length() == byteLen);
-  memcpy(bytes, result.ref()->Data(), byteLen);
+  const auto range = Range<uint8_t>(bytes, byteLen);
+  auto view = RawBufferView(range);
+  Run<RPROC(ReadPixels)>(x, y, width, height, format, type, view);
 }
 
 bool ClientWebGLContext::ReadPixels_SharedPrecheck(CallerType aCallerType,
@@ -3384,7 +3416,7 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
                                   JS::MutableHandleValue retval) const {
   const FuncScope funcScope(*this, "getQuery");
   if (IsContextLost()) return;
-  const auto& limits = mNotLost->info;
+  const auto& limits = Limits();
   auto& state = *(mNotLost->generation);
 
   if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query)) {
@@ -3778,10 +3810,6 @@ void ClientWebGLContext::DrawBuffers(const dom::Sequence<GLenum>& buffers) {
   Run<RPROC(DrawBuffers)>(vec);
 }
 
-void ClientWebGLContext::LoseContext(const webgl::ContextLossReason reason) {
-  Run<RPROC(LoseContext)>(reason);
-}
-
 void ClientWebGLContext::EnqueueErrorImpl(const GLenum error,
                                           const nsACString& text) const {
   if (!mNotLost) {
@@ -3815,9 +3843,8 @@ static bool IsExtensionForbiddenForCaller(const WebGLExtensionID ext,
 bool ClientWebGLContext::IsSupported(const WebGLExtensionID ext,
                                      const dom::CallerType callerType) const {
   if (IsExtensionForbiddenForCaller(ext, callerType)) return false;
-
-  const auto& supportedExts = mNotLost->info.supportedExtensions;
-  return supportedExts[ext];
+  const auto& limits = Limits();
+  return limits.supportedExtensions[ext];
 }
 
 void ClientWebGLContext::GetSupportedExtensions(
@@ -3841,10 +3868,11 @@ void ClientWebGLContext::GetSupportedProfilesASTC(
     dom::Nullable<nsTArray<nsString>>& retval) const {
   retval.SetNull();
   if (!mNotLost) return;
+  const auto& limits = Limits();
 
   auto& retarr = retval.SetValue();
   retarr.AppendElement(NS_LITERAL_STRING("ldr"));
-  if (mNotLost->info.astcHdr) {
+  if (limits.astcHdr) {
     retarr.AppendElement(NS_LITERAL_STRING("hdr"));
   }
 }
@@ -4012,7 +4040,7 @@ already_AddRefed<WebGLActiveInfoJS> ClientWebGLContext::GetActiveAttrib(const We
   }
 
   const auto& info = list[index];
-  return AsAddRefed(new WebGLActiveInfoJS(*this, info));
+  return AsAddRefed(new WebGLActiveInfoJS(info));
 }
 
 already_AddRefed<WebGLActiveInfoJS> ClientWebGLContext::GetActiveUniform(const WebGLProgramJS& prog,
@@ -4029,7 +4057,7 @@ already_AddRefed<WebGLActiveInfoJS> ClientWebGLContext::GetActiveUniform(const W
   }
 
   const auto& info = list[index];
-  return AsAddRefed(new WebGLActiveInfoJS(*this, info));
+  return AsAddRefed(new WebGLActiveInfoJS(info));
 }
 
 void ClientWebGLContext::GetActiveUniformBlockName(const WebGLProgramJS& prog, const GLuint index,
@@ -4175,7 +4203,7 @@ already_AddRefed<WebGLActiveInfoJS> ClientWebGLContext::GetTransformFeedbackVary
   }
 
   const auto& info = list[index];
-  return AsAddRefed(new WebGLActiveInfoJS(*this, info));
+  return AsAddRefed(new WebGLActiveInfoJS(info));
 }
 
 GLint ClientWebGLContext::GetAttribLocation(const WebGLProgramJS& prog,
@@ -4458,16 +4486,51 @@ const webgl::LinkResult& ClientWebGLContext::GetLinkResult(const WebGLProgramJS&
 
 // ---------------------------
 
+static inline size_t SizeOfViewElem(const dom::ArrayBufferView& view) {
+  const auto& elemType = view.Type();
+  if (elemType == js::Scalar::MaxTypedArrayViewType)  // DataViews.
+    return 1;
+
+  return js::Scalar::byteSize(elemType);
+}
+
+bool ClientWebGLContext::ValidateArrayBufferView(const dom::ArrayBufferView& view,
+                                           GLuint elemOffset,
+                                           GLuint elemCountOverride,
+                                           const GLenum errorEnum,
+                                           uint8_t** const out_bytes,
+                                           size_t* const out_byteLen) const {
+  view.ComputeLengthAndData();
+  uint8_t* const bytes = view.DataAllowShared();
+  const size_t byteLen = view.LengthAllowShared();
+
+  const auto& elemSize = SizeOfViewElem(view);
+
+  size_t elemCount = byteLen / elemSize;
+  if (elemOffset > elemCount) {
+    EnqueueError(errorEnum, "Invalid offset into ArrayBufferView.");
+    return false;
+  }
+  elemCount -= elemOffset;
+
+  if (elemCountOverride) {
+    if (elemCountOverride > elemCount) {
+      EnqueueError(errorEnum, "Invalid sub-length for ArrayBufferView.");
+      return false;
+    }
+    elemCount = elemCountOverride;
+  }
+
+  *out_bytes = bytes + (elemOffset * elemSize);
+  *out_byteLen = elemCount * elemSize;
+  return true;
+}
+
+// ---------------------------
+
 webgl::ObjectJS::ObjectJS(const ClientWebGLContext& webgl)
   : mGeneration(webgl.mNotLost->generation)
   , mId(webgl.mNotLost->generation->NextId()) {}
-
-// -
-
-WebGLActiveInfoJS::WebGLActiveInfoJS(ClientWebGLContext& parent,
-       const webgl::ActiveInfo& info)
-       : mParent(&parent), mElemCount(info.elemCount), mElemType(info.elemType),
-        mName(NS_ConvertUTF8toUTF16(info.name.c_str())) {}
 
 // -
 
@@ -4527,6 +4590,7 @@ _(WebGLSync)
 _(WebGLTexture)
 _(WebGLTransformFeedback)
 _(WebGLUniformLocation)
+//_(WebGLVertexArray) // The webidl is `WebGLVertexArrayObject` :(
 
 #undef _
 
@@ -4612,6 +4676,27 @@ NS_IMPL_CYCLE_COLLECTING_ADDREF(ClientWebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(ClientWebGLContext)
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ClientWebGLContext, CcViaMethods())
+
+// -----------------------------
+
+#define _(X) \
+  NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGL ## X ## JS, AddRef) \
+  NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGL ## X ## JS, Release)
+
+_(Buffer)
+_(Framebuffer)
+_(Program)
+_(Query)
+_(Renderbuffer)
+_(Sampler)
+_(Shader)
+_(Sync)
+_(Texture)
+_(TransformFeedback)
+_(UniformLocation)
+_(VertexArray)
+
+#undef _
 
 // -----------------------------
 

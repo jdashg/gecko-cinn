@@ -80,20 +80,24 @@ struct ParamTraits<mozilla::webgl::InitContextResult> final {
   static void Write(Message* const msg, const T& in) {
     WriteParam(msg, in.error);
     WriteParam(msg, in.options);
-    WriteParam(msg, in.supportedExtensions);
+    WriteParam(msg, in.limits);
   }
 
   static bool Read(const Message* const msg, PickleIterator* const itr,
                    T* const out) {
     return ReadParam(msg, itr, &out->error) &&
            ReadParam(msg, itr, &out->options) &&
-           ReadParam(msg, itr, &out->supportedExtensions);
+           ReadParam(msg, itr, &out->limits);
   }
 };
 
 template <>
 struct ParamTraits<mozilla::webgl::ExtensionBits> final
     : public PlainOldDataSerializer<mozilla::webgl::ExtensionBits> {};
+
+template <>
+struct ParamTraits<mozilla::webgl::Limits> final
+    : public PlainOldDataSerializer<mozilla::webgl::Limits> {};
 
 }  // namespace IPC
 

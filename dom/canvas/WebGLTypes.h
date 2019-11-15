@@ -501,28 +501,40 @@ struct InitContextDesc final {
   WebGLContextOptions options;
 };
 
+struct Limits final {
+  ExtensionBits supportedExtensions;
+
+  // WebGL 1
+  uint32_t maxTexUnits = 0;
+  uint32_t maxTex2dSize = 0;
+  uint32_t maxTexCubeSize = 0;
+  uint32_t maxVertexAttribs = 0;
+  uint32_t maxViewportDims[2] = {};
+  float pointSizeRange[2] = {1, 1};
+  float lineWidthRange[2] = {1, 1};
+
+  // WebGL 2
+  uint32_t maxTexArrayLayers = 0;
+  uint32_t maxTex3dSize = 0;
+  uint32_t maxTransformFeedbackSeparateAttribs = 0;
+  uint32_t maxUniformBufferBindings = 0;
+  uint32_t uniformBufferOffsetAlignment = 0;
+
+  // Exts
+  bool astcHdr = false;
+  uint32_t maxColorDrawBuffers = 1;
+  uint64_t queryCounterBitsTimeElapsed = 0;
+  uint64_t queryCounterBitsTimestamp = 0;
+  uint32_t maxMultiviewLayers = 0;
+};
+
 struct InitContextResult final {
   std::string error;
   WebGLContextOptions options;
-  ExtensionBits supportedExtensions;
-  bool astcHdr = false;
-  uint8_t maxColorDrawBuffers = 0;
-  uint16_t maxTexUnits = 0;
-  uint16_t maxVertexAttribs = 0;
-  uint8_t maxUniformBufferBindings = 0;
-  uint16_t uniformBufferOffsetAlignment = 0;
-  GLsizei maxViewportDims[2] = {};
-  float pointSizeRange[2] = {};
-  float lineWidthRange[2] = {};
-  uint64_t queryCounterBitsTimeElapsed = 0;
-  uint64_t queryCounterBitsTimestamp = 0;
-  uint32_t maxTransformFeedbackSeparateAttribs = 0;
-  uint32_t maxTex2dSize = 0;
-  uint32_t maxTexCubeSize = 0;
-  uint32_t maxTexArrayLayers = 0;
-  uint32_t maxTex3dSize = 0;
-  uint32_t maxMultiviewLayers = 0;
+  webgl::Limits limits;
 };
+
+// -
 
 struct ErrorInfo final {
   GLenum type;
@@ -874,9 +886,14 @@ RawBuffer<T> RawBufferView(const Range<T>& range) {
 
 // -
 
+Maybe<webgl::ErrorInfo> CheckBindBufferRange(const GLenum target, const GLuint index,
+                                    const bool isBuffer,
+                                    const uint64_t offset, const uint64_t size,
+                                    const webgl::Limits& limits);
+
 Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
         const GLenum curTexTarget, const uint32_t mipLevel, const uint32_t zLayerBase,
-        const uint32_t zLayerCount, const webgl::InitContextResult& limits);
+        const uint32_t zLayerCount, const webgl::Limits& limits);
 
 Maybe<webgl::ErrorInfo> CheckVertexAttribPointer(bool webgl2, bool isFuncInt,
                                           GLint size, GLenum type,

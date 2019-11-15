@@ -346,33 +346,34 @@ bool WebGLTexture::ValidateTexImageSpecification(
   uint32_t maxDepth = 0;
   uint32_t maxLevel = 0;
 
+  const auto& limits = mContext->Limits();
   MOZ_ASSERT(level <= 31);
   switch (target.get()) {
     case LOCAL_GL_TEXTURE_2D:
-      maxWidthHeight = mContext->mGLMaxTextureSize >> level;
+      maxWidthHeight = limits.maxTex2dSize >> level;
       maxDepth = 1;
-      maxLevel = CeilingLog2(mContext->mGLMaxTextureSize);
+      maxLevel = CeilingLog2(limits.maxTex2dSize);
       break;
 
     case LOCAL_GL_TEXTURE_3D:
-      maxWidthHeight = mContext->mGLMax3DTextureSize >> level;
+      maxWidthHeight = limits.maxTex3dSize >> level;
       maxDepth = maxWidthHeight;
-      maxLevel = CeilingLog2(mContext->mGLMax3DTextureSize);
+      maxLevel = CeilingLog2(limits.maxTex3dSize);
       break;
 
     case LOCAL_GL_TEXTURE_2D_ARRAY:
-      maxWidthHeight = mContext->mGLMaxTextureSize >> level;
+      maxWidthHeight = limits.maxTex2dSize >> level;
       // "The maximum number of layers for two-dimensional array textures
       // (depth) must be at least MAX_ARRAY_TEXTURE_LAYERS for all levels."
-      maxDepth = mContext->mGLMaxArrayTextureLayers;
-      maxLevel = CeilingLog2(mContext->mGLMaxTextureSize);
+      maxDepth = limits.maxTexArrayLayers;
+      maxLevel = CeilingLog2(limits.maxTex2dSize);
       break;
 
     default:  // cube maps
       MOZ_ASSERT(IsCubeMap());
-      maxWidthHeight = mContext->mGLMaxCubeMapTextureSize >> level;
+      maxWidthHeight = limits.maxTexCubeSize >> level;
       maxDepth = 1;
-      maxLevel = CeilingLog2(mContext->mGLMaxCubeMapTextureSize);
+      maxLevel = CeilingLog2(limits.maxTexCubeSize);
       break;
   }
 

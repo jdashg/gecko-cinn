@@ -19,6 +19,50 @@ namespace mozilla {
 // -------------------------------------------------------------------------
 // Uniform Buffer Objects and Transform Feedback Buffers
 
+Maybe<double> WebGL2Context::GetIndexedParameter(const GLenum pname,
+          const uint32_t index) const {
+  const FuncScope funcScope(*this, "getIndexedParameter");
+  if (IsContextLost()) return {};
+
+  const auto* bindings = &mIndexedUniformBufferBindings;
+  const char* limitStr = "MAX_UNIFORM_BUFFER_BINDINGS";
+  switch (pname) {
+    case LOCAL_GL_UNIFORM_BUFFER_START:
+    case LOCAL_GL_UNIFORM_BUFFER_SIZE:
+      break;
+
+    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_START:
+    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_SIZE:
+      bindings = &(mBoundTransformFeedback->mIndexedBindings);
+      limitStr = "MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS";
+      break;
+
+    default:
+      ErrorInvalidEnumInfo("pname", pname);
+      return {};
+  }
+
+  if (index >= bindings->size()) {
+    ErrorInvalidValue("`index` must be < %s.", limitStr);
+    return {};
+  }
+  const auto& binding = (*bindings)[index];
+
+  switch (pname) {
+    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_START:
+    case LOCAL_GL_UNIFORM_BUFFER_START:
+      return Some(binding.mRangeStart);
+      break;
+
+    case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_SIZE:
+    case LOCAL_GL_UNIFORM_BUFFER_SIZE:
+      return Some(binding.mRangeSize);
+
+    default:
+      MOZ_CRASH("impossible");
+  }
+}
+
 void WebGL2Context::UniformBlockBinding(WebGLProgram& program,
                                         GLuint uniformBlockIndex,
                                         GLuint uniformBlockBinding) {
@@ -29,5 +73,6 @@ void WebGL2Context::UniformBlockBinding(WebGLProgram& program,
 
   program.UniformBlockBinding(uniformBlockIndex, uniformBlockBinding);
 }
+
 
 }  // namespace mozilla

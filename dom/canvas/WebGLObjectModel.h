@@ -27,16 +27,10 @@ class WebGLContextBoundObject {
   const WeakPtr<WebGLContext> mContext;
 
   explicit WebGLContextBoundObject(WebGLContext* webgl)
-      : mContext(webgl), mContextGeneration(webgl->Generation()) {}
-
-  bool IsCompatibleWithContext(const WebGLContext* other) const {
-    return (mContext == other && mContextGeneration == other->Generation());
-  }
+      : mContext(webgl) {}
 
  private:
   friend class HostWebGLContext;
-
-  const uint32_t mContextGeneration;
 };
 
 ////

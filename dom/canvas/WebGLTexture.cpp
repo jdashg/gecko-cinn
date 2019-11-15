@@ -819,8 +819,7 @@ void WebGLTexture::GenerateMipmap() {
   PopulateMipChain(maxLevel);
 }
 
-Maybe<double> WebGLTexture::GetTexParameter(TexTarget texTarget,
-                                                GLenum pname) const {
+Maybe<double> WebGLTexture::GetTexParameter(GLenum pname) const {
   GLint i = 0;
   GLfloat f = 0.0f;
 
@@ -843,15 +842,21 @@ Maybe<double> WebGLTexture::GetTexParameter(TexTarget texTarget,
     case LOCAL_GL_TEXTURE_WRAP_T:
     case LOCAL_GL_TEXTURE_WRAP_R:
     case LOCAL_GL_TEXTURE_COMPARE_MODE:
-    case LOCAL_GL_TEXTURE_COMPARE_FUNC:
-      mContext->gl->fGetTexParameteriv(texTarget.get(), pname, &i);
-      return Some(uint32_t(i));
+    case LOCAL_GL_TEXTURE_COMPARE_FUNC: {
+      MOZ_ASSERT(mTarget);
+      const gl::ScopedBindTexture autoTex(mContext->gl, mGLName, mTarget.get());
+      mContext->gl->fGetTexParameteriv(mTarget.get(), pname, &i);
+      return Some(i);
+    }
 
     case LOCAL_GL_TEXTURE_MAX_ANISOTROPY_EXT:
     case LOCAL_GL_TEXTURE_MAX_LOD:
-    case LOCAL_GL_TEXTURE_MIN_LOD:
-      mContext->gl->fGetTexParameterfv(texTarget.get(), pname, &f);
-      return Some(float(f));
+    case LOCAL_GL_TEXTURE_MIN_LOD: {
+      MOZ_ASSERT(mTarget);
+      const gl::ScopedBindTexture autoTex(mContext->gl, mGLName, mTarget.get());
+      mContext->gl->fGetTexParameterfv(mTarget.get(), pname, &f);
+      return Some(f);
+    }
 
     default:
       MOZ_CRASH("GFX: Unhandled pname.");

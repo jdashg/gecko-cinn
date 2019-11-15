@@ -239,7 +239,7 @@ class WebGLExtensionDrawBuffers : public WebGLExtensionBase {
 
 class WebGLExtensionVertexArray : public WebGLExtensionBase {
  public:
-  explicit WebGLExtensionVertexArray(WebGLContext* webgl);
+  explicit WebGLExtensionVertexArray(WebGLContext* webgl) : WebGLExtensionBase(webgl) {}
 };
 
 class WebGLExtensionInstancedArrays : public WebGLExtensionBase {

@@ -362,7 +362,8 @@ void WebGLContext::WarnIfImplicit(const WebGLExtensionID ext) const {
 
 void WebGLContext::RequestExtension(const WebGLExtensionID ext,
                                     const bool explicitly) {
-  if (!mSupportedExtensions[ext]) return;
+  const auto& limits = Limits();
+  if (!limits.supportedExtensions[ext]) return;
 
   auto& slot = mExtensions[ext];
   switch (ext) {

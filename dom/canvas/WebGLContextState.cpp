@@ -74,13 +74,13 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
 
   if (IsWebGL2() || IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers)) {
     if (pname == LOCAL_GL_MAX_COLOR_ATTACHMENTS) {
-      return Some(mGLMaxColorAttachments);
+      return Some(MaxValidDrawBuffers());
 
     } else if (pname == LOCAL_GL_MAX_DRAW_BUFFERS) {
-      return Some(mGLMaxDrawBuffers);
+      return Some(MaxValidDrawBuffers());
 
     } else if (pname >= LOCAL_GL_DRAW_BUFFER0 &&
-               pname < GLenum(LOCAL_GL_DRAW_BUFFER0 + mGLMaxDrawBuffers)) {
+               pname < GLenum(LOCAL_GL_DRAW_BUFFER0 + MaxValidDrawBuffers())) {
       GLint ret = LOCAL_GL_NONE;
       if (!mBoundDrawFramebuffer) {
         if (pname == LOCAL_GL_DRAW_BUFFER0) {
@@ -314,12 +314,6 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
       return Some(ret);
     }
 
-    case LOCAL_GL_MAX_TEXTURE_SIZE:
-      return Some(mGLMaxTextureSize);
-
-    case LOCAL_GL_MAX_CUBE_MAP_TEXTURE_SIZE:
-      return Some(mGLMaxCubeMapTextureSize);
-
     case LOCAL_GL_MAX_RENDERBUFFER_SIZE:
       return Some(mGLMaxRenderbufferSize);
 
@@ -329,12 +323,6 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
     case LOCAL_GL_MAX_TEXTURE_IMAGE_UNITS:
       return Some(mGLMaxFragmentTextureImageUnits);
 
-    case LOCAL_GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS:
-      return Some(mGLMaxCombinedTextureImageUnits);
-
-    case LOCAL_GL_MAX_VERTEX_ATTRIBS:
-      return Some(mGLMaxVertexAttribs);
-
     case LOCAL_GL_MAX_VERTEX_UNIFORM_VECTORS:
       return Some(mGLMaxVertexUniformVectors);
 
@@ -343,12 +331,6 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
 
     case LOCAL_GL_MAX_VARYING_VECTORS:
       return Some(mGLMaxFragmentInputVectors);
-
-    case LOCAL_GL_MAX_VIEWS_OVR:
-      if (IsExtensionEnabled(WebGLExtensionID::OVR_multiview2)) {
-        return Some(mGLMaxMultiviewViews);
-      }
-      break;
 
     // unsigned int. here we may have to return very large values like 2^32-1
     // that can't be represented as javascript integer values. We just return

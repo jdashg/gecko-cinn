@@ -786,14 +786,8 @@ RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
     printf_stderr("--- WebGL context created: %p\n", webgl.get());
   }
 
-  out->supportedExtensions = webgl->mSupportedExtensions;
   out->options = webgl->mOptions;
-
-  if (out->supportedExtensions
-          [WebGLExtensionID::WEBGL_compressed_texture_astc]) {
-    out->astcHdr = webgl->gl->IsExtensionSupported(
-        gl::GLContext::KHR_texture_compression_astc_hdr);
-  }
+  out->limits = *webgl->mLimits;
 
   return webgl;
 }
@@ -853,12 +847,6 @@ void WebGLContext::FinishInit() {
   //////
 
   gl->ResetSyncCallCount("WebGLContext Initialization");
-
-  for (const auto i : MakeEnumeratedRange(WebGLExtensionID::Max)) {
-    if (IsExtensionSupported(i)) {
-      mSupportedExtensions[i] = true;
-    }
-  }
 }
 
 void WebGLContext::SetCompositableHost(
@@ -1867,62 +1855,6 @@ void WebGLContext::EnsureVRReady() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-static inline size_t SizeOfViewElem(const dom::ArrayBufferView& view) {
-  const auto& elemType = view.Type();
-  if (elemType == js::Scalar::MaxTypedArrayViewType)  // DataViews.
-    return 1;
-
-  return js::Scalar::byteSize(elemType);
-}
-
-bool WebGLContext::ValidateArrayBufferView(const dom::ArrayBufferView& view,
-                                           GLuint elemOffset,
-                                           GLuint elemCountOverride,
-                                           const GLenum errorEnum,
-                                           uint8_t** const out_bytes,
-                                           size_t* const out_byteLen) const {
-  view.ComputeLengthAndData();
-  uint8_t* const bytes = view.DataAllowShared();
-  const size_t byteLen = view.LengthAllowShared();
-
-  const auto& elemSize = SizeOfViewElem(view);
-
-  size_t elemCount = byteLen / elemSize;
-  if (elemOffset > elemCount) {
-    GenerateError(errorEnum, "Invalid offset into ArrayBufferView.");
-    return false;
-  }
-  elemCount -= elemOffset;
-
-  if (elemCountOverride) {
-    if (elemCountOverride > elemCount) {
-      GenerateError(errorEnum, "Invalid sub-length for ArrayBufferView.");
-      return false;
-    }
-    elemCount = elemCountOverride;
-  }
-
-  *out_bytes = bytes + (elemOffset * elemSize);
-  *out_byteLen = elemCount * elemSize;
-  return true;
-}
-
-////
-
-void WebGLContext::UpdateMaxDrawBuffers() {
-  mGLMaxColorAttachments =
-      gl->GetIntAs<uint32_t>(LOCAL_GL_MAX_COLOR_ATTACHMENTS);
-  mGLMaxDrawBuffers = gl->GetIntAs<uint32_t>(LOCAL_GL_MAX_DRAW_BUFFERS);
-
-  // WEBGL_draw_buffers:
-  // "The value of the MAX_COLOR_ATTACHMENTS_WEBGL parameter must be greater
-  // than or
-  //  equal to that of the MAX_DRAW_BUFFERS_WEBGL parameter."
-  mGLMaxDrawBuffers = std::min(mGLMaxDrawBuffers, mGLMaxColorAttachments);
-}
-
-// --
 
 const char* WebGLContext::FuncName() const {
   const char* ret;

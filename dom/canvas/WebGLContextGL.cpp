@@ -68,12 +68,12 @@ void WebGLContext::ActiveTexture(GLenum texture) {
   if (IsContextLost()) return;
 
   if (texture < LOCAL_GL_TEXTURE0 ||
-      texture >= LOCAL_GL_TEXTURE0 + mGLMaxTextureUnits) {
+      texture >= LOCAL_GL_TEXTURE0 + Limits().maxTexUnits) {
     return ErrorInvalidEnum(
         "Texture unit %d out of range. "
         "Accepted values range from TEXTURE0 to TEXTURE0 + %d. "
         "Notice that TEXTURE0 != 0.",
-        texture, mGLMaxTextureUnits);
+        texture, Limits().maxTexUnits);
   }
 
   mActiveTexture = texture - LOCAL_GL_TEXTURE0;
@@ -299,7 +299,7 @@ void WebGLContext::DeleteTexture(WebGLTexture* tex) {
   if (mBoundReadFramebuffer) mBoundReadFramebuffer->DetachTexture(tex);
 
   GLuint activeTexture = mActiveTexture;
-  for (uint32_t i = 0; i < mGLMaxTextureUnits; i++) {
+  for (const auto i : IntegerRange(mBound2DTextures.Length())) {
     if (mBound2DTextures[i] == tex || mBoundCubeMapTextures[i] == tex ||
         mBound3DTextures[i] == tex || mBound2DArrayTextures[i] == tex) {
       ActiveTexture(LOCAL_GL_TEXTURE0 + i);
@@ -377,7 +377,7 @@ void WebGLContext::FramebufferAttach(
     const GLenum target, const GLenum attachSlot, const GLenum bindImageTarget,
     const webgl::FbAttachInfo& toAttach) {
   webgl::ScopedBindFailureGuard failureGuard(*this);
-  const auto& limits = Limits();
+  const auto& limits = *mLimits;
 
   if (!ValidateFramebufferTarget(target)) return;
 
@@ -901,26 +901,26 @@ void WebGLContext::PixelStorei(GLenum pname, GLint param) {
 bool WebGLContext::DoReadPixelsAndConvert(const webgl::FormatInfo* srcFormat,
                                           GLint x, GLint y, GLsizei width,
                                           GLsizei height, GLenum format,
-                                          GLenum destType, void* dest,
-                                          uint32_t destSize,
+                                          GLenum destType, uintptr_t dest,
+                                          uint64_t destSize,
                                           uint32_t rowStride) {
   // On at least Win+NV, we'll get PBO errors if we don't have at least
   // `rowStride * height` bytes available to read into.
-  const auto naiveBytesNeeded = CheckedUint32(rowStride) * height;
+  const auto naiveBytesNeeded = CheckedInt<uint64_t>(rowStride) * height;
   const bool isDangerCloseToEdge =
       (!naiveBytesNeeded.isValid() || naiveBytesNeeded.value() > destSize);
   const bool useParanoidHandling =
       (gl->WorkAroundDriverBugs() && isDangerCloseToEdge &&
        mBoundPixelPackBuffer);
   if (!useParanoidHandling) {
-    gl->fReadPixels(x, y, width, height, format, destType, dest);
+    gl->fReadPixels(x, y, width, height, format, destType, reinterpret_cast<void*>(dest));
     return true;
   }
 
   // Read everything but the last row.
   const auto bodyHeight = height - 1;
   if (bodyHeight) {
-    gl->fReadPixels(x, y, width, bodyHeight, format, destType, dest);
+    gl->fReadPixels(x, y, width, bodyHeight, format, destType, reinterpret_cast<void*>(dest));
   }
 
   // Now read the last row.
@@ -980,36 +980,24 @@ bool WebGLContext::ValidatePackSize(uint32_t width, uint32_t height,
   return true;
 }
 
-UniqueBuffer WebGLContext::ReadPixels(
-    GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type) {
+void WebGLContext::ReadPixels(
+    GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type,
+    const Range<uint8_t>& dest) {
   const FuncScope funcScope(*this, "readPixels");
-  if (IsContextLost()) return {};
+  if (IsContextLost()) return;
 
   if (mBoundPixelPackBuffer) {
     ErrorInvalidOperation("PIXEL_PACK_BUFFER must be null.");
-    return {};
+    return;
   }
 
-  const auto bpp = webgl::BytesPerPixel({format, type});
-  const auto checkedByteLen = CheckedInt<size_t>(bpp) * width * height;
-  if (!checkedByteLen.isValid()) {
-    ErrorOutOfMemory("Impossible number of bytes.");
-    return {};
-  }
-  const auto byteLen = checkedByteLen.value();
-
-  auto ret = UniqueBuffer(malloc(byteLen));
-  if (!ret) {
-    ErrorOutOfMemory("ReadPixels could not allocate temp memory");
-    return {};
-  }
-  ReadPixelsImpl(x, y, width, height, format, type, ret.get(), byteLen);
-  return ret;
+  ReadPixelsImpl(x, y, width, height, format, type,
+      reinterpret_cast<uintptr_t>(dest.begin().get()), dest.length());
 }
 
 void WebGLContext::ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
                               GLenum format, GLenum type,
-                              WebGLsizeiptr offset) {
+                              uint64_t offset) {
   const FuncScope funcScope(*this, "readPixels");
   if (IsContextLost()) return;
 
@@ -1017,8 +1005,6 @@ void WebGLContext::ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height
   if (!buffer) return;
 
   //////
-
-  if (!ValidateNonNegative("offset", offset)) return;
 
   {
     const auto bytesPerType = webgl::BytesPerPixel({LOCAL_GL_RED, type});
@@ -1033,18 +1019,19 @@ void WebGLContext::ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height
 
   //////
 
-  const auto bytesAvailable = buffer->ByteLength();
-  const auto checkedBytesAfterOffset = CheckedUint32(bytesAvailable) - offset;
-
-  uint32_t bytesAfterOffset = 0;
-  if (checkedBytesAfterOffset.isValid()) {
-    bytesAfterOffset = checkedBytesAfterOffset.value();
+  auto bytesAvailable = buffer->ByteLength();
+  if (offset > bytesAvailable) {
+    ErrorInvalidOperation(
+        "`offset` too large for bound PIXEL_PACK_BUFFER.");
+    return;
   }
+  bytesAvailable -= offset;
+
+  // -
 
   const ScopedLazyBind lazyBind(gl, LOCAL_GL_PIXEL_PACK_BUFFER, buffer);
 
-  ReadPixelsImpl(x, y, width, height, format, type, (void*)offset,
-                 bytesAfterOffset);
+  ReadPixelsImpl(x, y, width, height, format, type, offset, bytesAvailable);
 
   buffer->ResetLastUpdateFenceId();
 }
@@ -1154,8 +1141,8 @@ static bool ValidateReadPixelsFormatAndType(
 
 void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
                                   GLsizei rawHeight, GLenum packFormat,
-                                  GLenum packType, void* dest,
-                                  uint32_t dataLen) {
+                                  GLenum packType, uintptr_t dest,
+                                  uint64_t availBytes) {
   if (!ValidateNonNegative("width", rawWidth) ||
       !ValidateNonNegative("height", rawHeight)) {
     return;
@@ -1189,7 +1176,7 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
   if (!ValidatePackSize(width, height, bytesPerPixel, &rowStride, &bytesNeeded))
     return;
 
-  if (bytesNeeded > dataLen) {
+  if (bytesNeeded > availBytes) {
     ErrorInvalidOperation("buffer too small");
     return;
   }
@@ -1216,7 +1203,7 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
 
   if (uint32_t(rwWidth) == width && uint32_t(rwHeight) == height) {
     DoReadPixelsAndConvert(srcFormat->format, x, y, width, height, packFormat,
-                           packType, dest, dataLen, rowStride);
+                           packType, dest, bytesNeeded, rowStride);
     return;
   }
 
@@ -1246,7 +1233,7 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
                      mPixelStore.mPackSkipRows + writeY);
 
     DoReadPixelsAndConvert(srcFormat->format, readX, readY, rwWidth, rwHeight,
-                           packFormat, packType, dest, dataLen, rowStride);
+                           packFormat, packType, dest, bytesNeeded, rowStride);
 
     gl->fPixelStorei(LOCAL_GL_PACK_ROW_LENGTH, mPixelStore.mPackRowLength);
     gl->fPixelStorei(LOCAL_GL_PACK_SKIP_PIXELS, mPixelStore.mPackSkipPixels);
@@ -1254,11 +1241,11 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
   } else {
     // I *did* say "hilariously slow".
 
-    uint8_t* row = (uint8_t*)dest + writeX * bytesPerPixel;
+    auto row = dest + writeX * bytesPerPixel;
     row += writeY * rowStride;
     for (uint32_t j = 0; j < uint32_t(rwHeight); j++) {
       DoReadPixelsAndConvert(srcFormat->format, readX, readY + j, rwWidth, 1,
-                             packFormat, packType, row, dataLen, rowStride);
+                             packFormat, packType, row, bytesNeeded, rowStride);
       row += rowStride;
     }
   }
@@ -1547,8 +1534,9 @@ void WebGLContext::Viewport(GLint x, GLint y, GLsizei width, GLsizei height) {
     return;
   }
 
-  width = std::min(width, (GLsizei)mGLMaxViewportDims[0]);
-  height = std::min(height, (GLsizei)mGLMaxViewportDims[1]);
+  const auto& limits = Limits();
+  width = std::min(width, static_cast<GLsizei>(limits.maxViewportDims[0]));
+  height = std::min(height, static_cast<GLsizei>(limits.maxViewportDims[1]));
 
   gl->fViewport(x, y, width, height);
 

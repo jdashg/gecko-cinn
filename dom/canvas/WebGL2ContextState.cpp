@@ -66,9 +66,7 @@ Maybe<double> WebGL2Context::GetParameter(GLenum pname) {
     case LOCAL_GL_MAX_SAMPLES:
     case LOCAL_GL_MAX_TEXTURE_LOD_BIAS:
     case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS:
-    case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS:
     case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS:
-    case LOCAL_GL_MAX_UNIFORM_BUFFER_BINDINGS:
     case LOCAL_GL_MAX_VERTEX_OUTPUT_COMPONENTS:
     case LOCAL_GL_MAX_VERTEX_UNIFORM_BLOCKS:
     case LOCAL_GL_MAX_VERTEX_UNIFORM_COMPONENTS:
@@ -76,7 +74,6 @@ Maybe<double> WebGL2Context::GetParameter(GLenum pname) {
     case LOCAL_GL_PACK_ROW_LENGTH:
     case LOCAL_GL_PACK_SKIP_PIXELS:
     case LOCAL_GL_PACK_SKIP_ROWS:
-    case LOCAL_GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT:
     case LOCAL_GL_UNPACK_IMAGE_HEIGHT:
     case LOCAL_GL_UNPACK_ROW_LENGTH: {
       GLint val;
@@ -92,12 +89,6 @@ Maybe<double> WebGL2Context::GetParameter(GLenum pname) {
 
     case LOCAL_GL_UNPACK_SKIP_ROWS:
       return Some(mPixelStore.mUnpackSkipRows);
-
-    case LOCAL_GL_MAX_3D_TEXTURE_SIZE:
-      return Some(mGLMax3DTextureSize);
-
-    case LOCAL_GL_MAX_ARRAY_TEXTURE_LAYERS:
-      return Some(mGLMaxArrayTextureLayers);
 
     case LOCAL_GL_MAX_VARYING_COMPONENTS: {
       // On OS X Core Profile this is buggy.  The spec says that the

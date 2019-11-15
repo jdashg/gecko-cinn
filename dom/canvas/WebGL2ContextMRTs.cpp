@@ -15,7 +15,7 @@ bool WebGL2Context::ValidateClearBuffer(const GLenum buffer, const GLint drawBuf
   GLint maxDrawBuffer;
   switch (buffer) {
     case LOCAL_GL_COLOR:
-      maxDrawBuffer = mGLMaxDrawBuffers - 1;
+      maxDrawBuffer = Limits().maxColorDrawBuffers - 1;
       break;
 
     case LOCAL_GL_DEPTH:

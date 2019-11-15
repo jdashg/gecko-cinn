@@ -305,7 +305,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   const WeakPtr<HostWebGLContext> mHost;
   const bool mResistFingerprinting;
   WebGLContextOptions mOptions;
-  webgl::ExtensionBits mSupportedExtensions;
+  Maybe<webgl::Limits> mLimits;
 
   bool mIsContextLost = false;
   const uint32_t mMaxPerfWarnings;
@@ -507,8 +507,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   uvec2 DrawingBufferSize();
 
-  const webgl::InitContextResult& Limits() const;
-
  public:
   void GetContextAttributes(dom::Nullable<dom::WebGLContextAttributes>& retval);
 
@@ -596,19 +594,19 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
  protected:
   void ReadPixelsImpl(GLint x, GLint y, GLsizei width, GLsizei height,
-                      GLenum format, GLenum type, void* data, uint32_t dataLen);
+                      GLenum format, GLenum type, uintptr_t data, uint64_t dataLen);
   bool DoReadPixelsAndConvert(const webgl::FormatInfo* srcFormat, GLint x,
                               GLint y, GLsizei width, GLsizei height,
-                              GLenum format, GLenum destType, void* dest,
-                              uint32_t dataLen, uint32_t rowStride);
+                              GLenum format, GLenum destType, uintptr_t dest,
+                              uint64_t dataLen, uint32_t rowStride);
 
  public:
   void ReadPixelsPbo(GLint x, GLint y, GLsizei width, GLsizei height,
-                     GLenum format, GLenum type, WebGLsizeiptr offset);
+                     GLenum format, GLenum type, uint64_t offset);
 
-  UniqueBuffer ReadPixels(GLint x, GLint y, GLsizei width,
-                                           GLsizei height, GLenum format,
-                                           GLenum type);
+  void ReadPixels(GLint x, GLint y, GLsizei width,
+                   GLsizei height, GLenum format,
+                   GLenum type, const Range<uint8_t>& dest);
 
   ////
 
@@ -764,7 +762,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DeleteTexture(WebGLTexture* tex);
   void GenerateMipmap(GLenum texTarget);
 
-  Maybe<double> GetTexParameter(GLenum texTarget, GLenum pname);
+  Maybe<double> GetTexParameter(const WebGLTexture&, GLenum pname) const;
   void TexParameter_base(GLenum texTarget, GLenum pname,
                          const FloatOrInt& param);
 
@@ -896,55 +894,42 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       GLenum shaderType) const;
 
   // some GL constants
-  uint32_t mGLMaxTextureUnits = 0;
-
-  uint32_t mGLMaxVertexAttribs = 0;
   uint32_t mGLMaxFragmentUniformVectors = 0;
   uint32_t mGLMaxVertexUniformVectors = 0;
   uint32_t mGLMaxVertexOutputVectors = 0;
   uint32_t mGLMaxFragmentInputVectors = 0;
 
-  uint32_t mGLMaxTransformFeedbackSeparateAttribs = 0;
-  uint32_t mGLMaxUniformBufferBindings = 0;
-
   uint32_t mGLMaxVertexTextureImageUnits = 0;
   uint32_t mGLMaxFragmentTextureImageUnits = 0;
   uint32_t mGLMaxCombinedTextureImageUnits = 0;
-
-  uint32_t mGLMaxColorAttachments = 0;
-  uint32_t mGLMaxDrawBuffers = 0;
 
   // ES3:
   uint32_t mGLMinProgramTexelOffset = 0;
   uint32_t mGLMaxProgramTexelOffset = 0;
 
-  uint32_t mGLMaxViewportDims[2];
-
  public:
-  GLenum LastColorAttachmentEnum() const {
-    return LOCAL_GL_COLOR_ATTACHMENT0 + mGLMaxColorAttachments - 1;
+  auto GLMaxDrawBuffers() const { return mLimits->maxColorDrawBuffers; }
+
+  uint32_t MaxValidDrawBuffers() const {
+    if (IsWebGL2() || IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers)) {
+      return GLMaxDrawBuffers();
+    }
+    return 1;
   }
-  const auto& GLMaxDrawBuffers() const { return mGLMaxDrawBuffers; }
+
+  GLenum LastColorAttachmentEnum() const {
+    return LOCAL_GL_COLOR_ATTACHMENT0 + MaxValidDrawBuffers() - 1;
+  }
 
   const auto& Options() const { return mOptions; }
 
  protected:
-  // Texture sizes are often not actually the GL values. Let's be explicit that
-  // these are implementation limits.
-  uint32_t mGLMaxTextureSize = 0;
-  uint32_t mGLMaxCubeMapTextureSize = 0;
-  uint32_t mGLMax3DTextureSize = 0;
-  uint32_t mGLMaxArrayTextureLayers = 0;
-  uint32_t mGLMaxMultiviewViews = 1;
   uint32_t mGLMaxRenderbufferSize = 0;
 
  public:
-  GLuint MaxVertexAttribs() const { return mGLMaxVertexAttribs; }
-
-  GLuint GLMaxTextureUnits() const { return mGLMaxTextureUnits; }
-
-  float mGLAliasedLineWidthRange[2];
-  float mGLAliasedPointSizeRange[2];
+  const auto& Limits() const { return *mLimits; }
+  auto MaxVertexAttribs() const { return mLimits->maxVertexAttribs; }
+  auto GLMaxTextureUnits() const { return mLimits->maxTexUnits; }
 
   bool IsFormatValidForFB(TexInternalFormat format) const;
 
@@ -967,7 +952,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool IsExtensionExplicit(WebGLExtensionID) const;
   void WarnIfImplicit(WebGLExtensionID) const;
 
- protected:
   bool IsExtensionSupported(WebGLExtensionID) const;
 
   // -------------------------------------------------------------------------
@@ -1083,11 +1067,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
     return true;
   }
 
-  bool ValidateArrayBufferView(const dom::ArrayBufferView& view,
-                               GLuint elemOffset, GLuint elemCountOverride,
-                               GLenum errorVal, uint8_t** const out_bytes,
-                               size_t* const out_byteLen) const;
-
   ////
 
  protected:
@@ -1104,58 +1083,15 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   //////
  public:
   template <typename T>
-  bool ValidateObjectAllowDeleted(
-      const char* const argName,
-      const WebGLContextBoundObject<T>& object) const {
-    if (!object.IsCompatibleWithContext(this)) {
-      ErrorInvalidOperation(
-          "%s: Object from different WebGL context (or older"
-          " generation of this one) passed as argument.",
-          argName);
-      return false;
-    }
-
-    return true;
-  }
-
-  template <typename T>
   bool ValidateObject(const char* const argName,
-                      const WebGLRefCountedObject<T>& object,
-                      const bool isShaderOrProgram = false) const {
-    if (!ValidateObjectAllowDeleted(argName, object)) return false;
-
-    if (isShaderOrProgram) {
-      /* GLES 3.0.5 p45:
-       * "Commands that accept shader or program object names will generate the
-       *  error INVALID_VALUE if the provided name is not the name of either a
-       *  shader or program object[.]"
-       * Further, shaders and programs appear to be different from other
-       * objects, in that their lifetimes are better defined. However, they also
-       * appear to allow use of objects marked for deletion, and only reject
-       * actually-destroyed objects.
-       */
-      if (object.IsDeleted()) {
-        ErrorInvalidValue(
-            "%s: Shader or program object argument cannot have been"
-            " deleted.",
-            argName);
-        return false;
-      }
-    } else {
-      if (object.IsDeleteRequested()) {
-        ErrorInvalidOperation(
-            "%s: Object argument cannot have been marked for"
-            " deletion.",
-            argName);
-        return false;
-      }
-    }
-
+                      const WebGLRefCountedObject<T>& object) const {
+    // Todo: Remove all callers.
     return true;
   }
 
   template<typename T>
   bool ValidateObject(const char* const argName, const T* const object) const {
+    // Todo: Remove most (all?) callers.
     if (!object) {
       ErrorInvalidOperation(
           "%s: Object argument cannot have been marked for"
@@ -1168,20 +1104,10 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
 
-  // Program and Shader are incomplete, so we can't inline the conversion to
-  // WebGLDeletableObject here.
-  bool ValidateObject(const char* const argName,
-                      const WebGLProgram& object) const;
-  bool ValidateObject(const char* const argName,
-                      const WebGLShader& object) const;
-
-  ////
-
   template <typename T>
   bool ValidateIsObject(const WebGLRefCountedObject<T>* const object) const {
     if (IsContextLost()) return false;
     if (!object) return false;
-    if (!object->IsCompatibleWithContext(this)) return false;
     if (object->IsDeleted()) return false;
     return true;
   }
@@ -1190,7 +1116,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   bool ValidateDeleteObject(const WebGLRefCountedObject<T>* const object) {
     if (IsContextLost()) return false;
     if (!object) return false;
-    if (!ValidateObjectAllowDeleted("obj", *object)) return false;
     if (object->IsDeleteRequested()) return false;
     return true;
   }
@@ -1406,8 +1331,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
       gl::GLContext* gl) const;
 
   const decltype(mBound2DTextures)* TexListForElemType(GLenum elemType) const;
-
-  void UpdateMaxDrawBuffers();
 
   // --
  private:

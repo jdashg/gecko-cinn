@@ -104,7 +104,7 @@ struct PcqStatus {
   bool operator!=(const EStatus& o) const { return !(*this == o); }
 };
 
-bool IsSuccess(PcqStatus status) { return status == PcqStatus::Success; }
+inline bool IsSuccess(PcqStatus status) { return status == PcqStatus::Success; }
 
 template <typename T>
 struct RemoveCVR {
@@ -365,12 +365,12 @@ constexpr size_t GetMaxHeaderSize() {
   return maxAlign1 + readAndAlign2 + writeAndAlign3;
 }
 
-size_t UsedBytes(size_t aQueueBufferSize, size_t aRead, size_t aWrite) {
+inline size_t UsedBytes(size_t aQueueBufferSize, size_t aRead, size_t aWrite) {
   return (aRead <= aWrite) ? aWrite - aRead
                            : (aQueueBufferSize - aRead) + aWrite;
 }
 
-size_t FreeBytes(size_t aQueueBufferSize, size_t aRead, size_t aWrite) {
+inline size_t FreeBytes(size_t aQueueBufferSize, size_t aRead, size_t aWrite) {
   // Remember, queueSize is queueBufferSize-1
   return (aQueueBufferSize - 1) - UsedBytes(aQueueBufferSize, aRead, aWrite);
 }
@@ -401,7 +401,7 @@ size_t MinSizeofArgs(View& aView) {
 // TODO: Base this heuristic on something.  Also, if I made the PCQ size
 // (aTotal) a template parameter then this could be a compile-time check
 // in nearly all cases.
-bool NeedsSharedMemory(size_t aRequested, size_t aTotal) {
+inline bool NeedsSharedMemory(size_t aRequested, size_t aTotal) {
   return (aTotal / 16) < aRequested;
 }
 

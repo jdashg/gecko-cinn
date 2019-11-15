@@ -175,22 +175,16 @@ void WebGLContext::GenerateMipmap(GLenum rawTexTarget) {
   tex->GenerateMipmap();
 }
 
-Maybe<double> WebGLContext::GetTexParameter(GLenum rawTexTarget,
-                                                GLenum pname) {
+Maybe<double> WebGLContext::GetTexParameter(const WebGLTexture& tex,
+                                                GLenum pname) const {
   const FuncScope funcScope(*this, "getTexParameter");
-  const uint8_t funcDims = 0;
-
-  TexTarget texTarget;
-  WebGLTexture* tex;
-  if (!ValidateTexTarget(this, funcDims, rawTexTarget, &texTarget, &tex))
-    return Nothing();
 
   if (!IsTexParamValid(pname)) {
     ErrorInvalidEnumInfo("pname", pname);
     return Nothing();
   }
 
-  return tex->GetTexParameter(texTarget, pname);
+  return tex.GetTexParameter(pname);
 }
 
 void WebGLContext::TexParameter_base(GLenum rawTexTarget, GLenum pname,

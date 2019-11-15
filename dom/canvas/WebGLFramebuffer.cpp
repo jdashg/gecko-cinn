@@ -515,8 +515,8 @@ Maybe<WebGLFBAttachPoint*> WebGLFramebuffer::GetColorAttachPoint(
 
   const size_t colorId = attachPoint - LOCAL_GL_COLOR_ATTACHMENT0;
 
-  MOZ_ASSERT(mContext->mGLMaxColorAttachments <= kMaxColorAttachments);
-  if (colorId >= mContext->mGLMaxColorAttachments) return Nothing();
+  MOZ_ASSERT(mContext->Limits().maxColorDrawBuffers <= kMaxColorAttachments);
+  if (colorId >= mContext->MaxValidDrawBuffers()) return Nothing();
 
   return Some(&mColorAttachments[colorId]);
 }
@@ -1032,7 +1032,7 @@ void WebGLFramebuffer::RefreshDrawBuffers() const {
   // DrawBuffers yields a framebuffer status of
   // FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER. We could workaround this only on
   // affected versions, but it's easier be unconditional.
-  std::vector<GLenum> driverBuffers(mContext->mGLMaxDrawBuffers, LOCAL_GL_NONE);
+  std::vector<GLenum> driverBuffers(mContext->Limits().maxColorDrawBuffers, LOCAL_GL_NONE);
   for (const auto& attach : mColorDrawBuffers) {
     if (attach->HasAttachment()) {
       const uint32_t index =
@@ -1063,7 +1063,7 @@ void WebGLFramebuffer::RefreshReadBuffer() const {
 ////
 
 void WebGLFramebuffer::DrawBuffers(const std::vector<GLenum>& buffers) {
-  if (buffers.size() > mContext->mGLMaxDrawBuffers) {
+  if (buffers.size() > mContext->MaxValidDrawBuffers()) {
     // "An INVALID_VALUE error is generated if `n` is greater than
     // MAX_DRAW_BUFFERS."
     mContext->ErrorInvalidValue(

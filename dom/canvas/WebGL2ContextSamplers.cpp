@@ -21,9 +21,9 @@ void WebGL2Context::DeleteSampler(WebGLSampler* sampler) {
   const FuncScope funcScope(*this, "deleteSampler");
   if (!ValidateDeleteObject(sampler)) return;
 
-  for (uint32_t n = 0; n < mGLMaxTextureUnits; n++) {
-    if (mBoundSamplers[n] == sampler) {
-      mBoundSamplers[n] = nullptr;
+  for (auto& slot : mBoundSamplers) {
+    if (slot == sampler) {
+      slot = nullptr;
     }
   }
 
@@ -36,8 +36,8 @@ void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
 
   if (sampler && !ValidateObject("sampler", *sampler)) return;
 
-  if (unit >= mGLMaxTextureUnits)
-    return ErrorInvalidValue("unit must be < %u", mGLMaxTextureUnits);
+  if (unit >= mBoundSamplers.Length())
+    return ErrorInvalidValue("unit must be < %u", mBoundSamplers.Length());
 
   ////
 

@@ -181,7 +181,7 @@ class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
   // GL calls
   bool BindTexture(TexTarget texTarget);
   void GenerateMipmap();
-  Maybe<double> GetTexParameter(TexTarget texTarget, GLenum pname) const;
+  Maybe<double> GetTexParameter(GLenum pname) const;
   void TexParameter(TexTarget texTarget, GLenum pname, const FloatOrInt& param);
 
   ////////////////////////////////////
