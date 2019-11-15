@@ -72,20 +72,30 @@ void WebGLContext::DeleteQuery(WebGLQuery* query) {
 void WebGLContext::BeginQuery(GLenum target, WebGLQuery& query) {
   const FuncScope funcScope(*this, "beginQuery");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   const auto& slot = ValidateQuerySlotByTarget(target);
   if (!slot) return;
 
   if (*slot) return ErrorInvalidOperation("Query target already active.");
 
+  const auto& curTarget = query.Target();
+  if (curTarget && target != curTarget) {
+    ErrorInvalidOperation("Queries cannot change targets.");
+    return;
+  }
+
   ////
 
   query.BeginQuery(target, *slot);
+
+  guard.OnSuccess();
 }
 
 void WebGLContext::EndQuery(GLenum target) {
   const FuncScope funcScope(*this, "endQuery");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   const auto& slot = ValidateQuerySlotByTarget(target);
   if (!slot) return;
@@ -94,6 +104,8 @@ void WebGLContext::EndQuery(GLenum target) {
   if (!query) return ErrorInvalidOperation("Query target not active.");
 
   query->EndQuery();
+
+  guard.OnSuccess();
 }
 
 Maybe<double> WebGLContext::GetQueryParameter(const WebGLQuery& query,

@@ -513,7 +513,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // This is the entrypoint. Don't test against it directly.
   bool IsContextLost() const { return mIsContextLost; }
 
-  void AttachShader(WebGLProgram& prog, WebGLShader& shader) const;
+  void AttachShader(WebGLProgram& prog, WebGLShader& shader);
   void BindAttribLocation(WebGLProgram& prog, GLuint location,
                           const std::string& name) const;
   void BindFramebuffer(GLenum target, WebGLFramebuffer* fb);
@@ -549,7 +549,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void DepthFunc(GLenum func);
   void DepthMask(WebGLboolean b);
   void DepthRange(GLclampf zNear, GLclampf zFar);
-  void DetachShader(WebGLProgram& prog, const WebGLShader& shader) const;
+  void DetachShader(WebGLProgram& prog, const WebGLShader& shader);
   void DrawBuffers(const std::vector<GLenum>& buffers);
   void Flush();
   void Finish();
@@ -1439,6 +1439,25 @@ struct IndexedName final {
   uint64_t index;
 };
 
+// ------------
+
+/*
+Here are the bind calls that are supposed to be fully-validated client side,
+so that client's binding state doesn't diverge:
+* AttachShader
+* DetachShader
+* BindFramebuffer
+* FramebufferAttach
+* BindBuffer
+* BindBufferRange
+* BindTexture
+* UseProgram
+* BindSampler
+* BindTransformFeedback
+* BindVertexArray
+* BeginQuery
+* EndQuery
+*/
 class ScopedBindFailureGuard final {
   WebGLContext* mContext; // LoseContext requires non-const.
 
@@ -1451,6 +1470,7 @@ public:
     }
   }
 
+  /// Call OnSuccess when call succeeded.
   void OnSuccess() {
     mContext = nullptr;
   }

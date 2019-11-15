@@ -707,22 +707,8 @@ void WebGLProgram::AttachShader(WebGLShader& shader) {
     case LOCAL_GL_FRAGMENT_SHADER:
       shaderSlot = &mFragShader;
       break;
-    default:
-      mContext->ErrorInvalidOperation("attachShader: Bad type for shader.");
-      return;
   }
-
-  if (*shaderSlot) {
-    if (&shader == *shaderSlot) {
-      mContext->ErrorInvalidOperation(
-          "attachShader: `shader` is already attached.");
-    } else {
-      mContext->ErrorInvalidOperation(
-          "attachShader: Only one of each type of"
-          " shader may be attached to a program.");
-    }
-    return;
-  }
+  MOZ_ASSERT(shaderSlot);
 
   *shaderSlot = &shader;
 
@@ -764,15 +750,10 @@ void WebGLProgram::DetachShader(const WebGLShader& shader) {
     case LOCAL_GL_FRAGMENT_SHADER:
       shaderSlot = &mFragShader;
       break;
-    default:
-      mContext->ErrorInvalidOperation("attachShader: Bad type for shader.");
-      return;
   }
+  MOZ_ASSERT(shaderSlot);
 
-  if (*shaderSlot != &shader) {
-    mContext->ErrorInvalidOperation("detachShader: `shader` is not attached.");
-    return;
-  }
+  if (*shaderSlot != &shader) return;
 
   *shaderSlot = nullptr;
 

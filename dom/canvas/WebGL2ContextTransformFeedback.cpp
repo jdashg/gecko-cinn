@@ -44,6 +44,7 @@ void WebGL2Context::DeleteTransformFeedback(WebGLTransformFeedback* tf) {
 void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
   const FuncScope funcScope(*this, "bindTransformFeedback");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (tf && !ValidateObject("tf", *tf)) return;
 
@@ -64,6 +65,8 @@ void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
   if (mBoundTransformFeedback) {
     mBoundTransformFeedback->mHasBeenBound = true;
   }
+
+  guard.OnSuccess();
 }
 
 void WebGL2Context::BeginTransformFeedback(GLenum primMode) {

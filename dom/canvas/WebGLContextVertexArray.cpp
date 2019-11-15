@@ -15,6 +15,7 @@ namespace mozilla {
 void WebGLContext::BindVertexArray(WebGLVertexArray* array) {
   const FuncScope funcScope(*this, "bindVertexArray");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (array && !ValidateObject("array", *array)) return;
 
@@ -28,6 +29,8 @@ void WebGLContext::BindVertexArray(WebGLVertexArray* array) {
   if (mBoundVertexArray) {
     mBoundVertexArray->mHasBeenBound = true;
   }
+
+  guard.OnSuccess();
 }
 
 already_AddRefed<WebGLVertexArray> WebGLContext::CreateVertexArray() {

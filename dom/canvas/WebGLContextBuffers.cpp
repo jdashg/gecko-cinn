@@ -126,6 +126,7 @@ IndexedBufferBinding* WebGLContext::ValidateIndexedBufferSlot(GLenum target,
 void WebGLContext::BindBuffer(GLenum target, WebGLBuffer* buffer) {
   const FuncScope funcScope(*this, "bindBuffer");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard failureGuard(*this);
 
   if (buffer && !ValidateObject("buffer", *buffer)) return;
 
@@ -142,6 +143,8 @@ void WebGLContext::BindBuffer(GLenum target, WebGLBuffer* buffer) {
   if (buffer) {
     buffer->SetContentAfterBind(target);
   }
+
+  failureGuard.OnSuccess();
 }
 
 ////////////////////////////////////////
@@ -171,6 +174,7 @@ void WebGLContext::BindBufferRange(GLenum target, GLuint index,
                                        WebGLBuffer* buffer, uint64_t offset,
                                        uint64_t size) {
   if (buffer && !ValidateObject("buffer", *buffer)) return;
+  webgl::ScopedBindFailureGuard failureGuard(*this);
 
   WebGLRefPtr<WebGLBuffer>* genericBinding;
   IndexedBufferBinding* indexedBinding;
@@ -221,6 +225,8 @@ void WebGLContext::BindBufferRange(GLenum target, GLuint index,
   if (buffer) {
     buffer->SetContentAfterBind(target);
   }
+
+  failureGuard.OnSuccess();
 }
 
 ////////////////////////////////////////

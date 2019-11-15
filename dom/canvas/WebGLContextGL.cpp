@@ -80,11 +80,14 @@ void WebGLContext::ActiveTexture(GLenum texture) {
   gl->fActiveTexture(texture);
 }
 
-void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) const {
+void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) {
   const FuncScope funcScope(*this, "attachShader");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   prog.AttachShader(shader);
+
+  guard.OnSuccess();
 }
 
 void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
@@ -98,6 +101,7 @@ void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
 void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
   const FuncScope funcScope(*this, "bindFramebuffer");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (!ValidateFramebufferTarget(target)) return;
 
@@ -121,8 +125,9 @@ void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
       mBoundReadFramebuffer = wfb;
       break;
     default:
-      break;
+      return;
   }
+  guard.OnSuccess();
 }
 
 void WebGLContext::BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
@@ -326,11 +331,14 @@ void WebGLContext::DeleteShader(WebGLShader* shader) {
 }
 
 void WebGLContext::DetachShader(WebGLProgram& prog,
-                                const WebGLShader& shader) const {
+                                const WebGLShader& shader) {
   const FuncScope funcScope(*this, "detachShader");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   prog.DetachShader(shader);
+
+  guard.OnSuccess();
 }
 
 static bool ValidateComparisonEnum(WebGLContext& webgl, const GLenum func) {
@@ -376,6 +384,7 @@ void WebGLContext::DepthRange(GLfloat zNear, GLfloat zFar) {
 void WebGLContext::FramebufferAttach(
     const GLenum target, const GLenum attachSlot, const GLenum bindImageTarget,
     const webgl::FbAttachInfo& toAttach) {
+  const FuncScope funcScope(*this, "framebufferAttach");
   webgl::ScopedBindFailureGuard failureGuard(*this);
   const auto& limits = *mLimits;
 
@@ -1409,19 +1418,22 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const bool transpose,
 void WebGLContext::UseProgram(WebGLProgram* prog) {
   const FuncScope funcScope(*this, "useProgram");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (!prog) {
     mCurrentProgram = nullptr;
     mActiveProgramLinkInfo = nullptr;
+    guard.OnSuccess();
     return;
   }
 
   if (!ValidateObject("prog", *prog)) return;
 
-  if (prog->UseProgram()) {
-    mCurrentProgram = prog;
-    mActiveProgramLinkInfo = mCurrentProgram->LinkInfo();
-  }
+  if (!prog->UseProgram()) return;
+
+  mCurrentProgram = prog;
+  mActiveProgramLinkInfo = mCurrentProgram->LinkInfo();
+  guard.OnSuccess();
 }
 
 void WebGLContext::ValidateProgram(const WebGLProgram& prog) {

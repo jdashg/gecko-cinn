@@ -55,13 +55,6 @@ static GLenum TargetForDriver(const gl::GLContext* gl, GLenum target) {
 }
 
 void WebGLQuery::BeginQuery(GLenum target, WebGLRefPtr<WebGLQuery>& slot) {
-  if (mTarget && target != mTarget) {
-    mContext->ErrorInvalidOperation("Queries cannot change targets.");
-    return;
-  }
-
-  ////
-
   mTarget = target;
   mActiveSlot = &slot;
   *mActiveSlot = this;

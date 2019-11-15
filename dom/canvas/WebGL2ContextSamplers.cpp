@@ -33,6 +33,7 @@ void WebGL2Context::DeleteSampler(WebGLSampler* sampler) {
 void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
   const FuncScope funcScope(*this, "bindSampler");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (sampler && !ValidateObject("sampler", *sampler)) return;
 
@@ -44,6 +45,8 @@ void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
   gl->fBindSampler(unit, sampler ? sampler->mGLName : 0);
 
   mBoundSamplers[unit] = sampler;
+
+  guard.OnSuccess();
 }
 
 void WebGL2Context::SamplerParameteri(WebGLSampler& sampler, GLenum pname,

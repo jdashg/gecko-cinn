@@ -124,6 +124,7 @@ bool WebGLContext::IsTexParamValid(GLenum pname) const {
 void WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex) {
   const FuncScope funcScope(*this, "bindTexture");
   if (IsContextLost()) return;
+  webgl::ScopedBindFailureGuard guard(*this);
 
   if (newTex && !ValidateObject("tex", *newTex)) return;
 
@@ -161,6 +162,8 @@ void WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex) {
   }
 
   *currentTexPtr = newTex;
+
+  guard.OnSuccess();
 }
 
 void WebGLContext::GenerateMipmap(GLenum rawTexTarget) {
