@@ -92,7 +92,225 @@ static webgl::TextureBaseType FragOutputBaseType(const GLenum type) {
   return webgl::TextureBaseType::Float;
 }
 
+// -----------------------------------------
+
+namespace webgl {
+
+void UniformAs1fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform1fv(location, count, static_cast<const float*>(any));
+}
+void UniformAs2fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform2fv(location, count, static_cast<const float*>(any));
+}
+void UniformAs3fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform3fv(location, count, static_cast<const float*>(any));
+}
+void UniformAs4fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform4fv(location, count, static_cast<const float*>(any));
+}
+
+void UniformAs1iv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform1iv(location, count, static_cast<const int32_t*>(any));
+}
+void UniformAs2iv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform2iv(location, count, static_cast<const int32_t*>(any));
+}
+void UniformAs3iv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform3iv(location, count, static_cast<const int32_t*>(any));
+}
+void UniformAs4iv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform4iv(location, count, static_cast<const int32_t*>(any));
+}
+
+void UniformAs1uiv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform1uiv(location, count, static_cast<const uint32_t*>(any));
+}
+void UniformAs2uiv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform2uiv(location, count, static_cast<const uint32_t*>(any));
+}
+void UniformAs3uiv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform3uiv(location, count, static_cast<const uint32_t*>(any));
+}
+void UniformAs4uiv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any) {
+  gl.fUniform4uiv(location, count, static_cast<const uint32_t*>(any));
+}
+
+void UniformAsMatrix2x2fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix2fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix2x3fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix2x3fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix2x4fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix2x4fv(location, count, transpose, static_cast<const float*>(any));
+}
+
+void UniformAsMatrix3x2fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix3x2fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix3x3fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix3fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix3x4fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix3x4fv(location, count, transpose, static_cast<const float*>(any));
+}
+
+void UniformAsMatrix4x2fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix4x2fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix4x3fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix4x3fv(location, count, transpose, static_cast<const float*>(any));
+}
+void UniformAsMatrix4x4fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                       const void* any) {
+  gl.fUniformMatrix4fv(location, count, transpose, static_cast<const float*>(any));
+}
+
 // -
+
+webgl::ActiveUniformValidationInfo webgl::ActiveUniformValidationInfo::Make(
+  const webgl::ActiveUniformInfo& info) {
+  auto ret = webgl::ActiveUniformValidationInfo{info};
+
+  switch (info.elemType) {
+    case LOCAL_GL_FLOAT:
+      ret.channelsPerElem = 1;
+      ret.pfn = &UniformAs1fv;
+      break;
+    case LOCAL_GL_FLOAT_VEC2:
+      ret.channelsPerElem = 2;
+      ret.pfn = &UniformAs2fv;
+      break;
+    case LOCAL_GL_FLOAT_VEC3:
+      ret.channelsPerElem = 3;
+      ret.pfn = &UniformAs3fv;
+      break;
+    case LOCAL_GL_FLOAT_VEC4:
+      ret.channelsPerElem = 4;
+      ret.pfn = &UniformAs4fv;
+      break;
+
+    case LOCAL_GL_SAMPLER_2D:
+    case LOCAL_GL_SAMPLER_3D:
+    case LOCAL_GL_SAMPLER_CUBE:
+    case LOCAL_GL_SAMPLER_2D_SHADOW:
+    case LOCAL_GL_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+    case LOCAL_GL_INT_SAMPLER_2D:
+    case LOCAL_GL_INT_SAMPLER_3D:
+    case LOCAL_GL_INT_SAMPLER_CUBE:
+    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_BOOL:
+    case LOCAL_GL_INT:
+      ret.channelsPerElem = 1;
+      ret.pfn = &UniformAs1iv;
+      break;
+    case LOCAL_GL_INT_VEC2:
+      ret.channelsPerElem = 2;
+      ret.pfn = &UniformAs2iv;
+      break;
+    case LOCAL_GL_INT_VEC3:
+      ret.channelsPerElem = 3;
+      ret.pfn = &UniformAs3iv;
+      break;
+    case LOCAL_GL_INT_VEC4:
+      ret.channelsPerElem = 4;
+      ret.pfn = &UniformAs4iv;
+      break;
+
+    case LOCAL_GL_UNSIGNED_INT:
+      ret.channelsPerElem = 1;
+      ret.pfn = &UniformAs1uiv;
+      break;
+    case LOCAL_GL_UNSIGNED_INT_VEC2:
+      ret.channelsPerElem = 2;
+      ret.pfn = &UniformAs2uiv;
+      break;
+    case LOCAL_GL_UNSIGNED_INT_VEC3:
+      ret.channelsPerElem = 3;
+      ret.pfn = &UniformAs3uiv;
+      break;
+    case LOCAL_GL_UNSIGNED_INT_VEC4:
+      ret.channelsPerElem = 4;
+      ret.pfn = &UniformAs4uiv;
+      break;
+
+    // -
+
+    case LOCAL_GL_FLOAT_MAT2:
+      ret.channelsPerElem = 2*2;
+      ret.pfn = &UniformAsMatrix2x2fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT2x3:
+      ret.channelsPerElem = 2*3;
+      ret.pfn = &UniformAsMatrix2x3fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT2x4:
+      ret.channelsPerElem = 2*4;
+      ret.pfn = &UniformAsMatrix2x4fv;
+      break;
+
+    case LOCAL_GL_FLOAT_MAT3x2:
+      ret.channelsPerElem = 3*2;
+      ret.pfn = &UniformAsMatrix3x2fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT3:
+      ret.channelsPerElem = 3*3;
+      ret.pfn = &UniformAsMatrix3x3fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT3x4:
+      ret.channelsPerElem = 3*4;
+      ret.pfn = &UniformAsMatrix3x4fv;
+      break;
+
+    case LOCAL_GL_FLOAT_MAT4x2:
+      ret.channelsPerElem = 4*2;
+      ret.pfn = &UniformAsMatrix4x2fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT4x3:
+      ret.channelsPerElem = 4*3;
+      ret.pfn = &UniformAsMatrix4x3fv;
+      break;
+    case LOCAL_GL_FLOAT_MAT4:
+      ret.channelsPerElem = 4*4;
+      ret.pfn = &UniformAsMatrix4x4fv;
+      break;
+
+    default:
+      gfxCriticalError() << "Bad `elemType`: " << EnumString(info.elemType);
+      MOZ_CRASH("`elemType`");
+  }
+  return ret;
+}
+
+} // namespace webgl
+
+// -------------------------
 
 //#define DUMP_SHADERVAR_MAPPINGS
 
@@ -172,7 +390,7 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
   auto& nameMap = info->nameMap;
 
   const auto fnAccum = [&](WebGLShader& shader) {
-    const auto& compRes = vertShader->CompileResults();
+    const auto& compRes = shader.CompileResults();
     for (const auto& pair : compRes->mNameMap) {
       nameMap.insert(pair);
     }
@@ -235,8 +453,10 @@ static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
       info->samplerUniforms.push_back(std::move(curInfo));
     }
 
+    const auto valInfo = webgl::ActiveUniformValidationInfo::Make(uniform);
+
     for (const auto& pair : uniform.locByIndex) {
-      info->locationMap.insert({pair.second, {uniform, pair.first, samplerInfo}});
+      info->locationMap.insert({pair.second, {valInfo, pair.first, samplerInfo}});
     }
   }
 
@@ -933,11 +1153,13 @@ void WebGLProgram::LinkAndUpdate() {
   {
     GLuint logLenWithNull = 0;
     gl->fGetProgramiv(mGLName, LOCAL_GL_INFO_LOG_LENGTH, (GLint*)&logLenWithNull);
-    std::vector<char> buffer(logLenWithNull);
     if (logLenWithNull > 1) {
+    std::vector<char> buffer(logLenWithNull);
       gl->fGetProgramInfoLog(mGLName, buffer.size(), nullptr, buffer.data());
-    }
     mLinkLog = buffer.data();
+  } else {
+    mLinkLog.clear();
+  }
   }
 
   GLint ok = 0;

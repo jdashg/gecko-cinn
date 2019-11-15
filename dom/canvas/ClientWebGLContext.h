@@ -278,27 +278,33 @@ struct WebGLShaderPreventDelete;
 
 class WebGLProgramJS final : public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
+ public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLProgramJS)
+  // Must come first! (see comment in WebGLShaderJS)
 
+ private:
   std::shared_ptr<WebGLProgramPreventDelete> mInnerRef;
   const std::weak_ptr<WebGLProgramPreventDelete> mInnerWeak;
 
   std::unordered_map<GLenum, std::shared_ptr<WebGLShaderPreventDelete>> mNextLink_Shaders;
   bool mLastValidate = false;
   mutable std::shared_ptr<webgl::LinkResult> mResult; // Never null, often defaulted.
-  mutable Maybe<std::unordered_map<std::string, uint32_t>> mUniformLocByName;
+
+  struct UniformLocInfo final {
+    const uint32_t location;
+    const GLenum elemType;
+  };
+
+  mutable Maybe<std::unordered_map<std::string, UniformLocInfo>> mUniformLocByName;
   mutable std::vector<uint32_t> mUniformBlockBindings;
 
   std::unordered_set<const WebGLTransformFeedbackJS*> mActiveTfos;
 
- public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLProgramJS)
-
   explicit WebGLProgramJS(const ClientWebGLContext&);
-private:
   ~WebGLProgramJS() = default;
-public:
 
+public:
   bool IsDeleted() const override {
     return !mInnerWeak.lock();
   }
@@ -331,18 +337,17 @@ public:
 
 class WebGLRenderbufferJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
-
-  bool mHasBeenBound = false; // !IsRenderbuffer until Bind
-
 public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLRenderbufferJS)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLRenderbufferJS)
 
-  explicit WebGLRenderbufferJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
-  ~WebGLRenderbufferJS() = default;
-public:
+  bool mHasBeenBound = false; // !IsRenderbuffer until Bind
 
+  explicit WebGLRenderbufferJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
+  ~WebGLRenderbufferJS() = default;
+
+public:
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
 
@@ -357,8 +362,8 @@ public:
   explicit WebGLSamplerJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl) {}
 private:
   ~WebGLSamplerJS() = default;
-public:
 
+public:
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
 
@@ -373,6 +378,14 @@ struct WebGLShaderPreventDelete final {
 class WebGLShaderJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
+ public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderJS)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLShaderJS)
+  // If the REFCOUNTING macro isn't declared first, the AddRef at
+  // mInnerRef->js will panic when REFCOUNTING's "owning thread" var is still
+  // uninitialized.
+
+ private:
   const GLenum mType;
   std::shared_ptr<WebGLShaderPreventDelete> mInnerRef;
   const std::weak_ptr<WebGLShaderPreventDelete> mInnerWeak;
@@ -380,15 +393,10 @@ class WebGLShaderJS final : public webgl::ObjectJS {
 
   mutable webgl::CompileResult mResult;
 
- public:
-  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderJS)
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLShaderJS)
-
   WebGLShaderJS(const ClientWebGLContext&, GLenum type);
-private:
   ~WebGLShaderJS() = default;
-public:
 
+public:
   bool IsDeleted() const override {
     return !mInnerWeak.lock();
   }
@@ -460,19 +468,24 @@ public:
 
 // -
 
+std::array<uint16_t,3> ValidUploadElemTypes(GLenum);
+
 class WebGLUniformLocationJS final : public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   const std::weak_ptr<webgl::LinkResult> mParent;
   const uint32_t mLocation;
+  const std::array<uint16_t,3> mValidUploadElemTypes;
 
 public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLUniformLocationJS)
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(WebGLUniformLocationJS)
 
   WebGLUniformLocationJS(const ClientWebGLContext& webgl,
-        std::weak_ptr<webgl::LinkResult> parent, uint32_t loc) : webgl::ObjectJS(webgl),
-        mParent(parent), mLocation(loc) {}
+        std::weak_ptr<webgl::LinkResult> parent, uint32_t loc,
+        GLenum elemType) : webgl::ObjectJS(webgl),
+        mParent(parent), mLocation(loc),
+        mValidUploadElemTypes(ValidUploadElemTypes(elemType)) {}
 private:
   ~WebGLUniformLocationJS() = default;
 public:
@@ -1563,7 +1576,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
 
  private:
-  void UniformNTv(const WebGLUniformLocationJS* const loc, uint8_t n, webgl::UniformBaseType t,
+  void UniformNTv(GLenum funcElemType,
+    const WebGLUniformLocationJS* const loc,
     const Range<const uint8_t>& bytes, GLuint elemOffset = 0,
                             GLuint elemCountOverride = 0) const;
 
@@ -1590,84 +1604,86 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  public:
 
-  #define _(T,Type,BaseType) \
-    void Uniform1 ## T(const WebGLUniformLocationJS* const loc, Type x) const { \
-      const Type arr[] = { x }; \
-      UniformNTv(loc, 1, BaseType, MakeByteRange(arr)); \
+#define _(T,type_t,TYPE) \
+    void Uniform1 ## T(const WebGLUniformLocationJS* const loc, type_t x) const { \
+      const type_t arr[] = { x }; \
+      UniformNTv(TYPE, loc, MakeByteRange(arr)); \
     } \
-    void Uniform2 ## T(const WebGLUniformLocationJS* const loc, Type x, \
-                   Type y) const { \
-      const Type arr[] = { x, y }; \
-      UniformNTv(loc, 2, BaseType, MakeByteRange(arr)); \
+    void Uniform2 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
+                   type_t y) const { \
+      const type_t arr[] = { x, y }; \
+      UniformNTv(TYPE##_VEC2, loc, MakeByteRange(arr)); \
     } \
-    void Uniform3 ## T(const WebGLUniformLocationJS* const loc, Type x, \
-                   Type y, Type z) const { \
-      const Type arr[] = { x, y, z }; \
-      UniformNTv(loc, 3, BaseType, MakeByteRange(arr)); \
+    void Uniform3 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
+                   type_t y, type_t z) const { \
+      const type_t arr[] = { x, y, z }; \
+      UniformNTv(TYPE##_VEC3, loc, MakeByteRange(arr)); \
     } \
-    void Uniform4 ## T(const WebGLUniformLocationJS* const loc, Type x, \
-                   Type y, Type z, Type w) const { \
-      const Type arr[] = { x, y, z, w }; \
-      UniformNTv(loc, 4, BaseType, MakeByteRange(arr)); \
+    void Uniform4 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
+                   type_t y, type_t z, type_t w) const { \
+      const type_t arr[] = { x, y, z, w }; \
+      UniformNTv(TYPE##_VEC4, loc, MakeByteRange(arr)); \
     }
 
-  _(f,float,webgl::UniformBaseType::Float)
-  _(i,int32_t,webgl::UniformBaseType::Int)
-  _(ui,uint32_t,webgl::UniformBaseType::Uint)
+  _(f ,float   ,LOCAL_GL_FLOAT)
+  _(i ,int32_t ,LOCAL_GL_INT)
+  _(ui,uint32_t,LOCAL_GL_UNSIGNED_INT)
 
-  #undef _
+#undef _
 
   // -
 
-  #define _(N,T,BaseType,TypeListU) \
-    void Uniform ## N ## T ## v(const WebGLUniformLocationJS* const loc, \
+#define _(NT,TypeListU,TYPE) \
+    void Uniform ## NT ## v(const WebGLUniformLocationJS* const loc, \
                                 const TypeListU& list, \
                                 GLuint elemOffset = 0, \
                                 GLuint elemCountOverride = 0) const { \
-      UniformNTv(loc, N, BaseType, MakeByteRange(list), elemOffset, elemCountOverride); \
+      UniformNTv(TYPE, loc, MakeByteRange(list), elemOffset, elemCountOverride); \
     }
 
-  _(1,f,webgl::UniformBaseType::Float,Float32ListU)
-  _(2,f,webgl::UniformBaseType::Float,Float32ListU)
-  _(3,f,webgl::UniformBaseType::Float,Float32ListU)
-  _(4,f,webgl::UniformBaseType::Float,Float32ListU)
-  _(1,i,webgl::UniformBaseType::Int,Int32ListU)
-  _(2,i,webgl::UniformBaseType::Int,Int32ListU)
-  _(3,i,webgl::UniformBaseType::Int,Int32ListU)
-  _(4,i,webgl::UniformBaseType::Int,Int32ListU)
-  _(1,ui,webgl::UniformBaseType::Uint,Uint32ListU)
-  _(2,ui,webgl::UniformBaseType::Uint,Uint32ListU)
-  _(3,ui,webgl::UniformBaseType::Uint,Uint32ListU)
-  _(4,ui,webgl::UniformBaseType::Uint,Uint32ListU)
+  _(1f ,Float32ListU,LOCAL_GL_FLOAT)
+  _(2f ,Float32ListU,LOCAL_GL_FLOAT_VEC2)
+  _(3f ,Float32ListU,LOCAL_GL_FLOAT_VEC3)
+  _(4f ,Float32ListU,LOCAL_GL_FLOAT_VEC4)
+  _(1i ,Int32ListU  ,LOCAL_GL_INT)
+  _(2i ,Int32ListU  ,LOCAL_GL_INT_VEC2)
+  _(3i ,Int32ListU  ,LOCAL_GL_INT_VEC3)
+  _(4i ,Int32ListU  ,LOCAL_GL_INT_VEC4)
+  _(1ui,Uint32ListU ,LOCAL_GL_UNSIGNED_INT)
+  _(2ui,Uint32ListU ,LOCAL_GL_UNSIGNED_INT_VEC2)
+  _(3ui,Uint32ListU ,LOCAL_GL_UNSIGNED_INT_VEC3)
+  _(4ui,Uint32ListU ,LOCAL_GL_UNSIGNED_INT_VEC4)
 
-  #undef _
+#undef _
 
   // -
 
   private:
-  void UniformMatrixAxBfv(uint8_t a, uint8_t b, const WebGLUniformLocationJS*, bool transpose,
+  void UniformMatrixAxBfv(GLenum funcElemType,
+                          const WebGLUniformLocationJS*, bool transpose,
                           const Range<const float>&, GLuint elemOffset,
                           GLuint elemCountOverride) const;
   public:
 
-#define _(X, A, B)                                                           \
+#define _(X) \
   void UniformMatrix##X##fv(const WebGLUniformLocationJS* loc, bool transpose, \
-                            const Float32ListU& list, GLuint elemOffset = 0,   \
+                            const Float32ListU& list, GLuint elemOffset = 0, \
                             GLuint elemCountOverride = 0) const { \
-    UniformMatrixAxBfv(A, B, loc, transpose, MakeRange(list), elemOffset, elemCountOverride); \
+    UniformMatrixAxBfv(LOCAL_GL_FLOAT_MAT##X, loc, transpose, MakeRange(list), \
+                       elemOffset, elemCountOverride); \
   }
 
-  _(2, 2, 2)
-  _(2x3, 2, 3)
-  _(2x4, 2, 4)
+  _(2)
+  _(2x3)
+  _(2x4)
 
-  _(3x2, 3, 2)
-  _(3, 3, 3)
-  _(3x4, 3, 4)
+  _(3x2)
+  _(3)
+  _(3x4)
 
-  _(4x2, 4, 2)
-  _(4x3, 4, 3)
-  _(4, 4, 4)
+  _(4x2)
+  _(4x3)
+  _(4)
 
 #undef _
 

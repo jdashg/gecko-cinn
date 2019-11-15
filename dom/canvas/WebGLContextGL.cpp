@@ -682,7 +682,7 @@ webgl::GetUniformData WebGLContext::GetUniform(const WebGLProgram& prog,
     const auto locInfo = MaybeFind(info->locationMap, loc);
     if (!locInfo) return;
 
-    ret.type = locInfo->info.elemType;
+    ret.type = locInfo->info.info.elemType;
     switch (ret.type) {
       case LOCAL_GL_FLOAT:
       case LOCAL_GL_FLOAT_VEC2:
@@ -1317,8 +1317,7 @@ void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
 ////////////////////////////////////////////////////////////////////////////////
 // Uniform setters.
 
-void WebGLContext::UniformNTv(const uint8_t n, const webgl::UniformBaseType t,
-                              const uint32_t loc, const Range<const uint8_t>& data) const {
+void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& data) const {
   const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
   const auto& link = mActiveProgramLinkInfo;
   if (!link) return;
@@ -1326,35 +1325,16 @@ void WebGLContext::UniformNTv(const uint8_t n, const webgl::UniformBaseType t,
   const auto locInfo = MaybeFind(link->locationMap, loc);
   if (!locInfo) return;
 
-  if (n != locInfo->info.elemCount) {
-    ErrorInvalidOperation(
-        "Size from function (%u) differs from size in shader (%u).",
-        n, locInfo->info.elemCount);
-    return;
-  }
-
-  const bool typeOk = [&]() {
-    const auto baseType = webgl::ToAttribBaseType(locInfo->info.elemType);
-    switch (baseType) {
-      case webgl::AttribBaseType::Boolean: return true;
-      case webgl::AttribBaseType::Float: return t == webgl::UniformBaseType::Float;
-      case webgl::AttribBaseType::Int: return t == webgl::UniformBaseType::Int;
-      case webgl::AttribBaseType::Uint: return t == webgl::UniformBaseType::Uint;
-    }
-  }();
-  if (!typeOk) {
-    ErrorInvalidOperation(
-        "Type from function (%s) is incompatible with type in shader (%s).",
-        ToString(t), ToString(locInfo->info.elemType).c_str());
-    return;
-  }
+  const auto& validationInfo = locInfo->info;
+  const auto& channels = validationInfo.channelsPerElem;
+  const auto& pfn = validationInfo.pfn;
 
   // -
 
-  const auto elemCount = data.length() / (sizeof(float) * n); // rounds down
+  const auto elemCount = data.length() / (sizeof(float) * channels); // rounds down
   if (!elemCount) return;
 
-  const auto samplerInfo = locInfo->samplerInfo;
+  const auto& samplerInfo = locInfo->samplerInfo;
   if (samplerInfo) {
     const auto idata = reinterpret_cast<const uint32_t*>(data.begin().get());
     const auto maxTexUnits = GLMaxTextureUnits();
@@ -1371,36 +1351,9 @@ void WebGLContext::UniformNTv(const uint8_t n, const webgl::UniformBaseType t,
 
   // -
 
-  static const decltype(&gl::GLContext::fUniform1fv) kFloatFuncs[] = {
-      &gl::GLContext::fUniform1fv, &gl::GLContext::fUniform2fv,
-      &gl::GLContext::fUniform3fv, &gl::GLContext::fUniform4fv};
-  static const decltype(&gl::GLContext::fUniform1iv) kIntFuncs[] = {
-      &gl::GLContext::fUniform1iv, &gl::GLContext::fUniform2iv,
-      &gl::GLContext::fUniform3iv, &gl::GLContext::fUniform4iv};
-  static const decltype(&gl::GLContext::fUniform1uiv) kUintFuncs[] = {
-      &gl::GLContext::fUniform1uiv, &gl::GLContext::fUniform2uiv,
-      &gl::GLContext::fUniform3uiv, &gl::GLContext::fUniform4uiv};
-
-  switch (t) {
-    case webgl::UniformBaseType::Float: {
-      const auto func = kFloatFuncs[n - 1];
-      (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const float*>(data.begin().get()));
-      break;
-    }
-    case webgl::UniformBaseType::Int: {
-      const auto func = kIntFuncs[n - 1];
-      (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const int32_t*>(data.begin().get()));
-      break;
-    }
-    case webgl::UniformBaseType::Uint: {
-      const auto func = kUintFuncs[n - 1];
-      (gl->*func)(static_cast<GLint>(loc), elemCount,
-                  reinterpret_cast<const uint32_t*>(data.begin().get()));
-      break;
-    }
-  }
+  // This is a little galaxy-brain, sorry!
+  const auto ptr = static_cast<const void*>(data.begin().get());
+  (*pfn)(*gl, static_cast<GLint>(loc), elemCount, false, ptr);
 
   // -
 
@@ -1429,8 +1382,7 @@ static inline void MatrixAxBToRowMajor(const uint8_t width,
   }
 }
 
-void WebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
-                                      const uint32_t loc, const bool transpose,
+void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const bool transpose,
                                       const Range<const float>& data) const {
   const FuncScope funcScope(*this, "UniformMatrix[1234]x[1234]fv");
   const auto& link = mActiveProgramLinkInfo;
@@ -1439,44 +1391,17 @@ void WebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
   const auto locInfo = MaybeFind(link->locationMap, loc);
   if (!locInfo) return;
 
-  const bool typeOk = [&]() {
-    switch (locInfo->info.elemType) {
-      case LOCAL_GL_FLOAT_MAT2: return a == 2 && b == 2;
-      case LOCAL_GL_FLOAT_MAT3: return a == 3 && b == 3;
-      case LOCAL_GL_FLOAT_MAT4: return a == 4 && b == 4;
-      case LOCAL_GL_FLOAT_MAT2x3: return a == 2 && b == 3;
-      case LOCAL_GL_FLOAT_MAT2x4: return a == 2 && b == 4;
-      case LOCAL_GL_FLOAT_MAT3x2: return a == 3 && b == 2;
-      case LOCAL_GL_FLOAT_MAT3x4: return a == 3 && b == 4;
-      case LOCAL_GL_FLOAT_MAT4x2: return a == 4 && b == 2;
-      case LOCAL_GL_FLOAT_MAT4x3: return a == 4 && b == 3;
-      default: return false;
-    }
-  }();
-  if (!typeOk) {
-    ErrorInvalidOperation(
-        "Type from function (%ux%u matrix) is incompatible with type in shader (%s).",
-        a, b, EnumString(locInfo->info.elemType).c_str());
-    return;
-  }
+  const auto& validationInfo = locInfo->info;
+  const auto& channels = validationInfo.channelsPerElem;
+  const auto& pfn = validationInfo.pfn;
 
   // -
 
-  const auto elemCount = data.length() / (sizeof(float) * a * b); // rounds down
+  const auto elemCount = data.length() / channels; // rounds down
   if (!elemCount) return;
 
-  static const decltype(&gl::GLContext::fUniformMatrix2fv) kFuncList[] = {
-      &gl::GLContext::fUniformMatrix2fv,   &gl::GLContext::fUniformMatrix2x3fv,
-      &gl::GLContext::fUniformMatrix2x4fv,
-
-      &gl::GLContext::fUniformMatrix3x2fv, &gl::GLContext::fUniformMatrix3fv,
-      &gl::GLContext::fUniformMatrix3x4fv,
-
-      &gl::GLContext::fUniformMatrix4x2fv, &gl::GLContext::fUniformMatrix4x3fv,
-      &gl::GLContext::fUniformMatrix4fv};
-  const auto func = kFuncList[3 * (a - 2) + (b - 2)];
-
-  (gl->*func)(static_cast<GLint>(loc), elemCount, transpose, data.begin().get());
+  const auto ptr = static_cast<const void*>(data.begin().get());
+  (*pfn)(*gl, static_cast<GLint>(loc), elemCount, transpose, ptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

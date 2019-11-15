@@ -2170,7 +2170,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(GLContext& gl, const GLuint prog, const 
         const auto mappedName = std::string(stringBuffer.data(), lengthWithoutNull);
         const auto userName = fnUnmapName(mappedName);
 
-        auto loc = gl.fGetAttribLocation(prog, userName.c_str());
+        auto loc = gl.fGetAttribLocation(prog, mappedName.c_str());
         if (mappedName.find("gl_") == 0) {
           // Bug 1328559: Appears problematic on ANGLE and OSX, but not Linux or
           // Win+GL.

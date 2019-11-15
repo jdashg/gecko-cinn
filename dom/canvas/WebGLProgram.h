@@ -57,6 +57,17 @@ struct CachedDrawFetchLimits final {
 
 // -
 
+void UniformAs1fv(gl::GLContext& gl, GLint location, GLsizei count, bool transpose,
+                  const void* any);
+
+struct ActiveUniformValidationInfo final {
+  const ActiveUniformInfo& info;
+  uint8_t channelsPerElem = 0;
+  decltype(&UniformAs1fv) pfn = nullptr;
+
+  static ActiveUniformValidationInfo Make(const ActiveUniformInfo&);
+};
+
 struct SamplerUniformInfo final {
   const decltype(WebGLContext::mBound2DTextures)& texListForType;
   const webgl::TextureBaseType texBaseType;
@@ -65,7 +76,7 @@ struct SamplerUniformInfo final {
 };
 
 struct LocationInfo final {
-  const ActiveUniformInfo& info;
+  const ActiveUniformValidationInfo info;
   const uint32_t indexIntoUniform;
   SamplerUniformInfo* const samplerInfo;
 };

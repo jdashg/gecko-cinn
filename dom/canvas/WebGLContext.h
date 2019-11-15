@@ -625,11 +625,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   //////////////////////////
 
-  void UniformNTv(uint8_t n, webgl::UniformBaseType t,
-                  uint32_t loc, const Range<const uint8_t>& data) const;
-
-  void UniformMatrixAxBfv(uint8_t A, uint8_t B, uint32_t loc,
-                          bool transpose,
+  void UniformNTv(uint32_t loc, const Range<const uint8_t>& data) const;
+  void UniformMatrixAxBfv(uint32_t loc, bool transpose,
                           const Range<const float>& data) const;
 
   ////////////////////////////////////

@@ -686,6 +686,7 @@ bool ClientWebGLContext::CreateHostContext() {
     ThrowEvent_WebGLContextCreationError(notLost.info.error);
     return false;
   }
+  notLost.generation = std::make_shared<webgl::ContextGenerationInfo>(*this);
 
   mNotLost = Some(std::move(notLost));
   return true;
@@ -797,7 +798,8 @@ ClientWebGLContext::GetInputStream(const char* mimeType,
 
 template<typename T>
 static already_AddRefed<T> AsAddRefed(T* ptr) {
-  return already_AddRefed<T>(ptr);
+  RefPtr<T> rp = ptr;
+  return rp.forget();
 }
 
 template<typename T>
@@ -3174,12 +3176,34 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
   }
 }
 
-void ClientWebGLContext::UniformNTv(const WebGLUniformLocationJS* const loc, const uint8_t n,
-              const webgl::UniformBaseType t, const Range<const uint8_t>& bytes,
+void ClientWebGLContext::UniformNTv(const GLenum funcElemType,
+                                    const WebGLUniformLocationJS* const loc,
+                                    const Range<const uint8_t>& bytes,
               GLuint elemOffset,
                         GLuint elemCountOverride) const {
   if (!loc) return;
   if (!loc->ValidateUsable(*this, "location")) return;
+
+  // -
+
+  bool funcMatchesLocation = false;
+  for (const auto allowed : loc->mValidUploadElemTypes) {
+    funcMatchesLocation |= (funcElemType == allowed);
+  }
+  if (MOZ_UNLIKELY( !funcMatchesLocation )) {
+    std::string validSetters;
+    for (const auto allowed : loc->mValidUploadElemTypes) {
+      validSetters += EnumString(allowed);
+      validSetters += '/';
+    }
+    validSetters.pop_back(); // Cheekily discard the extra trailing '/'.
+
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+        "Uniform's `type` requires uniform setter of type %s.", validSetters.c_str());
+    return;
+  }
+
+  // -
 
   auto availCount = bytes.length() / sizeof(float);
   if (elemOffset > availCount) {
@@ -3195,17 +3219,35 @@ void ClientWebGLContext::UniformNTv(const WebGLUniformLocationJS* const loc, con
     availCount = elemCountOverride;
   }
 
+  // -
+
   const auto ptr = bytes.begin().get() + (elemOffset * sizeof(float));
   const auto buffer = RawBuffer<const uint8_t>(availCount * sizeof(float), ptr);
-  Run<RPROC(UniformNTv)>(n, t, loc->mLocation, buffer);
+  Run<RPROC(UniformNTv)>(loc->mLocation, buffer);
 }
 
-void ClientWebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
+void ClientWebGLContext::UniformMatrixAxBfv(const GLenum funcElemType,
   const WebGLUniformLocationJS* const loc, bool transpose,
                         const Range<const float>& data, GLuint elemOffset,
                         GLuint elemCountOverride) const {
+  if (!mIsWebGL2 && transpose) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`transpose`:true requires WebGL 2.");
+    return;
+  }
+
   if (!loc) return;
   if (!loc->ValidateUsable(*this, "location")) return;
+
+  // -
+
+  const auto& allowed = loc->mValidUploadElemTypes[0]; // Matrix types must match exactly.
+  if (MOZ_UNLIKELY( funcElemType != allowed )) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+        "Uniform's `type` requires uniform setter of type %s.", EnumString(allowed).c_str());
+    return;
+  }
+
+  // -
 
   auto availCount = data.length();
   if (elemOffset > availCount) {
@@ -3221,13 +3263,10 @@ void ClientWebGLContext::UniformMatrixAxBfv(const uint8_t a, const uint8_t b,
     availCount = elemCountOverride;
   }
 
-  if (!mIsWebGL2 && transpose) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`transpose`:true requires WebGL 2.");
-    return;
-  }
+  // -
 
   const auto buffer = RawBuffer<const float>(availCount, data.begin().get() + elemOffset);
-  Run<RPROC(UniformMatrixAxBfv)>(a, b, loc->mLocation, transpose, buffer);
+  Run<RPROC(UniformMatrixAxBfv)>(loc->mLocation, transpose, buffer);
 }
 
 // -
@@ -3928,6 +3967,8 @@ void ClientWebGLContext::AttachShader(WebGLProgramJS& prog,
   }
   slot = shader.mInnerWeak.lock();
   MOZ_ASSERT(slot);
+
+  Run<RPROC(AttachShader)>(prog.mId, shader.mId);
 }
 
 void ClientWebGLContext::BindAttribLocation(WebGLProgramJS& prog,
@@ -3952,6 +3993,8 @@ void ClientWebGLContext::DetachShader(WebGLProgramJS& prog,
     return;
   }
   slot = nullptr;
+
+  Run<RPROC(DetachShader)>(prog.mId, shader.mId);
 }
 
 void ClientWebGLContext::GetAttachedShaders(const WebGLProgramJS& prog,
@@ -4313,7 +4356,8 @@ ClientWebGLContext::GetUniformLocation(const WebGLProgramJS& prog,
         if (indexed) {
           locName << "[" << pair.first << "]";
         }
-        prog.mUniformLocByName->insert({locName.str(), pair.second});
+        const auto locInfo = WebGLProgramJS::UniformLocInfo{pair.second, activeUniform.elemType};
+        prog.mUniformLocByName->insert({locName.str(), locInfo});
       }
     }
   }
@@ -4326,7 +4370,55 @@ ClientWebGLContext::GetUniformLocation(const WebGLProgramJS& prog,
   }
   if (!loc) return nullptr;
 
-  return AsAddRefed(new WebGLUniformLocationJS(*this, prog.mResult, *loc));
+  return AsAddRefed(new WebGLUniformLocationJS(*this, prog.mResult, loc->location,
+                                                 loc->elemType));
+}
+
+std::array<uint16_t,3> ValidUploadElemTypes(const GLenum elemType) {
+  std::vector<GLenum> ret;
+  switch (elemType) {
+    case LOCAL_GL_BOOL:
+      ret = {LOCAL_GL_FLOAT, LOCAL_GL_INT, LOCAL_GL_UNSIGNED_INT};
+      break;
+    case LOCAL_GL_BOOL_VEC2:
+      ret = {LOCAL_GL_FLOAT_VEC2, LOCAL_GL_INT_VEC2, LOCAL_GL_UNSIGNED_INT_VEC2};
+      break;
+    case LOCAL_GL_BOOL_VEC3:
+      ret = {LOCAL_GL_FLOAT_VEC3, LOCAL_GL_INT_VEC3, LOCAL_GL_UNSIGNED_INT_VEC3};
+      break;
+    case LOCAL_GL_BOOL_VEC4:
+      ret = {LOCAL_GL_FLOAT_VEC4, LOCAL_GL_INT_VEC4, LOCAL_GL_UNSIGNED_INT_VEC4};
+      break;
+
+    case LOCAL_GL_SAMPLER_2D:
+    case LOCAL_GL_SAMPLER_3D:
+    case LOCAL_GL_SAMPLER_CUBE:
+    case LOCAL_GL_SAMPLER_2D_SHADOW:
+    case LOCAL_GL_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+    case LOCAL_GL_INT_SAMPLER_2D:
+    case LOCAL_GL_INT_SAMPLER_3D:
+    case LOCAL_GL_INT_SAMPLER_CUBE:
+    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
+      ret = {LOCAL_GL_INT};
+      break;
+
+    default:
+      ret = {elemType};
+      break;
+  }
+
+  std::array<uint16_t,3> arr = {};
+  MOZ_ASSERT(arr[2] == 0);
+  for (const auto i : IntegerRange(ret.size())) {
+    arr[i] = AssertedCast<uint16_t>(ret[i]);
+  }
+  return arr;
 }
 
 void ClientWebGLContext::GetProgramInfoLog(const WebGLProgramJS& prog, nsAString& retval) const {
@@ -4617,9 +4709,7 @@ template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
                                  const std::shared_ptr<T>& field,
                                  const char* name, uint32_t flags) {
-  if (field) {
-    ImplCycleCollectionTraverse(callback, *field, name, flags);
-  }
+  CycleCollectionNoteChild(aCallback, field.get(), aName, aFlags);
 }
 
 template<typename T>
@@ -4629,11 +4719,12 @@ void ImplCycleCollectionUnlink(std::shared_ptr<T>& field) {
 
 // -
 
+// Todo: Move this to RefPtr.h.
 template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
                                  const RefPtr<T>& field,
                                  const char* name, uint32_t flags) {
-  ImplCycleCollectionTraverse(callback, RefPtr<T>(field), name, flags);
+  ImplCycleCollectionTraverse(callback, const_cast<RefPtr<T>&>(field), name, flags);
 }
 
 // -

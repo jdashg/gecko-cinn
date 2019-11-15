@@ -638,14 +638,13 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   // ------------------------ Uniforms and attributes ------------------------
 
-  void UniformNTv(const uint8_t n, const webgl::UniformBaseType t, uint32_t loc,
-          const RawBuffer<const uint8_t>& data) const {
-    mContext->UniformNTv(n, t, loc, MakeRange(data));
+  void UniformNTv(uint32_t loc, const RawBuffer<const uint8_t>& data) const {
+    mContext->UniformNTv(loc, MakeRange(data));
   }
 
-  void UniformMatrixAxBfv(uint8_t a, uint8_t b, uint32_t loc,
-                          bool transpose, const RawBuffer<const float>& data) const {
-    mContext->UniformMatrixAxBfv(a, b, loc, transpose, MakeRange(data));
+  void UniformMatrixAxBfv(uint32_t loc, bool transpose,
+                          const RawBuffer<const float>& data) const {
+    mContext->UniformMatrixAxBfv(loc, transpose, MakeRange(data));
   }
 
   void VertexAttrib4T(GLuint index, const webgl::TypedQuad& data) const {
