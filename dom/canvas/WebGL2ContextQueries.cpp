@@ -21,7 +21,7 @@ namespace mozilla {
  *     implementation-dependent cases.
  */
 
-WebGLRefPtr<WebGLQuery>* WebGLContext::ValidateQuerySlotByTarget(
+RefPtr<WebGLQuery>* WebGLContext::ValidateQuerySlotByTarget(
     GLenum target) {
   if (IsWebGL2()) {
     switch (target) {
@@ -54,25 +54,17 @@ WebGLRefPtr<WebGLQuery>* WebGLContext::ValidateQuerySlotByTarget(
 // -------------------------------------------------------------------------
 // Query Objects
 
-already_AddRefed<WebGLQuery> WebGLContext::CreateQuery() {
+RefPtr<WebGLQuery> WebGLContext::CreateQuery() {
   const FuncScope funcScope(*this, "createQuery");
   if (IsContextLost()) return nullptr;
 
-  RefPtr<WebGLQuery> globj = new WebGLQuery(this);
-  return globj.forget();
-}
-
-void WebGLContext::DeleteQuery(WebGLQuery* query) {
-  const FuncScope funcScope(*this, "deleteQuery");
-  if (!ValidateDeleteObject(query)) return;
-
-  query->DeleteQuery();
+  return new WebGLQuery(this);
 }
 
 void WebGLContext::BeginQuery(GLenum target, WebGLQuery& query) {
-  const FuncScope funcScope(*this, "beginQuery");
+  FuncScope funcScope(*this, "beginQuery");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   const auto& slot = ValidateQuerySlotByTarget(target);
   if (!slot) return;
@@ -89,13 +81,13 @@ void WebGLContext::BeginQuery(GLenum target, WebGLQuery& query) {
 
   query.BeginQuery(target, *slot);
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::EndQuery(GLenum target) {
-  const FuncScope funcScope(*this, "endQuery");
+  FuncScope funcScope(*this, "endQuery");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   const auto& slot = ValidateQuerySlotByTarget(target);
   if (!slot) return;
@@ -105,7 +97,7 @@ void WebGLContext::EndQuery(GLenum target) {
 
   query->EndQuery();
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 Maybe<double> WebGLContext::GetQueryParameter(const WebGLQuery& query,

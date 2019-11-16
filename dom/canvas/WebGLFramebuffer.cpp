@@ -48,12 +48,6 @@ WebGLFBAttachPoint::~WebGLFBAttachPoint() {
   MOZ_ASSERT(!mTexturePtr);
 }
 
-bool WebGLFBAttachPoint::IsDeleteRequested() const {
-  return Texture()
-             ? Texture()->IsDeleteRequested()
-             : Renderbuffer() ? Renderbuffer()->IsDeleteRequested() : false;
-}
-
 void WebGLFBAttachPoint::Clear() { Set(nullptr, {}); }
 
 void WebGLFBAttachPoint::Set(gl::GLContext* const gl,
@@ -462,13 +456,11 @@ Maybe<double> WebGLFBAttachPoint::GetParameter(WebGLContext* webgl,
 // WebGLFramebuffer
 
 WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mGLName(fbo),
       mDepthAttachment(webgl, LOCAL_GL_DEPTH_ATTACHMENT),
       mStencilAttachment(webgl, LOCAL_GL_STENCIL_ATTACHMENT),
       mDepthStencilAttachment(webgl, LOCAL_GL_DEPTH_STENCIL_ATTACHMENT) {
-  mContext->mFramebuffers.insertBack(this);
-
   mAttachments.push_back(&mDepthAttachment);
   mAttachments.push_back(&mStencilAttachment);
 
@@ -489,7 +481,7 @@ WebGLFramebuffer::WebGLFramebuffer(WebGLContext* webgl, GLuint fbo)
   mColorReadBuffer = &mColorAttachments[0];
 }
 
-void WebGLFramebuffer::Delete() {
+WebGLFramebuffer::~WebGLFramebuffer() {
   InvalidateCaches();
 
   mDepthAttachment.Clear();
@@ -500,9 +492,8 @@ void WebGLFramebuffer::Delete() {
     cur.Clear();
   }
 
+  if (!mContext) return;
   mContext->gl->fDeleteFramebuffers(1, &mGLName);
-
-  LinkedListElement<WebGLFramebuffer>::removeFrom(mContext->mFramebuffers);
 }
 
 ////

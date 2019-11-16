@@ -14,14 +14,10 @@
 
 namespace mozilla {
 
-WebGLVertexArray::WebGLVertexArray(WebGLContext* const webgl, const GLuint name)
-    : WebGLRefCountedObject(webgl),
-      mGLName(name),
+WebGLVertexArray::WebGLVertexArray(WebGLContext* const webgl)
+    : WebGLContextBoundObject(webgl),
       mAttribs(mContext->Limits().maxVertexAttribs) {
-  mContext->mVertexArrays.insertBack(this);
 }
-
-WebGLVertexArray::~WebGLVertexArray() { MOZ_ASSERT(IsDeleted()); }
 
 WebGLVertexArray* WebGLVertexArray::Create(WebGLContext* webgl) {
   WebGLVertexArray* array;
@@ -31,14 +27,6 @@ WebGLVertexArray* WebGLVertexArray::Create(WebGLContext* webgl) {
     array = new WebGLVertexArrayFake(webgl);
   }
   return array;
-}
-
-void WebGLVertexArray::Delete() {
-  DeleteImpl();
-
-  LinkedListElement<WebGLVertexArray>::removeFrom(mContext->mVertexArrays);
-  mElementArrayBuffer = nullptr;
-  mAttribs.clear();
 }
 
 }  // namespace mozilla

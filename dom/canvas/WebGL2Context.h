@@ -94,8 +94,7 @@ class WebGL2Context final : public WebGLContext {
   // -------------------------------------------------------------------------
   // Sampler Objects - WebGL2ContextSamplers.cpp
 
-  already_AddRefed<WebGLSampler> CreateSampler();
-  void DeleteSampler(WebGLSampler* sampler);
+  RefPtr<WebGLSampler> CreateSampler();
   void BindSampler(GLuint unit, WebGLSampler* sampler);
   void SamplerParameteri(WebGLSampler& sampler, GLenum pname, GLint param);
   void SamplerParameterf(WebGLSampler& sampler, GLenum pname, GLfloat param);
@@ -108,16 +107,14 @@ class WebGL2Context final : public WebGLContext {
   const GLuint64 kMaxClientWaitSyncTimeoutNS =
       1000 * 1000 * 1000;  // 1000ms in ns.
 
-  already_AddRefed<WebGLSync> FenceSync(GLenum condition, GLbitfield flags);
-  void DeleteSync(WebGLSync* sync);
+  RefPtr<WebGLSync> FenceSync(GLenum condition, GLbitfield flags);
   GLenum ClientWaitSync(const WebGLSync& sync, GLbitfield flags,
                         GLuint64 timeout);
 
   // -------------------------------------------------------------------------
   // Transform Feedback - WebGL2ContextTransformFeedback.cpp
 
-  already_AddRefed<WebGLTransformFeedback> CreateTransformFeedback();
-  void DeleteTransformFeedback(WebGLTransformFeedback* tf);
+  RefPtr<WebGLTransformFeedback> CreateTransformFeedback();
   void BindTransformFeedback(WebGLTransformFeedback* tf);
   void BeginTransformFeedback(GLenum primitiveMode);
   void EndTransformFeedback();
@@ -152,9 +149,6 @@ class WebGL2Context final : public WebGLContext {
   virtual bool IsTexParamValid(GLenum pname) const override;
 
   void UpdateBoundQuery(GLenum target, WebGLQuery* query);
-
-  // CreateVertexArrayImpl is assumed to be infallible.
-  virtual WebGLVertexArray* CreateVertexArrayImpl() override;
 };
 
 }  // namespace mozilla

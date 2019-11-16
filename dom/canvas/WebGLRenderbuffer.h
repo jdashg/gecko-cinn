@@ -6,9 +6,6 @@
 #ifndef WEBGL_RENDERBUFFER_H_
 #define WEBGL_RENDERBUFFER_H_
 
-#include "mozilla/LinkedList.h"
-#include "nsWrapperCache.h"
-
 #include "CacheInvalidator.h"
 #include "WebGLObjectModel.h"
 #include "WebGLStrongTypes.h"
@@ -19,12 +16,13 @@ namespace webgl {
 struct FormatUsageInfo;
 }
 
-class WebGLRenderbuffer final : public WebGLRefCountedObject<WebGLRenderbuffer>,
-                                public LinkedListElement<WebGLRenderbuffer>,
+class WebGLRenderbuffer final : public WebGLContextBoundObject,
                                 public WebGLRectangleObject,
                                 public CacheInvalidator {
   friend class WebGLFramebuffer;
   friend class WebGLFBAttachPoint;
+
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLRenderbuffer, override)
 
  public:
   const GLuint mPrimaryRB;
@@ -35,11 +33,7 @@ class WebGLRenderbuffer final : public WebGLRefCountedObject<WebGLRenderbuffer>,
   webgl::ImageInfo mImageInfo;
 
  public:
-  NS_INLINE_DECL_REFCOUNTING(WebGLRenderbuffer)
-
   explicit WebGLRenderbuffer(WebGLContext* webgl);
-
-  void Delete();
 
   const auto& ImageInfo() const { return mImageInfo; }
 
@@ -51,7 +45,7 @@ class WebGLRenderbuffer final : public WebGLRefCountedObject<WebGLRenderbuffer>,
   auto MemoryUsage() const { return mImageInfo.MemoryUsage(); }
 
  protected:
-  ~WebGLRenderbuffer() { DeleteOnce(); }
+  ~WebGLRenderbuffer() override;
 
   void DoFramebufferRenderbuffer(GLenum attachment) const;
   GLenum DoRenderbufferStorage(uint32_t samples,

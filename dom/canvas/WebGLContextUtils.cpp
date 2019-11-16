@@ -469,12 +469,6 @@ void WebGLContext::AssertCachedBindings() const {
 #ifdef DEBUG
   gl::GLContext::LocalErrorScope errorScope(*gl);
 
-  if (IsWebGL2() ||
-      IsExtensionEnabled(WebGLExtensionID::OES_vertex_array_object)) {
-    AssertUintParamCorrect(gl, LOCAL_GL_VERTEX_ARRAY_BINDING,
-                           mBoundVertexArray->mGLName);
-  }
-
   GLint stencilBits = 0;
   if (GetStencilBits(&stencilBits)) {  // Depends on current draw framebuffer.
     const GLuint stencilRefMask = (1 << stencilBits) - 1;

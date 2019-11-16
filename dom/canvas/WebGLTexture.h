@@ -15,8 +15,6 @@
 #include "mozilla/Casting.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/dom/TypedArray.h"
-#include "mozilla/LinkedList.h"
-#include "nsWrapperCache.h"
 
 #include "CacheInvalidator.h"
 #include "WebGLObjectModel.h"
@@ -95,14 +93,13 @@ struct ImageInfo final {
 
 }  // namespace webgl
 
-// NOTE: When this class is switched to new DOM bindings, update the (then-slow)
-// WrapObject calls in GetParameter and GetFramebufferAttachmentParameter.
-class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
-                           public LinkedListElement<WebGLTexture>,
+class WebGLTexture final : public WebGLContextBoundObject,
                            public CacheInvalidator {
   // Friends
   friend class WebGLContext;
   friend class WebGLFramebuffer;
+
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLTexture, override)
 
   ////////////////////////////////////
   // Members
@@ -165,16 +162,12 @@ class WebGLTexture final : public WebGLRefCountedObject<WebGLTexture>,
 
   ////////////////////////////////////
 
-  NS_INLINE_DECL_REFCOUNTING(WebGLTexture)
-
   WebGLTexture(WebGLContext* webgl, GLuint tex);
-
-  void Delete();
 
   TexTarget Target() const { return mTarget; }
 
  protected:
-  ~WebGLTexture() { DeleteOnce(); }
+  ~WebGLTexture() override;
 
  public:
   ////////////////////////////////////

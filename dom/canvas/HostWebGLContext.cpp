@@ -15,6 +15,7 @@
 #include "WebGLContext.h"
 #include "WebGLCrossProcessCommandQueue.h"
 #include "WebGLFramebuffer.h"
+#include "WebGLMemoryTracker.h"
 #include "WebGLParent.h"
 #include "WebGLProgram.h"
 #include "WebGLRenderbuffer.h"
@@ -45,9 +46,12 @@ HostWebGLContext::HostWebGLContext(OwnerData&& ownerData)
   if (mOwnerData.outOfProcess) {
     mOwnerData.outOfProcess->mCommandSink->mHostContext = this;
   }
+  WebGLMemoryTracker::AddContext(this);
 }
 
-HostWebGLContext::~HostWebGLContext() = default;
+HostWebGLContext::~HostWebGLContext() {
+  WebGLMemoryTracker::RemoveContext(this);
+}
 
 // -
 

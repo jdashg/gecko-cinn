@@ -12,11 +12,19 @@
 namespace mozilla {
 
 WebGLBuffer::WebGLBuffer(WebGLContext* webgl, GLuint buf)
-    : WebGLRefCountedObject(webgl), mGLName(buf) {
-  mContext->mBuffers.insertBack(this);
+    : WebGLContextBoundObject(webgl), mGLName(buf) {
 }
 
-WebGLBuffer::~WebGLBuffer() { DeleteOnce(); }
+WebGLBuffer::~WebGLBuffer() {
+  mByteLength = 0;
+  mFetchInvalidator.InvalidateCaches();
+
+  mIndexCache = nullptr;
+  mIndexRanges.clear();
+
+  if (!mContext) return;
+  mContext->gl->fDeleteBuffers(1, &mGLName);
+}
 
 void WebGLBuffer::SetContentAfterBind(GLenum target) {
   if (mContent != Kind::Undefined) return;
@@ -39,17 +47,6 @@ void WebGLBuffer::SetContentAfterBind(GLenum target) {
     default:
       MOZ_CRASH("GFX: invalid target");
   }
-}
-
-void WebGLBuffer::Delete() {
-  mContext->gl->fDeleteBuffers(1, &mGLName);
-
-  mByteLength = 0;
-  mFetchInvalidator.InvalidateCaches();
-
-  mIndexCache = nullptr;
-  mIndexRanges.clear();
-  LinkedListElement<WebGLBuffer>::remove();  // remove from mContext->mBuffers
 }
 
 ////////////////////////////////////////

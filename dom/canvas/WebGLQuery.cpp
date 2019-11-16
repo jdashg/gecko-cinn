@@ -22,16 +22,15 @@ static GLuint GenQuery(gl::GLContext* gl) {
 }
 
 WebGLQuery::WebGLQuery(WebGLContext* webgl)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mGLName(GenQuery(mContext->gl)),
       mTarget(0),
       mActiveSlot(nullptr) {
-  mContext->mQueries.insertBack(this);
 }
 
-void WebGLQuery::Delete() {
+WebGLQuery::~WebGLQuery() {
+  if (!mContext) return;
   mContext->gl->fDeleteQueries(1, &mGLName);
-  LinkedListElement<WebGLQuery>::removeFrom(mContext->mQueries);
 }
 
 ////
@@ -54,7 +53,7 @@ static GLenum TargetForDriver(const gl::GLContext* gl, GLenum target) {
   return LOCAL_GL_SAMPLES_PASSED;
 }
 
-void WebGLQuery::BeginQuery(GLenum target, WebGLRefPtr<WebGLQuery>& slot) {
+void WebGLQuery::BeginQuery(GLenum target, RefPtr<WebGLQuery>& slot) {
   mTarget = target;
   mActiveSlot = &slot;
   *mActiveSlot = this;
@@ -155,16 +154,6 @@ Maybe<double> WebGLQuery::GetQueryParameter(GLenum pname) const {
     default:
       MOZ_CRASH("Bad `pname`.");
   }
-}
-
-void WebGLQuery::DeleteQuery() {
-  MOZ_ASSERT(!IsDeleteRequested());
-
-  if (mActiveSlot) {
-    EndQuery();
-  }
-
-  RequestDelete();
 }
 
 void WebGLQuery::QueryCounter() {

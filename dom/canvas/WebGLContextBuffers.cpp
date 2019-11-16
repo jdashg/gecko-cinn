@@ -14,8 +14,8 @@
 
 namespace mozilla {
 
-WebGLRefPtr<WebGLBuffer>* WebGLContext::ValidateBufferSlot(GLenum target) {
-  WebGLRefPtr<WebGLBuffer>* slot = nullptr;
+RefPtr<WebGLBuffer>* WebGLContext::ValidateBufferSlot(GLenum target) {
+  RefPtr<WebGLBuffer>* slot = nullptr;
 
   switch (target) {
     case LOCAL_GL_ARRAY_BUFFER:
@@ -124,9 +124,9 @@ IndexedBufferBinding* WebGLContext::ValidateIndexedBufferSlot(GLenum target,
 ////////////////////////////////////////
 
 void WebGLContext::BindBuffer(GLenum target, WebGLBuffer* buffer) {
-  const FuncScope funcScope(*this, "bindBuffer");
+  FuncScope funcScope(*this, "bindBuffer");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard failureGuard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (buffer && !ValidateObject("buffer", *buffer)) return;
 
@@ -144,14 +144,14 @@ void WebGLContext::BindBuffer(GLenum target, WebGLBuffer* buffer) {
     buffer->SetContentAfterBind(target);
   }
 
-  failureGuard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 ////////////////////////////////////////
 
 bool WebGLContext::ValidateIndexedBufferBinding(
     GLenum target, GLuint index,
-    WebGLRefPtr<WebGLBuffer>** const out_genericBinding,
+    RefPtr<WebGLBuffer>** const out_genericBinding,
     IndexedBufferBinding** const out_indexedBinding) {
   *out_genericBinding = ValidateBufferSlot(target);
   if (!*out_genericBinding) return false;
@@ -173,10 +173,11 @@ bool WebGLContext::ValidateIndexedBufferBinding(
 void WebGLContext::BindBufferRange(GLenum target, GLuint index,
                                        WebGLBuffer* buffer, uint64_t offset,
                                        uint64_t size) {
+  FuncScope funcScope(*this, "bindBufferBase/Range");
   if (buffer && !ValidateObject("buffer", *buffer)) return;
-  webgl::ScopedBindFailureGuard failureGuard(*this);
+  funcScope.mBindFailureGuard = true;
 
-  WebGLRefPtr<WebGLBuffer>* genericBinding;
+  RefPtr<WebGLBuffer>* genericBinding;
   IndexedBufferBinding* indexedBinding;
   if (!ValidateIndexedBufferBinding(target, index, &genericBinding,
                                     &indexedBinding)) {
@@ -226,7 +227,7 @@ void WebGLContext::BindBufferRange(GLenum target, GLuint index,
     buffer->SetContentAfterBind(target);
   }
 
-  failureGuard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 ////////////////////////////////////////
@@ -258,62 +259,14 @@ void WebGLContext::BufferSubData(GLenum target, uint64_t dstByteOffset,
 
 ////////////////////////////////////////
 
-already_AddRefed<WebGLBuffer> WebGLContext::CreateBuffer() {
+RefPtr<WebGLBuffer> WebGLContext::CreateBuffer() {
   const FuncScope funcScope(*this, "createBuffer");
   if (IsContextLost()) return nullptr;
 
   GLuint buf = 0;
   gl->fGenBuffers(1, &buf);
 
-  RefPtr<WebGLBuffer> globj = new WebGLBuffer(this, buf);
-  return globj.forget();
-}
-
-void WebGLContext::DeleteBuffer(WebGLBuffer* buffer) {
-  const FuncScope funcScope(*this, "deleteBuffer");
-  if (!ValidateDeleteObject(buffer)) return;
-
-  ////
-
-  const auto fnClearIfBuffer = [&](GLenum target,
-                                   WebGLRefPtr<WebGLBuffer>& bindPoint) {
-    if (bindPoint == buffer) {
-      bindPoint = nullptr;
-    }
-  };
-
-  fnClearIfBuffer(0, mBoundArrayBuffer);
-  fnClearIfBuffer(0, mBoundVertexArray->mElementArrayBuffer);
-
-  for (auto& cur : mBoundVertexArray->mAttribs) {
-    fnClearIfBuffer(0, cur.mBuf);
-  }
-
-  // WebGL binding points
-  if (IsWebGL2()) {
-    fnClearIfBuffer(0, mBoundCopyReadBuffer);
-    fnClearIfBuffer(0, mBoundCopyWriteBuffer);
-    fnClearIfBuffer(0, mBoundPixelPackBuffer);
-    fnClearIfBuffer(0, mBoundPixelUnpackBuffer);
-    fnClearIfBuffer(0, mBoundUniformBuffer);
-    fnClearIfBuffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER,
-                    mBoundTransformFeedbackBuffer);
-
-    if (!mBoundTransformFeedback->mIsActive) {
-      for (auto& binding : mBoundTransformFeedback->mIndexedBindings) {
-        fnClearIfBuffer(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER,
-                        binding.mBufferBinding);
-      }
-    }
-
-    for (auto& binding : mIndexedUniformBufferBindings) {
-      fnClearIfBuffer(0, binding.mBufferBinding);
-    }
-  }
-
-  ////
-
-  buffer->RequestDelete();
+  return new WebGLBuffer(this, buf);
 }
 
 }  // namespace mozilla

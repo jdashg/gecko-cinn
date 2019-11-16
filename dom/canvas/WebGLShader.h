@@ -12,9 +12,7 @@
 #include <vector>
 
 #include "GLDefs.h"
-#include "mozilla/LinkedList.h"
 #include "mozilla/MemoryReporting.h"
-#include "nsWrapperCache.h"
 
 #include "WebGLObjectModel.h"
 
@@ -24,16 +22,17 @@ namespace webgl {
 class ShaderValidatorResults;
 }  // namespace webgl
 
-class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
-                          public LinkedListElement<WebGLShader> {
+class WebGLShader final : public WebGLContextBoundObject {
   friend class WebGLContext;
   friend class WebGLProgram;
+
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLShader, override)
 
  public:
   WebGLShader(WebGLContext* webgl, GLenum type);
 
  protected:
-  ~WebGLShader();
+  ~WebGLShader() override;
 
  public:
   // GL funcs
@@ -58,9 +57,6 @@ class WebGLShader final : public WebGLRefCountedObject<WebGLShader>,
  public:
   // Other funcs
   size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
-  void Delete();
-
-  NS_INLINE_DECL_REFCOUNTING(WebGLShader)
 
  public:
   const GLuint mGLName;

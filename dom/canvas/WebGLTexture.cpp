@@ -70,7 +70,7 @@ Maybe<ImageInfo> ImageInfo::NextMip(const GLenum target) const {
 ////////////////////////////////////////
 
 WebGLTexture::WebGLTexture(WebGLContext* webgl, GLuint tex)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mGLName(tex),
       mTarget(LOCAL_GL_NONE),
       mFaceCount(0),
@@ -78,23 +78,19 @@ WebGLTexture::WebGLTexture(WebGLContext* webgl, GLuint tex)
       mImmutableLevelCount(0),
       mBaseMipmapLevel(0),
       mMaxMipmapLevel(1000) {
-  mContext->mTextures.insertBack(this);
 }
 
-void WebGLTexture::Delete() {
+WebGLTexture::~WebGLTexture() {
   for (auto& cur : mImageInfoArr) {
     cur = webgl::ImageInfo();
   }
   InvalidateCaches();
 
+  if (!mContext) return;
   mContext->gl->fDeleteTextures(1, &mGLName);
-
-  LinkedListElement<WebGLTexture>::removeFrom(mContext->mTextures);
 }
 
 size_t WebGLTexture::MemoryUsage() const {
-  if (IsDeleted()) return 0;
-
   size_t accum = 0;
   for (const auto& cur : mImageInfoArr) {
     accum += cur.MemoryUsage();
@@ -682,12 +678,6 @@ void WebGLTexture::ClampLevelBaseAndMax() {
 // GL calls
 
 bool WebGLTexture::BindTexture(TexTarget texTarget) {
-  if (IsDeleted()) {
-    mContext->ErrorInvalidOperation(
-        "bindTexture: Cannot bind a deleted object.");
-    return false;
-  }
-
   const bool isFirstBinding = !mTarget;
   if (!isFirstBinding && mTarget != texTarget) {
     mContext->ErrorInvalidOperation(

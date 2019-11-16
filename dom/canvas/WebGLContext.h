@@ -20,11 +20,9 @@
 #include "mozilla/EnumeratedArray.h"
 #include "mozilla/ErrorResult.h"
 #include "mozilla/gfx/2D.h"
-#include "mozilla/LinkedList.h"
 #include "mozilla/Mutex.h"
 #include "mozilla/UniquePtr.h"
 #include "mozilla/WeakPtr.h"
-#include "nsCycleCollectionNoteChild.h"
 #include "nsICanvasRenderingContextInternal.h"
 #include "nsLayoutUtils.h"
 #include "nsTArray.h"
@@ -46,7 +44,6 @@
 #include "nsICanvasRenderingContextInternal.h"
 #include "nsIObserver.h"
 #include "mozilla/dom/HTMLCanvasElement.h"
-#include "nsWrapperCache.h"
 #include "nsLayoutUtils.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
@@ -169,7 +166,7 @@ struct WebGLIntOrFloat {
 };
 
 struct IndexedBufferBinding {
-  WebGLRefPtr<WebGLBuffer> mBufferBinding;
+  RefPtr<WebGLBuffer> mBufferBinding;
   uint64_t mRangeStart;
   uint64_t mRangeSize;
 
@@ -233,7 +230,8 @@ class DynDGpuManager final {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class WebGLContext : public SupportsWeakPtr<WebGLContext> {
+class WebGLContext : public VRefCounted,
+                     public SupportsWeakPtr<WebGLContext> {
   friend class ScopedDrawCallWrapper;
   friend class ScopedDrawWithTransformFeedback;
   friend class ScopedFakeVertexAttrib0;
@@ -265,6 +263,8 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                                           uint32_t);
   friend RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
     WebGLProgram* prog, gl::GLContext* gl);
+
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLContext, override)
 
   enum {
     UNPACK_FLIP_Y_WEBGL = 0x9240,
@@ -360,6 +360,26 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   // -
 
+  /*
+
+  Here are the bind calls that are supposed to be fully-validated client side,
+  so that client's binding state doesn't diverge:
+  * AttachShader
+  * DetachShader
+  * BindFramebuffer
+  * FramebufferAttach
+  * BindBuffer
+  * BindBufferRange
+  * BindTexture
+  * UseProgram
+  * BindSampler
+  * BindTransformFeedback
+  * BindVertexArray
+  * BeginQuery
+  * EndQuery
+
+  */
+
   const auto& CurFuncScope() const { return *mFuncScope; }
   const char* FuncName() const;
 
@@ -367,6 +387,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
    public:
     const WebGLContext& mWebGL;
     const char* const mFuncName;
+    bool mBindFailureGuard = false;
 
    public:
     FuncScope(const WebGLContext& webgl, const char* funcName);
@@ -513,6 +534,19 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // This is the entrypoint. Don't test against it directly.
   bool IsContextLost() const { return mIsContextLost; }
 
+  // -
+
+  RefPtr<WebGLBuffer> CreateBuffer();
+  RefPtr<WebGLFramebuffer> CreateFramebuffer();
+  RefPtr<WebGLProgram> CreateProgram();
+  RefPtr<WebGLQuery> CreateQuery();
+  RefPtr<WebGLRenderbuffer> CreateRenderbuffer();
+  RefPtr<WebGLShader> CreateShader(GLenum type);
+  RefPtr<WebGLTexture> CreateTexture();
+  RefPtr<WebGLVertexArray> CreateVertexArray();
+
+  // -
+
   void AttachShader(WebGLProgram& prog, WebGLShader& shader);
   void BindAttribLocation(WebGLProgram& prog, GLuint location,
                           const std::string& name) const;
@@ -535,17 +569,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void CompileShaderANGLE(WebGLShader* shader);
   void CompileShaderBypass(WebGLShader* shader, const nsCString& shaderSource);
   public:
-  already_AddRefed<WebGLFramebuffer> CreateFramebuffer();
-  already_AddRefed<WebGLProgram> CreateProgram();
-  already_AddRefed<WebGLRenderbuffer> CreateRenderbuffer();
-  already_AddRefed<WebGLShader> CreateShader(GLenum type);
-  already_AddRefed<WebGLVertexArray> CreateVertexArray();
   void CullFace(GLenum face);
-  void DeleteFramebuffer(WebGLFramebuffer* fb);
-  void DeleteProgram(WebGLProgram* prog);
-  void DeleteRenderbuffer(WebGLRenderbuffer* rb);
-  void DeleteShader(WebGLShader* shader);
-  void DeleteVertexArray(WebGLVertexArray* vao);
   void DepthFunc(GLenum func);
   void DepthMask(WebGLboolean b);
   void DepthRange(GLclampf zNear, GLclampf zFar);
@@ -647,23 +671,20 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   void BufferSubData(GLenum target, uint64_t dstByteOffset,
                          uint64_t srcDataLen, const uint8_t* srcData) const;
 
-  already_AddRefed<WebGLBuffer> CreateBuffer();
-  void DeleteBuffer(WebGLBuffer* buf);
-
  protected:
   // bound buffer state
-  WebGLRefPtr<WebGLBuffer> mBoundArrayBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundCopyReadBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundCopyWriteBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundPixelPackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundPixelUnpackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundTransformFeedbackBuffer;
-  WebGLRefPtr<WebGLBuffer> mBoundUniformBuffer;
+  RefPtr<WebGLBuffer> mBoundArrayBuffer;
+  RefPtr<WebGLBuffer> mBoundCopyReadBuffer;
+  RefPtr<WebGLBuffer> mBoundCopyWriteBuffer;
+  RefPtr<WebGLBuffer> mBoundPixelPackBuffer;
+  RefPtr<WebGLBuffer> mBoundPixelUnpackBuffer;
+  RefPtr<WebGLBuffer> mBoundTransformFeedbackBuffer;
+  RefPtr<WebGLBuffer> mBoundUniformBuffer;
 
   std::vector<IndexedBufferBinding> mIndexedUniformBufferBindings;
 
-  WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTarget(GLenum target);
-  WebGLRefPtr<WebGLBuffer>& GetBufferSlotByTargetIndexed(GLenum target,
+  RefPtr<WebGLBuffer>& GetBufferSlotByTarget(GLenum target);
+  RefPtr<WebGLBuffer>& GetBufferSlotByTargetIndexed(GLenum target,
                                                          GLuint index);
 
   // -
@@ -689,15 +710,13 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
   // -----------------------------------------------------------------------------
   // Queries (WebGL2ContextQueries.cpp)
  protected:
-  WebGLRefPtr<WebGLQuery> mQuerySlot_SamplesPassed;
-  WebGLRefPtr<WebGLQuery> mQuerySlot_TFPrimsWritten;
-  WebGLRefPtr<WebGLQuery> mQuerySlot_TimeElapsed;
+  RefPtr<WebGLQuery> mQuerySlot_SamplesPassed;
+  RefPtr<WebGLQuery> mQuerySlot_TFPrimsWritten;
+  RefPtr<WebGLQuery> mQuerySlot_TimeElapsed;
 
-  WebGLRefPtr<WebGLQuery>* ValidateQuerySlotByTarget(GLenum target);
+  RefPtr<WebGLQuery>* ValidateQuerySlotByTarget(GLenum target);
 
  public:
-  already_AddRefed<WebGLQuery> CreateQuery();
-  void DeleteQuery(WebGLQuery* query);
   void BeginQuery(GLenum target, WebGLQuery& query);
   void EndQuery(GLenum target);
   Maybe<double> GetQueryParameter(const WebGLQuery& query, GLenum pname) const;
@@ -755,8 +774,6 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   void ActiveTexture(GLenum texUnit);
   void BindTexture(GLenum texTarget, WebGLTexture* tex);
-  already_AddRefed<WebGLTexture> CreateTexture();
-  void DeleteTexture(WebGLTexture* tex);
   void GenerateMipmap(GLenum texTarget);
 
   Maybe<double> GetTexParameter(const WebGLTexture&, GLenum pname) const;
@@ -1032,7 +1049,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
            IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers);
   }
 
-  WebGLRefPtr<WebGLBuffer>* ValidateBufferSlot(GLenum target);
+  RefPtr<WebGLBuffer>* ValidateBufferSlot(GLenum target);
 
  public:
   WebGLBuffer* ValidateBufferSelection(GLenum target) const;
@@ -1042,7 +1059,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   bool ValidateIndexedBufferBinding(
       GLenum target, GLuint index,
-      WebGLRefPtr<WebGLBuffer>** const out_genericBinding,
+      RefPtr<WebGLBuffer>** const out_genericBinding,
       IndexedBufferBinding** const out_indexedBinding);
 
  public:
@@ -1081,7 +1098,7 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
  public:
   template <typename T>
   bool ValidateObject(const char* const argName,
-                      const WebGLRefCountedObject<T>& object) const {
+                      const T& object) const {
     // Todo: Remove all callers.
     return true;
   }
@@ -1101,44 +1118,21 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
 
   ////
 
-  template <typename T>
-  bool ValidateIsObject(const WebGLRefCountedObject<T>* const object) const {
-    if (IsContextLost()) return false;
-    if (!object) return false;
-    if (object->IsDeleted()) return false;
-    return true;
-  }
-
-  template <typename T>
-  bool ValidateDeleteObject(const WebGLRefCountedObject<T>* const object) {
-    if (IsContextLost()) return false;
-    if (!object) return false;
-    if (object->IsDeleteRequested()) return false;
-    return true;
-  }
-
-  ////
-
- private:
-  // -------------------------------------------------------------------------
-  // Context customization points
-  virtual WebGLVertexArray* CreateVertexArrayImpl();
-
  public:
   void LoseContext(
       webgl::ContextLossReason reason = webgl::ContextLossReason::None);
   const WebGLPixelStore GetPixelStore() const { return mPixelStore; }
 
  protected:
-  nsTArray<WebGLRefPtr<WebGLTexture>> mBound2DTextures;
-  nsTArray<WebGLRefPtr<WebGLTexture>> mBoundCubeMapTextures;
-  nsTArray<WebGLRefPtr<WebGLTexture>> mBound3DTextures;
-  nsTArray<WebGLRefPtr<WebGLTexture>> mBound2DArrayTextures;
-  nsTArray<WebGLRefPtr<WebGLSampler>> mBoundSamplers;
+  nsTArray<RefPtr<WebGLTexture>> mBound2DTextures;
+  nsTArray<RefPtr<WebGLTexture>> mBoundCubeMapTextures;
+  nsTArray<RefPtr<WebGLTexture>> mBound3DTextures;
+  nsTArray<RefPtr<WebGLTexture>> mBound2DArrayTextures;
+  nsTArray<RefPtr<WebGLSampler>> mBoundSamplers;
 
   void ResolveTexturesForDraw() const;
 
-  WebGLRefPtr<WebGLProgram> mCurrentProgram;
+  RefPtr<WebGLProgram> mCurrentProgram;
   RefPtr<const webgl::LinkedProgramInfo> mActiveProgramLinkInfo;
 
   bool ValidateFramebufferTarget(GLenum target) const;
@@ -1148,29 +1142,17 @@ class WebGLContext : public SupportsWeakPtr<WebGLContext> {
                                      GLsizei* const out_glNumAttachments,
                                      const GLenum** const out_glAttachments);
 
-  WebGLRefPtr<WebGLFramebuffer> mBoundDrawFramebuffer;
-  WebGLRefPtr<WebGLFramebuffer> mBoundReadFramebuffer;
-  WebGLRefPtr<WebGLTransformFeedback> mBoundTransformFeedback;
-  WebGLRefPtr<WebGLVertexArray> mBoundVertexArray;
+  RefPtr<WebGLFramebuffer> mBoundDrawFramebuffer;
+  RefPtr<WebGLFramebuffer> mBoundReadFramebuffer;
+  RefPtr<WebGLTransformFeedback> mBoundTransformFeedback;
+  RefPtr<WebGLVertexArray> mBoundVertexArray;
 
  public:
   const auto& BoundReadFb() const { return mBoundReadFramebuffer; }
 
  protected:
-  LinkedList<WebGLBuffer> mBuffers;
-  LinkedList<WebGLFramebuffer> mFramebuffers;
-  LinkedList<WebGLProgram> mPrograms;
-  LinkedList<WebGLQuery> mQueries;
-  LinkedList<WebGLRenderbuffer> mRenderbuffers;
-  LinkedList<WebGLSampler> mSamplers;
-  LinkedList<WebGLShader> mShaders;
-  LinkedList<WebGLSync> mSyncs;
-  LinkedList<WebGLTexture> mTextures;
-  LinkedList<WebGLTransformFeedback> mTransformFeedbacks;
-  LinkedList<WebGLVertexArray> mVertexArrays;
-
-  WebGLRefPtr<WebGLTransformFeedback> mDefaultTransformFeedback;
-  WebGLRefPtr<WebGLVertexArray> mDefaultVertexArray;
+  RefPtr<WebGLTransformFeedback> mDefaultTransformFeedback;
+  RefPtr<WebGLVertexArray> mDefaultVertexArray;
 
   WebGLPixelStore mPixelStore;
 
@@ -1438,53 +1420,12 @@ struct IndexedName final {
   std::string name;
   uint64_t index;
 };
-
-// ------------
-
-/*
-Here are the bind calls that are supposed to be fully-validated client side,
-so that client's binding state doesn't diverge:
-* AttachShader
-* DetachShader
-* BindFramebuffer
-* FramebufferAttach
-* BindBuffer
-* BindBufferRange
-* BindTexture
-* UseProgram
-* BindSampler
-* BindTransformFeedback
-* BindVertexArray
-* BeginQuery
-* EndQuery
-*/
-class ScopedBindFailureGuard final {
-  WebGLContext* mContext; // LoseContext requires non-const.
-
-public:
-  explicit ScopedBindFailureGuard(WebGLContext& context) : mContext(&context) {}
-
-  ~ScopedBindFailureGuard() {
-    if (mContext) {
-      OnFailure();
-    }
-  }
-
-  /// Call OnSuccess when call succeeded.
-  void OnSuccess() {
-    mContext = nullptr;
-  }
-
-private:
-  void OnFailure();
-};
+Maybe<IndexedName> ParseIndexed(const std::string& str);
 
 }  // namespace webgl
 
 webgl::LinkActiveInfo GetLinkActiveInfo(gl::GLContext& gl, const GLuint prog, const bool webgl2,
                                  const std::unordered_map<std::string, std::string>& nameUnmap);
-
-Maybe<webgl::IndexedName> ParseIndexed(const std::string& str);
 
 }  // namespace mozilla
 

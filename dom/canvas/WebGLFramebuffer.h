@@ -8,9 +8,7 @@
 
 #include <vector>
 
-#include "mozilla/LinkedList.h"
 #include "mozilla/WeakPtr.h"
-#include "nsWrapperCache.h"
 
 #include "WebGLObjectModel.h"
 #include "WebGLRenderbuffer.h"
@@ -50,8 +48,8 @@ class WebGLFBAttachPoint final {
   const bool mDeferAttachment = false;
 
  private:
-  WebGLRefPtr<WebGLTexture> mTexturePtr;
-  WebGLRefPtr<WebGLRenderbuffer> mRenderbufferPtr;
+  RefPtr<WebGLTexture> mTexturePtr;
+  RefPtr<WebGLRenderbuffer> mRenderbufferPtr;
   uint32_t mTexImageLayer = 0;
   uint8_t mTexImageZLayerCount = 1;
   uint8_t mTexImageLevel = 0;
@@ -70,12 +68,9 @@ class WebGLFBAttachPoint final {
 
   ////
 
-  void Unlink() { Clear(); }
-
   bool HasAttachment() const {
     return bool(mTexturePtr) | bool(mRenderbufferPtr);
   }
-  bool IsDeleteRequested() const;
 
   void Clear();
 
@@ -134,11 +129,11 @@ class WebGLFBAttachPoint final {
   };
 };
 
-class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
-                               public LinkedListElement<WebGLFramebuffer>,
+class WebGLFramebuffer final : public WebGLContextBoundObject,
                                public SupportsWeakPtr<WebGLFramebuffer>,
                                public CacheInvalidator {
  public:
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLFramebuffer, override)
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLFramebuffer)
 
   const GLuint mGLName;
@@ -192,18 +187,8 @@ class WebGLFramebuffer final : public WebGLRefCountedObject<WebGLFramebuffer>,
   ////
 
  public:
-  NS_INLINE_DECL_REFCOUNTING(WebGLFramebuffer)
-
   WebGLFramebuffer(WebGLContext* webgl, GLuint fbo);
-
- private:
-  ~WebGLFramebuffer() {
-    DeleteOnce();
-    InvalidateCaches();
-  }
-
- public:
-  void Delete();
+  ~WebGLFramebuffer() override;
 
   ////
 

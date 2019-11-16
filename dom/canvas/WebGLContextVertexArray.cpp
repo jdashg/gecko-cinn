@@ -13,9 +13,9 @@
 namespace mozilla {
 
 void WebGLContext::BindVertexArray(WebGLVertexArray* array) {
-  const FuncScope funcScope(*this, "bindVertexArray");
+  FuncScope funcScope(*this, "bindVertexArray");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (array && !ValidateObject("array", *array)) return;
 
@@ -30,29 +30,14 @@ void WebGLContext::BindVertexArray(WebGLVertexArray* array) {
     mBoundVertexArray->mHasBeenBound = true;
   }
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
-already_AddRefed<WebGLVertexArray> WebGLContext::CreateVertexArray() {
+RefPtr<WebGLVertexArray> WebGLContext::CreateVertexArray() {
   const FuncScope funcScope(*this, "createVertexArray");
   if (IsContextLost()) return nullptr;
 
-  RefPtr<WebGLVertexArray> globj = CreateVertexArrayImpl();
-  return globj.forget();
-}
-
-WebGLVertexArray* WebGLContext::CreateVertexArrayImpl() {
   return WebGLVertexArray::Create(this);
-}
-
-void WebGLContext::DeleteVertexArray(WebGLVertexArray* array) {
-  const FuncScope funcScope(*this, "deleteVertexArray");
-  if (!ValidateDeleteObject(array)) return;
-
-  if (mBoundVertexArray == array)
-    BindVertexArray(static_cast<WebGLVertexArray*>(nullptr));
-
-  array->RequestDelete();
 }
 
 }  // namespace mozilla

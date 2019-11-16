@@ -13,7 +13,7 @@ namespace mozilla {
 // -------------------------------------------------------------------------
 // Transform Feedback
 
-already_AddRefed<WebGLTransformFeedback>
+RefPtr<WebGLTransformFeedback>
 WebGL2Context::CreateTransformFeedback() {
   const FuncScope funcScope(*this, "createTransformFeedback");
   if (IsContextLost()) return nullptr;
@@ -21,30 +21,13 @@ WebGL2Context::CreateTransformFeedback() {
   GLuint tf = 0;
   gl->fGenTransformFeedbacks(1, &tf);
 
-  RefPtr<WebGLTransformFeedback> ret = new WebGLTransformFeedback(this, tf);
-  return ret.forget();
-}
-
-void WebGL2Context::DeleteTransformFeedback(WebGLTransformFeedback* tf) {
-  const FuncScope funcScope(*this, "deleteTransformFeedback");
-  if (!ValidateDeleteObject(tf)) return;
-
-  if (tf->mIsActive) {
-    ErrorInvalidOperation("Cannot delete active transform feedbacks.");
-    return;
-  }
-
-  if (mBoundTransformFeedback == tf) {
-    BindTransformFeedback(nullptr);
-  }
-
-  tf->RequestDelete();
+  return new WebGLTransformFeedback(this, tf);
 }
 
 void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
-  const FuncScope funcScope(*this, "bindTransformFeedback");
+  FuncScope funcScope(*this, "bindTransformFeedback");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (tf && !ValidateObject("tf", *tf)) return;
 
@@ -58,7 +41,7 @@ void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
 
   ////
 
-  mBoundTransformFeedback = (tf ? tf : mDefaultTransformFeedback);
+  mBoundTransformFeedback = (tf ? tf : mDefaultTransformFeedback.get());
 
   gl->fBindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, mBoundTransformFeedback->mGLName);
 
@@ -66,7 +49,7 @@ void WebGL2Context::BindTransformFeedback(WebGLTransformFeedback* tf) {
     mBoundTransformFeedback->mHasBeenBound = true;
   }
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGL2Context::BeginTransformFeedback(GLenum primMode) {

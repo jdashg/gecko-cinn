@@ -10,10 +10,8 @@
 #include <set>
 #include <vector>
 
-#include "mozilla/LinkedList.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/WeakPtr.h"
-#include "nsWrapperCache.h"
 
 #include "CacheInvalidator.h"
 #include "WebGLContext.h"
@@ -129,14 +127,13 @@ struct LinkedProgramInfo final : public RefCounted<LinkedProgramInfo>,
 
 }  // namespace webgl
 
-class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
-                           public LinkedListElement<WebGLProgram> {
+class WebGLProgram final : public WebGLContextBoundObject {
   friend class WebGLTransformFeedback;
   friend struct webgl::LinkedProgramInfo;
 
- public:
-  NS_INLINE_DECL_REFCOUNTING(WebGLProgram)
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(WebGLProgram, override)
 
+ public:
   explicit WebGLProgram(WebGLContext* webgl);
 
   void Delete();
@@ -179,8 +176,8 @@ class WebGLProgram final : public WebGLRefCountedObject<WebGLProgram>,
   const GLuint mGLName;
 
  private:
-  WebGLRefPtr<WebGLShader> mVertShader;
-  WebGLRefPtr<WebGLShader> mFragShader;
+  RefPtr<WebGLShader> mVertShader;
+  RefPtr<WebGLShader> mFragShader;
   size_t mNumActiveTFOs;
 
   std::map<std::string, GLuint> mNextLink_BoundAttribLocs;

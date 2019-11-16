@@ -14,7 +14,7 @@ namespace mozilla {
 // -------------------------------------------------------------------------
 // Sync objects
 
-already_AddRefed<WebGLSync> WebGL2Context::FenceSync(GLenum condition,
+RefPtr<WebGLSync> WebGL2Context::FenceSync(GLenum condition,
                                                      GLbitfield flags) {
   const FuncScope funcScope(*this, "fenceSync");
   if (IsContextLost()) return nullptr;
@@ -34,14 +34,7 @@ already_AddRefed<WebGLSync> WebGL2Context::FenceSync(GLenum condition,
   const auto& availRunnable = EnsureAvailabilityRunnable();
   availRunnable->mSyncs.push_back(globj);
 
-  return globj.forget();
-}
-
-void WebGL2Context::DeleteSync(WebGLSync* sync) {
-  const FuncScope funcScope(*this, "deleteSync");
-  if (!ValidateDeleteObject(sync)) return;
-
-  sync->RequestDelete();
+  return globj;
 }
 
 GLenum WebGL2Context::ClientWaitSync(const WebGLSync& sync, GLbitfield flags,

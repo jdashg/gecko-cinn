@@ -55,6 +55,7 @@ class CompositableHost;
  */
 class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   friend class WebGLContext;
+  friend class WebGLMemoryTracker;
 
   using ObjectId = webgl::ObjectId;
 

@@ -674,32 +674,27 @@ webgl::LinkedProgramInfo::GetDrawFetchLimits() const {
 // WebGLProgram
 
 WebGLProgram::WebGLProgram(WebGLContext* webgl)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mGLName(webgl->gl->fCreateProgram()),
       mNumActiveTFOs(0),
       mNextLink_TransformFeedbackBufferMode(LOCAL_GL_INTERLEAVED_ATTRIBS) {
-  mContext->mPrograms.insertBack(this);
 }
 
-WebGLProgram::~WebGLProgram() { DeleteOnce(); }
-
-void WebGLProgram::Delete() {
-  gl::GLContext* gl = mContext->GL();
-  gl->fDeleteProgram(mGLName);
-
+WebGLProgram::~WebGLProgram() {
   mVertShader = nullptr;
   mFragShader = nullptr;
 
   mMostRecentLinkInfo = nullptr;
 
-  LinkedListElement<WebGLProgram>::removeFrom(mContext->mPrograms);
+  if (!mContext) return;
+  mContext->gl->fDeleteProgram(mGLName);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // GL funcs
 
 void WebGLProgram::AttachShader(WebGLShader& shader) {
-  WebGLRefPtr<WebGLShader>* shaderSlot;
+  RefPtr<WebGLShader>* shaderSlot;
   switch (shader.mType) {
     case LOCAL_GL_VERTEX_SHADER:
       shaderSlot = &mVertShader;
@@ -742,7 +737,7 @@ void WebGLProgram::BindAttribLocation(GLuint loc, const std::string& name) {
 }
 
 void WebGLProgram::DetachShader(const WebGLShader& shader) {
-  WebGLRefPtr<WebGLShader>* shaderSlot;
+  RefPtr<WebGLShader>* shaderSlot;
   switch (shader.mType) {
     case LOCAL_GL_VERTEX_SHADER:
       shaderSlot = &mVertShader;
@@ -998,7 +993,7 @@ bool WebGLProgram::ValidateAfterTentativeLink(
     }
     for (const auto& uniform : linkInfo->active.activeUniforms) {
       auto name = uniform.name;
-      const auto maybe = ParseIndexed(name);
+      const auto maybe = webgl::ParseIndexed(name);
       if (maybe) {
         name = maybe->name;
       }

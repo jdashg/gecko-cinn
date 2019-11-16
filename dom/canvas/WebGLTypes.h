@@ -116,9 +116,6 @@ class WebGLSync;
 class WebGLTexture;
 class WebGLTransformFeedback;
 class WebGLVertexArray;
-class WebGLVertexArrayObject;
-template <typename T>
-class WebGLRefPtr;
 
 // -
 

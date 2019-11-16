@@ -4346,7 +4346,7 @@ ClientWebGLContext::GetUniformLocation(const WebGLProgramJS& prog,
       if (activeUniform.block_index != -1) continue;
 
       auto baseName = activeUniform.name;
-      const auto indexed = ParseIndexed(baseName);
+      const auto indexed = webgl::ParseIndexed(baseName);
       if (indexed) {
         baseName = indexed->name;
       }

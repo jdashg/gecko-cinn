@@ -122,15 +122,15 @@ bool WebGLContext::IsTexParamValid(GLenum pname) const {
 // GL calls
 
 void WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex) {
-  const FuncScope funcScope(*this, "bindTexture");
+  FuncScope funcScope(*this, "bindTexture");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (newTex && !ValidateObject("tex", *newTex)) return;
 
   // Need to check rawTarget first before comparing against newTex->Target() as
   // newTex->Target() returns a TexTarget, which will assert on invalid value.
-  WebGLRefPtr<WebGLTexture>* currentTexPtr = nullptr;
+  RefPtr<WebGLTexture>* currentTexPtr = nullptr;
   switch (rawTarget) {
     case LOCAL_GL_TEXTURE_2D:
       currentTexPtr = &mBound2DTextures[mActiveTexture];
@@ -163,7 +163,7 @@ void WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex) {
 
   *currentTexPtr = newTex;
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::GenerateMipmap(GLenum rawTexTarget) {

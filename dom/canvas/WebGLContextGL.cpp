@@ -81,13 +81,13 @@ void WebGLContext::ActiveTexture(GLenum texture) {
 }
 
 void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) {
-  const FuncScope funcScope(*this, "attachShader");
+  FuncScope funcScope(*this, "attachShader");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   prog.AttachShader(shader);
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
@@ -99,9 +99,9 @@ void WebGLContext::BindAttribLocation(WebGLProgram& prog, GLuint location,
 }
 
 void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
-  const FuncScope funcScope(*this, "bindFramebuffer");
+  FuncScope funcScope(*this, "bindFramebuffer");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (!ValidateFramebufferTarget(target)) return;
 
@@ -127,7 +127,7 @@ void WebGLContext::BindFramebuffer(GLenum target, WebGLFramebuffer* wfb) {
     default:
       return;
   }
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::BlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha) {
@@ -235,14 +235,14 @@ GLenum WebGLContext::CheckFramebufferStatus(GLenum target) {
   return fb->CheckFramebufferStatus().get();
 }
 
-already_AddRefed<WebGLProgram> WebGLContext::CreateProgram() {
+RefPtr<WebGLProgram> WebGLContext::CreateProgram() {
   const FuncScope funcScope(*this, "createProgram");
   if (IsContextLost()) return nullptr;
-  RefPtr<WebGLProgram> globj = new WebGLProgram(this);
-  return globj.forget();
+
+  return new WebGLProgram(this);
 }
 
-already_AddRefed<WebGLShader> WebGLContext::CreateShader(GLenum type) {
+RefPtr<WebGLShader> WebGLContext::CreateShader(GLenum type) {
   const FuncScope funcScope(*this, "createShader");
   if (IsContextLost()) return nullptr;
 
@@ -251,8 +251,7 @@ already_AddRefed<WebGLShader> WebGLContext::CreateShader(GLenum type) {
     return nullptr;
   }
 
-  RefPtr<WebGLShader> shader = new WebGLShader(this, type);
-  return shader.forget();
+  return new WebGLShader(this, type);
 }
 
 void WebGLContext::CullFace(GLenum face) {
@@ -264,81 +263,15 @@ void WebGLContext::CullFace(GLenum face) {
   gl->fCullFace(face);
 }
 
-void WebGLContext::DeleteFramebuffer(WebGLFramebuffer* fbuf) {
-  const FuncScope funcScope(*this, "deleteFramebuffer");
-  if (!ValidateDeleteObject(fbuf)) return;
-
-  fbuf->RequestDelete();
-
-  if (mBoundReadFramebuffer == mBoundDrawFramebuffer) {
-    if (mBoundDrawFramebuffer == fbuf) {
-      BindFramebuffer(LOCAL_GL_FRAMEBUFFER,
-                      static_cast<WebGLFramebuffer*>(nullptr));
-    }
-  } else if (mBoundDrawFramebuffer == fbuf) {
-    BindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER,
-                    static_cast<WebGLFramebuffer*>(nullptr));
-  } else if (mBoundReadFramebuffer == fbuf) {
-    BindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER,
-                    static_cast<WebGLFramebuffer*>(nullptr));
-  }
-}
-
-void WebGLContext::DeleteRenderbuffer(WebGLRenderbuffer* rbuf) {
-  const FuncScope funcScope(*this, "deleteRenderbuffer");
-  if (!ValidateDeleteObject(rbuf)) return;
-
-  if (mBoundDrawFramebuffer) mBoundDrawFramebuffer->DetachRenderbuffer(rbuf);
-
-  if (mBoundReadFramebuffer) mBoundReadFramebuffer->DetachRenderbuffer(rbuf);
-
-  rbuf->RequestDelete();
-}
-
-void WebGLContext::DeleteTexture(WebGLTexture* tex) {
-  const FuncScope funcScope(*this, "deleteTexture");
-  if (!ValidateDeleteObject(tex)) return;
-
-  if (mBoundDrawFramebuffer) mBoundDrawFramebuffer->DetachTexture(tex);
-
-  if (mBoundReadFramebuffer) mBoundReadFramebuffer->DetachTexture(tex);
-
-  GLuint activeTexture = mActiveTexture;
-  for (const auto i : IntegerRange(mBound2DTextures.Length())) {
-    if (mBound2DTextures[i] == tex || mBoundCubeMapTextures[i] == tex ||
-        mBound3DTextures[i] == tex || mBound2DArrayTextures[i] == tex) {
-      ActiveTexture(LOCAL_GL_TEXTURE0 + i);
-      BindTexture(tex->Target().get(), nullptr);
-    }
-  }
-  ActiveTexture(LOCAL_GL_TEXTURE0 + activeTexture);
-
-  tex->RequestDelete();
-}
-
-void WebGLContext::DeleteProgram(WebGLProgram* prog) {
-  const FuncScope funcScope(*this, "deleteProgram");
-  if (!ValidateDeleteObject(prog)) return;
-
-  prog->RequestDelete();
-}
-
-void WebGLContext::DeleteShader(WebGLShader* shader) {
-  const FuncScope funcScope(*this, "deleteShader");
-  if (!ValidateDeleteObject(shader)) return;
-
-  shader->RequestDelete();
-}
-
 void WebGLContext::DetachShader(WebGLProgram& prog,
                                 const WebGLShader& shader) {
-  const FuncScope funcScope(*this, "detachShader");
+  FuncScope funcScope(*this, "detachShader");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   prog.DetachShader(shader);
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 static bool ValidateComparisonEnum(WebGLContext& webgl, const GLenum func) {
@@ -384,8 +317,8 @@ void WebGLContext::DepthRange(GLfloat zNear, GLfloat zFar) {
 void WebGLContext::FramebufferAttach(
     const GLenum target, const GLenum attachSlot, const GLenum bindImageTarget,
     const webgl::FbAttachInfo& toAttach) {
-  const FuncScope funcScope(*this, "framebufferAttach");
-  webgl::ScopedBindFailureGuard failureGuard(*this);
+  FuncScope funcScope(*this, "framebufferAttach");
+  funcScope.mBindFailureGuard = true;
   const auto& limits = *mLimits;
 
   if (!ValidateFramebufferTarget(target)) return;
@@ -417,7 +350,7 @@ void WebGLContext::FramebufferAttach(
 
   if (!fb->FramebufferAttach(attachSlot, safeToAttach)) return;
 
-  failureGuard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 // -
@@ -628,15 +561,14 @@ Maybe<double> WebGLContext::GetRenderbufferParameter(const WebGLRenderbuffer& rb
   return Nothing();
 }
 
-already_AddRefed<WebGLTexture> WebGLContext::CreateTexture() {
+RefPtr<WebGLTexture> WebGLContext::CreateTexture() {
   const FuncScope funcScope(*this, "createTexture");
   if (IsContextLost()) return nullptr;
 
   GLuint tex = 0;
   gl->fGenTextures(1, &tex);
 
-  RefPtr<WebGLTexture> globj = new WebGLTexture(this, tex);
-  return globj.forget();
+  return new WebGLTexture(this, tex);
 }
 
 GLenum WebGLContext::GetError() {
@@ -1416,14 +1348,14 @@ void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const bool transpose,
 ////////////////////////////////////////////////////////////////////////////////
 
 void WebGLContext::UseProgram(WebGLProgram* prog) {
-  const FuncScope funcScope(*this, "useProgram");
+  FuncScope funcScope(*this, "useProgram");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (!prog) {
     mCurrentProgram = nullptr;
     mActiveProgramLinkInfo = nullptr;
-    guard.OnSuccess();
+    funcScope.mBindFailureGuard = false;
     return;
   }
 
@@ -1433,7 +1365,8 @@ void WebGLContext::UseProgram(WebGLProgram* prog) {
 
   mCurrentProgram = prog;
   mActiveProgramLinkInfo = mCurrentProgram->LinkInfo();
-  guard.OnSuccess();
+
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::ValidateProgram(const WebGLProgram& prog) {
@@ -1443,23 +1376,21 @@ void WebGLContext::ValidateProgram(const WebGLProgram& prog) {
   prog.ValidateProgram();
 }
 
-already_AddRefed<WebGLFramebuffer> WebGLContext::CreateFramebuffer() {
+RefPtr<WebGLFramebuffer> WebGLContext::CreateFramebuffer() {
   const FuncScope funcScope(*this, "createFramebuffer");
   if (IsContextLost()) return nullptr;
 
   GLuint fbo = 0;
   gl->fGenFramebuffers(1, &fbo);
 
-  RefPtr<WebGLFramebuffer> globj = new WebGLFramebuffer(this, fbo);
-  return globj.forget();
+  return new WebGLFramebuffer(this, fbo);
 }
 
-already_AddRefed<WebGLRenderbuffer> WebGLContext::CreateRenderbuffer() {
+RefPtr<WebGLRenderbuffer> WebGLContext::CreateRenderbuffer() {
   const FuncScope funcScope(*this, "createRenderbuffer");
   if (IsContextLost()) return nullptr;
 
-  RefPtr<WebGLRenderbuffer> globj = new WebGLRenderbuffer(this);
-  return globj.forget();
+  return new WebGLRenderbuffer(this);
 }
 
 void WebGLContext::Viewport(GLint x, GLint y, GLsizei width, GLsizei height) {

@@ -66,7 +66,6 @@ EXPORTS.mozilla.dom += [
     'WebGLIpdl.h',
     'WebGLParent.h',
     'WebGLTypes.h',
-    'WebGLVertexArrayObject.h',
 ]
 
 # Canvas 2D and common sources
@@ -103,7 +102,6 @@ UNIFIED_SOURCES += [
     'WebGL2ContextSync.cpp',
     'WebGL2ContextTransformFeedback.cpp',
     'WebGL2ContextUniforms.cpp',
-    'WebGL2ContextVAOs.cpp',
     'WebGLBuffer.cpp',
     'WebGLChild.cpp',
     'WebGLContext.cpp',
@@ -162,7 +160,6 @@ UNIFIED_SOURCES += [
     'WebGLVertexArray.cpp',
     'WebGLVertexArrayFake.cpp',
     'WebGLVertexArrayGL.cpp',
-    'WebGLVertexArrayObject.cpp',
     'WebGLVertexAttribData.cpp',
 ]
 

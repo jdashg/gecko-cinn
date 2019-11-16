@@ -36,11 +36,10 @@ static bool EmulatePackedDepthStencil(gl::GLContext* gl) {
 }
 
 WebGLRenderbuffer::WebGLRenderbuffer(WebGLContext* webgl)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mPrimaryRB(DoCreateRenderbuffer(webgl->gl)),
       mEmulatePackedDepthStencil(EmulatePackedDepthStencil(webgl->gl)),
       mSecondaryRB(0) {
-  mContext->mRenderbuffers.insertBack(this);
 
   // Bind our RB, or we might end up calling FramebufferRenderbuffer before we
   // ever call BindRenderbuffer, since webgl.bindRenderbuffer doesn't actually
@@ -49,15 +48,15 @@ WebGLRenderbuffer::WebGLRenderbuffer(WebGLContext* webgl)
   mContext->gl->fBindRenderbuffer(LOCAL_GL_RENDERBUFFER, 0);
 }
 
-void WebGLRenderbuffer::Delete() {
+WebGLRenderbuffer::~WebGLRenderbuffer() {
+  mImageInfo = webgl::ImageInfo();
+
+  if (!mContext) return;
+
   mContext->gl->fDeleteRenderbuffers(1, &mPrimaryRB);
   if (mSecondaryRB) {
     mContext->gl->fDeleteRenderbuffers(1, &mSecondaryRB);
   }
-
-  mImageInfo = webgl::ImageInfo();
-
-  LinkedListElement<WebGLRenderbuffer>::removeFrom(mContext->mRenderbuffers);
 }
 
 static GLenum DoRenderbufferStorageMaybeMultisample(gl::GLContext* gl,

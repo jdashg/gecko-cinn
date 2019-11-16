@@ -9,31 +9,17 @@
 
 namespace mozilla {
 
-already_AddRefed<WebGLSampler> WebGL2Context::CreateSampler() {
+RefPtr<WebGLSampler> WebGL2Context::CreateSampler() {
   const FuncScope funcScope(*this, "createSampler");
   if (IsContextLost()) return nullptr;
 
-  RefPtr<WebGLSampler> globj = new WebGLSampler(this);
-  return globj.forget();
-}
-
-void WebGL2Context::DeleteSampler(WebGLSampler* sampler) {
-  const FuncScope funcScope(*this, "deleteSampler");
-  if (!ValidateDeleteObject(sampler)) return;
-
-  for (auto& slot : mBoundSamplers) {
-    if (slot == sampler) {
-      slot = nullptr;
-    }
-  }
-
-  sampler->RequestDelete();
+  return new WebGLSampler(this);
 }
 
 void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
-  const FuncScope funcScope(*this, "bindSampler");
+  FuncScope funcScope(*this, "bindSampler");
   if (IsContextLost()) return;
-  webgl::ScopedBindFailureGuard guard(*this);
+  funcScope.mBindFailureGuard = true;
 
   if (sampler && !ValidateObject("sampler", *sampler)) return;
 
@@ -46,7 +32,7 @@ void WebGL2Context::BindSampler(GLuint unit, WebGLSampler* sampler) {
 
   mBoundSamplers[unit] = sampler;
 
-  guard.OnSuccess();
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGL2Context::SamplerParameteri(WebGLSampler& sampler, GLenum pname,

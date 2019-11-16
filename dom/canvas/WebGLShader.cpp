@@ -69,14 +69,16 @@ static void GetCompilationStatusAndLog(gl::GLContext* gl, GLuint shader,
 ////////////////////////////////////////////////////////////////////////////////
 
 WebGLShader::WebGLShader(WebGLContext* webgl, GLenum type)
-    : WebGLRefCountedObject(webgl),
+    : WebGLContextBoundObject(webgl),
       mGLName(webgl->gl->fCreateShader(type)),
       mType(type) {
   mCompileResults = std::make_unique<webgl::ShaderValidatorResults>();
-  mContext->mShaders.insertBack(this);
 }
 
-WebGLShader::~WebGLShader() { DeleteOnce(); }
+WebGLShader::~WebGLShader() {
+  if (!mContext) return;
+  mContext->gl->fDeleteShader(mGLName);
+}
 
 void WebGLShader::ShaderSource(const std::string& source) {
   if (!ValidateGLSLPreprocString(mContext, source)) return;
@@ -188,14 +190,6 @@ size_t WebGLShader::SizeOfIncludingThis(MallocSizeOf mallocSizeOf) const {
          mSource.size()+1 +
          mCompileResults->SizeOfIncludingThis(mallocSizeOf) +
          mCompilationLog.size()+1;
-}
-
-void WebGLShader::Delete() {
-  gl::GLContext* gl = mContext->GL();
-
-  gl->fDeleteShader(mGLName);
-
-  LinkedListElement<WebGLShader>::removeFrom(mContext->mShaders);
 }
 
 }  // namespace mozilla
