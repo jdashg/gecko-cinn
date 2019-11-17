@@ -206,15 +206,6 @@ class ObjectJS {
 
 } // namespace webgl
 
-class CcMethods {
-public:
-  virtual void CcTraverse(nsCycleCollectionTraversalCallback&) const = 0;
-  virtual void CcUnlink() = 0;
-
-  CcMethods& CcViaMethods() { return *this; }
-  const CcMethods& CcViaMethods() const { return *this; }
-};
-
 // -------------------------
 
 class WebGLBufferJS final : public nsWrapperCache, public webgl::ObjectJS {
@@ -236,7 +227,7 @@ public:
 
 // -
 
-class WebGLFramebufferJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
+class WebGLFramebufferJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
 public:
@@ -259,14 +250,11 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 // -
 
-struct WebGLProgramInner final : public SupportsWeakPtr<WebGLProgramInner>,
-                                 public CcMethods {
+struct WebGLProgramInner final : public SupportsWeakPtr<WebGLProgramInner> {
   const RefPtr<WebGLProgramJS> js;
 
   NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(WebGLProgramInner)
@@ -277,14 +265,11 @@ struct WebGLProgramInner final : public SupportsWeakPtr<WebGLProgramInner>,
 
 private:
   virtual ~WebGLProgramInner() = default;
-
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 struct WebGLShaderInner;
 
-class WebGLProgramJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
+class WebGLProgramJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
  public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramJS)
@@ -318,8 +303,6 @@ public:
   }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 // -
@@ -377,8 +360,7 @@ public:
 
 // -
 
-struct WebGLShaderInner final : public SupportsWeakPtr<WebGLShaderInner>,
-                                public CcMethods {
+struct WebGLShaderInner final : public SupportsWeakPtr<WebGLShaderInner> {
   const RefPtr<WebGLShaderJS> js;
 
   NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(WebGLShaderInner)
@@ -388,9 +370,6 @@ struct WebGLShaderInner final : public SupportsWeakPtr<WebGLShaderInner>,
   explicit WebGLShaderInner(const RefPtr<WebGLShaderJS>& _js) : js(_js) {}
 private:
   virtual ~WebGLShaderInner() = default;
-
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 class WebGLShaderJS final : public nsWrapperCache, public webgl::ObjectJS {
@@ -462,7 +441,7 @@ public:
 
 // -
 
-class WebGLTransformFeedbackJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
+class WebGLTransformFeedbackJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsTransformFeedback until Bind
@@ -480,8 +459,6 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 // -
@@ -513,7 +490,7 @@ public:
 
 // -
 
-class WebGLVertexArrayJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
+class WebGLVertexArrayJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsVertexArray until Bind
@@ -530,8 +507,6 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 };
 
 ////////////////////////////////////
@@ -618,8 +593,7 @@ struct TexImageSourceAdapter final : public TexImageSource {
  */
 class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                  public SupportsWeakPtr<ClientWebGLContext>,
-                                 public nsWrapperCache,
-                                 public CcMethods {
+                                 public nsWrapperCache {
   friend class WebGLContextUserData;
   friend class webgl::ObjectJS;
 
@@ -638,9 +612,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
       return dom::WebGLRenderingContext_Binding::Wrap(cx, this, givenProto);
     return dom::WebGL2RenderingContext_Binding::Wrap(cx, this, givenProto);
   }
-
-  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
-  void CcUnlink() override;
 
   // -
 

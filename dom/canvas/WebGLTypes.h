@@ -668,7 +668,6 @@ class RawBuffer {
    */
   RawBuffer(uint64_t len, T* data, bool aTakeData = false)
       : mData(data), mLength(len), mOwnsData(aTakeData) {
-    MOZ_ASSERT(mData && mLength);
   }
 
   RawBuffer(uint64_t len, RefPtr<mozilla::ipc::SharedMemoryBasic>& aSmem)

@@ -4757,35 +4757,134 @@ void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
 
 // -
 
+template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const CcMethods& field,
+                                 const std::vector<RefPtr<T>>& field,
                                  const char* name, uint32_t flags) {
-  field.CcTraverse(callback);
+  for (const auto& cur : field) {
+    ImplCycleCollectionTraverse(callback, cur, name, flags);
+  }
 }
 
-void ImplCycleCollectionUnlink(CcMethods& field) {
-  field.CcUnlink();
+template<typename T>
+void ImplCycleCollectionUnlink(std::vector<RefPtr<T>>& field) {
+  field = {};
+}
+
+// -
+
+template<typename T, size_t N>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::array<RefPtr<T>, N>& field,
+                                 const char* name, uint32_t flags) {
+  for (const auto& cur : field) {
+    ImplCycleCollectionTraverse(callback, cur, name, flags);
+  }
+}
+
+template<typename T, size_t N>
+void ImplCycleCollectionUnlink(std::array<RefPtr<T>, N>& field) {
+  field = {};
+}
+
+// -
+
+template<typename T>
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::unordered_map<GLenum, RefPtr<T>>& field,
+                                 const char* name, uint32_t flags) {
+  for (const auto& pair : field) {
+    ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+  }
+}
+
+template<typename T>
+void ImplCycleCollectionUnlink(std::unordered_map<GLenum, RefPtr<T>>& field) {
+  field = {};
+}
+
+// -
+
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const std::unordered_map<GLenum,
+                                      WebGLFramebufferJS::Attachment>& field,
+                                 const char* name, uint32_t flags) {
+  for (const auto& pair : field) {
+    const auto& attach = pair.second;
+    ImplCycleCollectionTraverse(callback, attach.rb, name, flags);
+    ImplCycleCollectionTraverse(callback, attach.tex, name, flags);
+  }
+}
+
+void ImplCycleCollectionUnlink(std::unordered_map<GLenum,
+                                      WebGLFramebufferJS::Attachment>& field) {
+  field = {};
+}
+
+// -
+
+void ImplCycleCollectionUnlink(const RefPtr<ClientWebGLExtensionLoseContext>& field) {
+  const_cast<RefPtr<ClientWebGLExtensionLoseContext>&>(field) = nullptr;
+}
+void ImplCycleCollectionUnlink(const RefPtr<WebGLProgramJS>& field) {
+  const_cast<RefPtr<WebGLProgramJS>&>(field) = nullptr;
+}
+void ImplCycleCollectionUnlink(const RefPtr<WebGLShaderJS>& field) {
+  const_cast<RefPtr<WebGLShaderJS>&>(field) = nullptr;
+}
+
+// ----------------------
+
+void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
+                                 const ClientWebGLContext::NotLostData& field,
+                                 const char* name, uint32_t flags) {
+  ImplCycleCollectionTraverse(callback, field.extensions, "NotLostData.extensions", flags);
+
+  const auto& state = *field.generation;
+
+  ImplCycleCollectionTraverse(callback, state.mDefaultTfo, "state.mDefaultTfo", flags);
+  ImplCycleCollectionTraverse(callback, state.mDefaultVao, "state.mDefaultVao", flags);
+
+  ImplCycleCollectionTraverse(callback, state.mCurrentProgram, "state.mCurrentProgram", flags);
+
+  ImplCycleCollectionTraverse(callback, state.mBoundBufferByTarget, "state.mBoundBufferByTarget", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundUbos, "state.mBoundUbos", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundDrawFb, "state.mBoundDrawFb", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundReadFb, "state.mBoundReadFb", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundRb, "state.mBoundRb", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundTfo, "state.mBoundTfo", flags);
+  ImplCycleCollectionTraverse(callback, state.mBoundVao, "state.mBoundVao", flags);
+  ImplCycleCollectionTraverse(callback, state.mCurrentQueryByTarget, "state.state.mCurrentQueryByTarget", flags);
+
+  for (const auto& texUnit : state.mTexUnits) {
+    ImplCycleCollectionTraverse(callback, texUnit.sampler, "state.mTexUnits[].sampler", flags);
+    ImplCycleCollectionTraverse(callback, texUnit.texByTarget, "state.mTexUnits[].texByTarget", flags);
+  }
+}
+
+void ImplCycleCollectionUnlink(Maybe<ClientWebGLContext::NotLostData>& field) {
+  field = {};
 }
 
 // -----------------------------------------------------
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLBufferJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, CcViaMethods())
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, mAttachments)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, mInnerRef, mNextLink_Shaders)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLQueryJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLRenderbufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSamplerJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLShaderJS, mInnerRef)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSyncJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLTextureJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, mAttribBuffers, mActiveProgram)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLUniformLocationJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, mIndexBuffer, mAttribBuffers)
 
-NS_IMPL_CYCLE_COLLECTION(WebGLProgramInner, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION(WebGLProgramInner, js)
 NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLProgramInner, AddRef)
 NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLProgramInner, Release)
-NS_IMPL_CYCLE_COLLECTION(WebGLShaderInner, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION(WebGLShaderInner, js)
 NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLShaderInner, AddRef)
 NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLShaderInner, Release)
 
@@ -4801,7 +4900,7 @@ NS_INTERFACE_MAP_END
 NS_IMPL_CYCLE_COLLECTING_ADDREF(ClientWebGLContext)
 NS_IMPL_CYCLE_COLLECTING_RELEASE(ClientWebGLContext)
 
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ClientWebGLContext, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ClientWebGLContext, mExtLoseContext, mNotLost)
 
 // -----------------------------
 
@@ -4823,129 +4922,5 @@ _(UniformLocation)
 _(VertexArray)
 
 #undef _
-
-// -----------------------------
-
-void WebGLFramebufferJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  for (const auto& pair : mAttachments) {
-    const auto& attach = pair.second;
-    ImplCycleCollectionTraverse(callback, attach.rb, "mAttachments[].rb", 0);
-    ImplCycleCollectionTraverse(callback, attach.tex, "mAttachments[].tex", 0);
-  }
-}
-
-void WebGLFramebufferJS::CcUnlink() {
-  mAttachments = {};
-}
-
-// -
-
-void WebGLProgramJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  for (const auto& pair : mNextLink_Shaders) {
-    ImplCycleCollectionTraverse(callback, pair.second, "mNextLink_Shaders", 0);
-  }
-  ImplCycleCollectionTraverse(callback, mInnerRef, "mInnerRef", 0);
-}
-
-void WebGLProgramJS::CcUnlink() {
-  mNextLink_Shaders = {};
-  mInnerRef = nullptr;
-}
-
-// -
-
-void WebGLTransformFeedbackJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  for (const auto& cur : mAttribBuffers) {
-    ImplCycleCollectionTraverse(callback, cur, "mAttribBuffers[]", 0);
-  }
-  ImplCycleCollectionTraverse(callback, mActiveProgram, "mActiveProgram", 0);
-}
-
-void WebGLTransformFeedbackJS::CcUnlink() {
-  mAttribBuffers = {};
-  mActiveProgram = nullptr;
-}
-
-// -
-
-void WebGLVertexArrayJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  ImplCycleCollectionTraverse(callback, mIndexBuffer, "mIndexBuffer", 0);
-
-  for (const auto& cur : mAttribBuffers) {
-    ImplCycleCollectionTraverse(callback, cur, "mAttribBuffers[]", 0);
-  }
-}
-
-void WebGLVertexArrayJS::CcUnlink() {
-  mIndexBuffer = nullptr;
-  mAttribBuffers = {};
-}
-
-// -
-
-void WebGLProgramInner::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  ImplCycleCollectionTraverse(callback, js, "js", 0);
-}
-
-void WebGLProgramInner::CcUnlink() {
-  const_cast<RefPtr<WebGLProgramJS>&>(js) = nullptr;
-}
-
-void WebGLShaderInner::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  ImplCycleCollectionTraverse(callback, js, "js", 0);
-}
-
-void WebGLShaderInner::CcUnlink() {
-  const_cast<RefPtr<WebGLShaderJS>&>(js) = nullptr;
-}
-
-// --------------------------------
-
-void ClientWebGLContext::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
-  ImplCycleCollectionTraverse(callback, mExtLoseContext, "mExtLoseContext", 0);
-
-  if (mNotLost) {
-    const auto& state = *(mNotLost->generation);
-
-    ImplCycleCollectionTraverse(callback, state.mDefaultTfo, "mDefaultTfo", 0);
-    ImplCycleCollectionTraverse(callback, state.mDefaultVao, "mDefaultVao", 0);
-
-    ImplCycleCollectionTraverse(callback, state.mCurrentProgram, "mCurrentProgram", 0);
-
-    for (const auto& pair : state.mBoundBufferByTarget) {
-      ImplCycleCollectionTraverse(callback, pair.second, "mBoundBufferByTarget", 0);
-    }
-    for (const auto& cur : state.mBoundUbos) {
-      ImplCycleCollectionTraverse(callback, cur, "mBoundUbos", 0);
-    }
-    ImplCycleCollectionTraverse(callback, state.mBoundDrawFb, "mBoundDrawFb", 0);
-    ImplCycleCollectionTraverse(callback, state.mBoundReadFb, "mBoundReadFb", 0);
-    ImplCycleCollectionTraverse(callback, state.mBoundRb, "mBoundRb", 0);
-    ImplCycleCollectionTraverse(callback, state.mBoundTfo, "mBoundTfo", 0);
-    ImplCycleCollectionTraverse(callback, state.mBoundVao, "mBoundVao", 0);
-    for (const auto& pair : state.mCurrentQueryByTarget) {
-      ImplCycleCollectionTraverse(callback, pair.second, "mCurrentQueryByTarget", 0);
-    }
-
-    for (const auto& texUnit : state.mTexUnits) {
-      ImplCycleCollectionTraverse(callback, texUnit.sampler, "mTexUnits[].sampler", 0);
-      for (const auto& pair : texUnit.texByTarget) {
-        ImplCycleCollectionTraverse(callback, pair.second, "mTexUnits[].texByTarget", 0);
-      }
-    }
-
-    // -
-
-    for (const auto& cur : mNotLost->extensions) {
-      ImplCycleCollectionTraverse(callback, cur, "extensions", 0);
-    }
-  }
-}
-
-void ClientWebGLContext::CcUnlink() {
-  const_cast<RefPtr<ClientWebGLExtensionLoseContext>&>(mExtLoseContext) = nullptr;
-
-  mNotLost = {};
-}
 
 }  // namespace mozilla
