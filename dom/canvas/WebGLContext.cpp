@@ -1985,10 +1985,10 @@ void DynDGpuManager::DispatchTick(
 // -
 
 void WebGLContext::GenerateErrorImpl(const GLenum err,
-                                     const nsACString& text) const {
+                                     const std::string& text) const {
   if (mFuncScope && mFuncScope->mBindFailureGuard) {
     gfxCriticalError() << "mBindFailureGuard failure: Generating error " << EnumString(err)
-                       << ": " << text.BeginReading();
+                       << ": " << text;
   }
   /* ES2 section 2.5 "GL Errors" states that implementations can have
    * multiple 'flags', as errors might be caught in different parts of
@@ -1999,7 +1999,7 @@ void WebGLContext::GenerateErrorImpl(const GLenum err,
   if (!mWebGLError) mWebGLError = err;
 
   if (mHost) {
-    mHost->JsWarning(text.BeginReading());
+    mHost->JsWarning(text);
   }
 }
 

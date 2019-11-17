@@ -212,7 +212,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   void DidRefresh() { mContext->DidRefresh(); }
 
   void GenerateError(const GLenum error, const std::string& text) const {
-    mContext->GenerateError(error, text.c_str());
+    mContext->GenerateErrorImpl(error, text);
   }
 
   void OnContextLoss(webgl::ContextLossReason);

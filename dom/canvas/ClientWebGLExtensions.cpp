@@ -26,8 +26,6 @@ DEFINE_WEBGL_EXTENSION_GOOP(EXT_shader_texture_lod,
                             WebGLExtensionShaderTextureLod)
 DEFINE_WEBGL_EXTENSION_GOOP(EXT_texture_filter_anisotropic,
                             WebGLExtensionTextureFilterAnisotropic)
-DEFINE_WEBGL_EXTENSION_GOOP(EXT_disjoint_timer_query,
-                            WebGLExtensionDisjointTimerQuery)
 DEFINE_WEBGL_EXTENSION_GOOP(MOZ_debug, WebGLExtensionMOZDebug)
 DEFINE_WEBGL_EXTENSION_GOOP(OES_element_index_uint,
                             WebGLExtensionElementIndexUint)
@@ -54,6 +52,21 @@ DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_draw_buffers, WebGLExtensionDrawBuffers)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_explicit_present,
                             WebGLExtensionExplicitPresent)
 DEFINE_WEBGL_EXTENSION_GOOP(WEBGL_lose_context, WebGLExtensionLoseContext)
+
+// --------------
+
+
+JSObject* ClientWebGLExtensionDisjointTimerQuery::WrapObject(JSContext* cx,
+                                         JS::Handle<JSObject*> givenProto) {
+  return dom::EXT_disjoint_timer_query_Binding::Wrap(cx, this, givenProto);
+}
+
+ClientWebGLExtensionDisjointTimerQuery::ClientWebGLExtensionDisjointTimerQuery(
+ ClientWebGLContext& webgl)
+    : ClientWebGLExtensionBase(webgl) {
+  auto& state = webgl.State();
+  (void)state.mCurrentQueryByTarget[LOCAL_GL_TIME_ELAPSED];
+}
 
 // --------------
 // Compressed textures

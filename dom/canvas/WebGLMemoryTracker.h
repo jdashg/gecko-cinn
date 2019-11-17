@@ -20,9 +20,11 @@ class WebGLMemoryTracker : public nsIMemoryReporter {
 
   static StaticRefPtr<WebGLMemoryTracker> sUniqueInstance;
 
+  static RefPtr<WebGLMemoryTracker> Create();
+
   static RefPtr<WebGLMemoryTracker> Get() {
     if (!sUniqueInstance) {
-      sUniqueInstance = new WebGLMemoryTracker;
+      sUniqueInstance = WebGLMemoryTracker::Create().get();
     }
     return sUniqueInstance;
   }

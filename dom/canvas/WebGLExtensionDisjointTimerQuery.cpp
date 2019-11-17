@@ -7,7 +7,6 @@
 #include "WebGLExtensions.h"
 
 #include "GLContext.h"
-#include "mozilla/dom/ToJSValue.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/BindingUtils.h"
 #include "mozilla/StaticPrefs_webgl.h"

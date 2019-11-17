@@ -7,7 +7,6 @@
 
 #include "GLContext.h"
 #include "GLScreenBuffer.h"
-#include "mozilla/dom/ToJSValue.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/Preferences.h"
 #include "MozFramebuffer.h"

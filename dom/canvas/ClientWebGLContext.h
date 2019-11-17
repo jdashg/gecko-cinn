@@ -102,7 +102,7 @@ class WebGLShaderPrecisionFormatJS final : public RefCounted<WebGLShaderPrecisio
 
 // -----------------------
 
-struct WebGLProgramPreventDelete;
+struct WebGLProgramInner;
 class WebGLBufferJS;
 class WebGLFramebufferJS;
 class WebGLQueryJS;
@@ -124,7 +124,7 @@ private:
 public:
   webgl::ExtensionBits mEnabledExtensions;
   std::shared_ptr<webgl::LinkResult> mActiveLinkResult;
-  std::shared_ptr<WebGLProgramPreventDelete> mCurrentProgram;
+  RefPtr<WebGLProgramInner> mCurrentProgram;
 
   RefPtr<WebGLTransformFeedbackJS> mDefaultTfo;
   RefPtr<WebGLVertexArrayJS> mDefaultVao;
@@ -135,8 +135,8 @@ public:
   RefPtr<WebGLFramebufferJS> mBoundReadFb;
   RefPtr<WebGLRenderbufferJS> mBoundRb;
   RefPtr<WebGLTransformFeedbackJS> mBoundTfo;
-  std::unordered_map<GLenum, RefPtr<WebGLQueryJS>> mCurrentQueryByTarget;
   RefPtr<WebGLVertexArrayJS> mBoundVao;
+  std::unordered_map<GLenum, RefPtr<WebGLQueryJS>> mCurrentQueryByTarget;
 
   struct TexUnit final {
     RefPtr<WebGLSamplerJS> sampler;
@@ -150,8 +150,8 @@ public:
   std::vector<TypedQuad> mGenericVertexAttribs;
 
   bool mColorWriteMask[4] = {true, true, true, true};
-  int32_t mScissor[4] = {};
-  int32_t mViewport[4] = {};
+  std::array<int32_t,4> mScissor = {};
+  std::array<int32_t,4> mViewport = {};
   float mClearColor[4] = {1, 1, 1, 1};
   float mBlendColor[4] = {1, 1, 1, 1};
   float mDepthRange[2] = {0, 1};
@@ -167,12 +167,9 @@ public:
   }
 };
 
-class ObjectJS : public nsWrapperCache {
+class ObjectJS {
   friend ClientWebGLContext;
  public:
-  //NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ObjectJS)
-  //NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_NATIVE_CLASS(ObjectJS)
-
   const std::weak_ptr<ContextGenerationInfo> mGeneration;
   const ObjectId mId;
  protected:
@@ -211,7 +208,7 @@ class ObjectJS : public nsWrapperCache {
 
 class CcMethods {
 public:
-  virtual void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const = 0;
+  virtual void CcTraverse(nsCycleCollectionTraversalCallback&) const = 0;
   virtual void CcUnlink() = 0;
 
   CcMethods& CcViaMethods() { return *this; }
@@ -220,7 +217,7 @@ public:
 
 // -------------------------
 
-class WebGLBufferJS final : public webgl::ObjectJS {
+class WebGLBufferJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   webgl::BufferKind mKind = webgl::BufferKind::Undefined; // !IsBuffer until Bind
@@ -239,7 +236,7 @@ public:
 
 // -
 
-class WebGLFramebufferJS final : public webgl::ObjectJS, public CcMethods {
+class WebGLFramebufferJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
 public:
@@ -262,21 +259,32 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
   void CcUnlink() override;
 };
 
 // -
 
-struct WebGLProgramPreventDelete final {
+struct WebGLProgramInner final : public SupportsWeakPtr<WebGLProgramInner>,
+                                 public CcMethods {
   const RefPtr<WebGLProgramJS> js;
 
-  explicit WebGLProgramPreventDelete(const RefPtr<WebGLProgramJS>& _js) : js(_js) {}
+  NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(WebGLProgramInner)
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramInner)
+  MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLProgramInner)
+
+  explicit WebGLProgramInner(const RefPtr<WebGLProgramJS>& _js) : js(_js) {}
+
+private:
+  virtual ~WebGLProgramInner() = default;
+
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
+  void CcUnlink() override;
 };
 
-struct WebGLShaderPreventDelete;
+struct WebGLShaderInner;
 
-class WebGLProgramJS final : public webgl::ObjectJS, public CcMethods {
+class WebGLProgramJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
  public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLProgramJS)
@@ -284,10 +292,10 @@ class WebGLProgramJS final : public webgl::ObjectJS, public CcMethods {
   // Must come first! (see comment in WebGLShaderJS)
 
  private:
-  std::shared_ptr<WebGLProgramPreventDelete> mInnerRef;
-  const std::weak_ptr<WebGLProgramPreventDelete> mInnerWeak;
+  RefPtr<WebGLProgramInner> mInnerRef;
+  const WeakPtr<WebGLProgramInner> mInnerWeak;
 
-  std::unordered_map<GLenum, std::shared_ptr<WebGLShaderPreventDelete>> mNextLink_Shaders;
+  std::unordered_map<GLenum, RefPtr<WebGLShaderInner>> mNextLink_Shaders;
   bool mLastValidate = false;
   mutable std::shared_ptr<webgl::LinkResult> mResult; // Never null, often defaulted.
 
@@ -306,17 +314,17 @@ class WebGLProgramJS final : public webgl::ObjectJS, public CcMethods {
 
 public:
   bool IsDeleted() const override {
-    return !mInnerWeak.lock();
+    return !mInnerWeak.get();
   }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
   void CcUnlink() override;
 };
 
 // -
 
-class WebGLQueryJS final : public webgl::ObjectJS {
+class WebGLQueryJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   GLenum mTarget = 0; // !IsQuery until Bind
@@ -335,7 +343,7 @@ public:
 
 // -
 
-class WebGLRenderbufferJS final : public webgl::ObjectJS {
+class WebGLRenderbufferJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLRenderbufferJS)
@@ -353,7 +361,7 @@ public:
 
 // -
 
-class WebGLSamplerJS final : public webgl::ObjectJS {
+class WebGLSamplerJS final : public nsWrapperCache, public webgl::ObjectJS {
   // IsSampler without Bind
 public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLSamplerJS)
@@ -369,13 +377,23 @@ public:
 
 // -
 
-struct WebGLShaderPreventDelete final {
+struct WebGLShaderInner final : public SupportsWeakPtr<WebGLShaderInner>,
+                                public CcMethods {
   const RefPtr<WebGLShaderJS> js;
 
-  explicit WebGLShaderPreventDelete(const RefPtr<WebGLShaderJS>& _js) : js(_js) {}
+  NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(WebGLShaderInner)
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLShaderInner)
+  MOZ_DECLARE_WEAKREFERENCE_TYPENAME(WebGLShaderInner)
+
+  explicit WebGLShaderInner(const RefPtr<WebGLShaderJS>& _js) : js(_js) {}
+private:
+  virtual ~WebGLShaderInner() = default;
+
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
+  void CcUnlink() override;
 };
 
-class WebGLShaderJS final : public webgl::ObjectJS {
+class WebGLShaderJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
  public:
@@ -387,8 +405,8 @@ class WebGLShaderJS final : public webgl::ObjectJS {
 
  private:
   const GLenum mType;
-  std::shared_ptr<WebGLShaderPreventDelete> mInnerRef;
-  const std::weak_ptr<WebGLShaderPreventDelete> mInnerWeak;
+  RefPtr<WebGLShaderInner> mInnerRef;
+  const WeakPtr<WebGLShaderInner> mInnerWeak;
   std::string mSource;
 
   mutable webgl::CompileResult mResult;
@@ -398,7 +416,7 @@ class WebGLShaderJS final : public webgl::ObjectJS {
 
 public:
   bool IsDeleted() const override {
-    return !mInnerWeak.lock();
+    return !mInnerWeak.get();
   }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
@@ -406,7 +424,7 @@ public:
 
 // -
 
-class WebGLSyncJS final : public webgl::ObjectJS {
+class WebGLSyncJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   bool mSignaled = false;
@@ -425,7 +443,7 @@ public:
 
 // -
 
-class WebGLTextureJS final : public webgl::ObjectJS {
+class WebGLTextureJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   GLenum mTarget = 0; // !IsTexture until Bind
@@ -444,13 +462,13 @@ public:
 
 // -
 
-class WebGLTransformFeedbackJS final : public webgl::ObjectJS, public CcMethods {
+class WebGLTransformFeedbackJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsTransformFeedback until Bind
   bool mActiveOrPaused = false;
   std::vector<RefPtr<WebGLBufferJS>> mAttribBuffers;
-  std::shared_ptr<WebGLProgramPreventDelete> mActiveProgram;
+  RefPtr<WebGLProgramInner> mActiveProgram;
 
  public:
   NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(WebGLTransformFeedbackJS)
@@ -462,7 +480,7 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
   void CcUnlink() override;
 };
 
@@ -470,7 +488,7 @@ public:
 
 std::array<uint16_t,3> ValidUploadElemTypes(GLenum);
 
-class WebGLUniformLocationJS final : public webgl::ObjectJS {
+class WebGLUniformLocationJS final : public nsWrapperCache, public webgl::ObjectJS {
   friend class ClientWebGLContext;
 
   const std::weak_ptr<webgl::LinkResult> mParent;
@@ -495,7 +513,7 @@ public:
 
 // -
 
-class WebGLVertexArrayJS final : public webgl::ObjectJS, public CcMethods {
+class WebGLVertexArrayJS final : public nsWrapperCache, public webgl::ObjectJS, public CcMethods {
   friend class ClientWebGLContext;
 
   bool mHasBeenBound = false; // !IsVertexArray until Bind
@@ -512,7 +530,7 @@ private:
 public:
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
-  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
   void CcUnlink() override;
 };
 
@@ -621,7 +639,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
     return dom::WebGL2RenderingContext_Binding::Wrap(cx, this, givenProto);
   }
 
-  void CcTraverse(nsCycleCollectionTraversalCallback&, const char*, uint32_t) const override;
+  void CcTraverse(nsCycleCollectionTraversalCallback&) const override;
   void CcUnlink() override;
 
   // -
@@ -668,6 +686,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  public:
   const auto& Limits() const { return mNotLost->info.limits; }
+
+  const auto& State() const { return *mNotLost->generation; }
+  auto& State() { return *mNotLost->generation; }
 
   // -
 
@@ -1791,7 +1812,7 @@ public:
   void VertexAttribPointer(GLuint index, GLint size, GLenum type,
                            WebGLboolean normalized, GLsizei stride,
                            WebGLintptr byteOffset) {
-    VertexAttribPointerImpl(false, index, size, normalized, false, stride, byteOffset);
+    VertexAttribPointerImpl(false, index, size, type, normalized, stride, byteOffset);
   }
 
   // -------------------------------- Drawing -------------------------------

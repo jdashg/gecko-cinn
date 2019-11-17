@@ -44,7 +44,6 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/dom/BindingUtils.h"
 #include "mozilla/dom/ImageData.h"
-#include "mozilla/dom/ToJSValue.h"
 #include "mozilla/EndianUtils.h"
 
 namespace mozilla {

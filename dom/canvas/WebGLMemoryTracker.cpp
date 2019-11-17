@@ -73,9 +73,14 @@ NS_IMPL_ISUPPORTS(WebGLMemoryTracker, nsIMemoryReporter)
 
 StaticRefPtr<WebGLMemoryTracker> WebGLMemoryTracker::sUniqueInstance;
 
-WebGLMemoryTracker::WebGLMemoryTracker() {
-  RegisterWeakMemoryReporter(this);
+/*static*/
+RefPtr<WebGLMemoryTracker> WebGLMemoryTracker::Create() {
+  RefPtr<WebGLMemoryTracker> ret = new WebGLMemoryTracker;
+  RegisterWeakMemoryReporter(ret);
+  return ret;
 }
+
+WebGLMemoryTracker::WebGLMemoryTracker() = default;
 
 WebGLMemoryTracker::~WebGLMemoryTracker() {
   UnregisterWeakMemoryReporter(this);

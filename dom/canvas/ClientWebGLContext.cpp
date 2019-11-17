@@ -7,6 +7,7 @@
 
 #include "ClientWebGLExtensions.h"
 #include "HostWebGLContext.h"
+#include "mozilla/dom/ToJSValue.h"
 #include "mozilla/dom/WebGLContextEvent.h"
 #include "mozilla/dom/WorkerCommon.h"
 #include "mozilla/EnumeratedRange.h"
@@ -689,6 +690,45 @@ bool ClientWebGLContext::CreateHostContext() {
   notLost.generation = std::make_shared<webgl::ContextGenerationInfo>(*this);
 
   mNotLost = Some(std::move(notLost));
+
+  // Init state
+  const auto& limits = Limits();
+  auto& state = *(mNotLost->generation);
+  state.mDefaultTfo = new WebGLTransformFeedbackJS(*this);
+  state.mDefaultVao = new WebGLVertexArrayJS(*this);
+
+  state.mBoundTfo = state.mDefaultTfo;
+  state.mBoundVao = state.mDefaultVao;
+
+  (void)state.mBoundBufferByTarget[LOCAL_GL_ARRAY_BUFFER];
+
+  state.mTexUnits.resize(limits.maxTexUnits);
+  state.mBoundUbos.resize(limits.maxUniformBufferBindings);
+
+  {
+    webgl::TypedQuad initVal;
+    const float fData[4] = {0, 0, 0, 1};
+    memcpy(initVal.data, fData, sizeof(initVal.data));
+    state.mGenericVertexAttribs.resize(limits.maxVertexAttribs, initVal);
+  }
+
+  const auto& size = DrawingBufferSize();
+  state.mViewport = {0, 0, static_cast<int32_t>(size.x), static_cast<int32_t>(size.y)};
+  state.mScissor = state.mViewport;
+
+  if (mIsWebGL2) {
+    (void)state.mBoundBufferByTarget[LOCAL_GL_COPY_READ_BUFFER];
+    (void)state.mBoundBufferByTarget[LOCAL_GL_COPY_WRITE_BUFFER];
+    (void)state.mBoundBufferByTarget[LOCAL_GL_PIXEL_PACK_BUFFER];
+    (void)state.mBoundBufferByTarget[LOCAL_GL_PIXEL_UNPACK_BUFFER];
+    (void)state.mBoundBufferByTarget[LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER];
+    (void)state.mBoundBufferByTarget[LOCAL_GL_UNIFORM_BUFFER];
+
+    (void)state.mCurrentQueryByTarget[LOCAL_GL_ANY_SAMPLES_PASSED];
+    (void)state.mCurrentQueryByTarget[LOCAL_GL_ANY_SAMPLES_PASSED_CONSERVATIVE];
+    (void)state.mCurrentQueryByTarget[LOCAL_GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN];
+  }
+
   return true;
 }
 
@@ -1286,6 +1326,16 @@ static JS::Value StringValue(JSContext* cx, const std::string& str, ErrorResult&
   return JS::StringValue(jsStr);
 }
 
+template<typename T>
+bool ToJSValueOrNull(JSContext* const cx, const RefPtr<T>& ptr,
+    JS::MutableHandle<JS::Value> retval) {
+  if (!ptr) {
+    retval.set(JS::NullValue());
+    return true;
+  }
+  return ToJSValue(cx, ptr, retval);
+}
+
 void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
                                       JS::MutableHandle<JS::Value> retval,
                                       ErrorResult& rv,
@@ -1299,12 +1349,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
 
   const auto fnSetRetval_Buffer = [&](const GLenum target) {
     const auto buffer = *MaybeFind(state.mBoundBufferByTarget, target);
-    (void)ToJSValue(cx, buffer, retval);
+    (void)ToJSValueOrNull(cx, buffer, retval);
   };
   const auto fnSetRetval_Tex = [&](const GLenum texTarget) {
     const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
     const auto tex = *MaybeFind(texUnit.texByTarget, texTarget);
-    (void)ToJSValue(cx, tex, retval);
+    (void)ToJSValueOrNull(cx, tex, retval);
   };
 
   switch (pname) {
@@ -1313,19 +1363,19 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       return;
 
     case LOCAL_GL_CURRENT_PROGRAM:
-      (void)ToJSValue(cx, state.mCurrentProgram ? state.mCurrentProgram->js : nullptr, retval);
+      (void)ToJSValueOrNull(cx, state.mCurrentProgram ? state.mCurrentProgram->js : nullptr, retval);
       return;
 
     case LOCAL_GL_ELEMENT_ARRAY_BUFFER_BINDING:
-      (void)ToJSValue(cx, state.mBoundVao->mIndexBuffer, retval);
+      (void)ToJSValueOrNull(cx, state.mBoundVao->mIndexBuffer, retval);
       return;
 
     case LOCAL_GL_FRAMEBUFFER_BINDING:
-      (void)ToJSValue(cx, state.mBoundDrawFb, retval);
+      (void)ToJSValueOrNull(cx, state.mBoundDrawFb, retval);
       return;
 
     case LOCAL_GL_RENDERBUFFER_BINDING:
-      (void)ToJSValue(cx, state.mBoundRb, retval);
+      (void)ToJSValueOrNull(cx, state.mBoundRb, retval);
       return;
 
     case LOCAL_GL_TEXTURE_BINDING_2D:
@@ -1418,7 +1468,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
 
     // 4 ints
     case LOCAL_GL_SCISSOR_BOX: {
-      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mScissor);
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mScissor.data());
       if (!obj) {
         rv = NS_ERROR_OUT_OF_MEMORY;
       }
@@ -1426,7 +1476,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       return;
     }
     case LOCAL_GL_VIEWPORT: {
-      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mViewport);
+      const auto obj = dom::Int32Array::Create(cx, this, 4, state.mViewport.data());
       if (!obj) {
         rv = NS_ERROR_OUT_OF_MEMORY;
       }
@@ -1468,7 +1518,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         return;
 
       case LOCAL_GL_DRAW_FRAMEBUFFER_BINDING:
-        (void)ToJSValue(cx, state.mBoundDrawFb, retval);
+        (void)ToJSValueOrNull(cx, state.mBoundDrawFb, retval);
         return;
 
       case LOCAL_GL_PIXEL_PACK_BUFFER_BINDING:
@@ -1480,12 +1530,12 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         return;
 
       case LOCAL_GL_READ_FRAMEBUFFER_BINDING:
-        (void)ToJSValue(cx, state.mBoundReadFb, retval);
+        (void)ToJSValueOrNull(cx, state.mBoundReadFb, retval);
         return;
 
       case LOCAL_GL_SAMPLER_BINDING: {
         const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
-        (void)ToJSValue(cx, texUnit.sampler, retval);
+        (void)ToJSValueOrNull(cx, texUnit.sampler, retval);
         return;
       }
 
@@ -1502,7 +1552,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         if (ret == state.mDefaultTfo) {
           ret = nullptr;
         }
-        (void)ToJSValue(cx, ret, retval);
+        (void)ToJSValueOrNull(cx, ret, retval);
         return;
       }
 
@@ -1519,7 +1569,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
         if (ret == state.mDefaultVao) {
           ret = nullptr;
         }
-        (void)ToJSValue(cx, ret, retval);
+        (void)ToJSValueOrNull(cx, ret, retval);
         return;
       }
 
@@ -1713,9 +1763,9 @@ void ClientWebGLContext::GetFramebufferAttachmentParameter(
 
   if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
     if (attached.rb) {
-      (void)ToJSValue(cx, attached.rb, retval);
+      (void)ToJSValueOrNull(cx, attached.rb, retval);
     } else {
-      (void)ToJSValue(cx, attached.tex, retval);
+      (void)ToJSValueOrNull(cx, attached.tex, retval);
     }
     return;
   }
@@ -1763,7 +1813,7 @@ void ClientWebGLContext::GetIndexedParameter(JSContext* cx, GLenum target,
           "`index` (%u) >= MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS", index);
         return;
       }
-      (void)ToJSValue(cx, list[index], retval);
+      (void)ToJSValueOrNull(cx, list[index], retval);
       return;
     }
 
@@ -1774,7 +1824,7 @@ void ClientWebGLContext::GetIndexedParameter(JSContext* cx, GLenum target,
           "`index` (%u) >= MAX_UNIFORM_BUFFER_BINDINGS", index);
         return;
       }
-      (void)ToJSValue(cx, list[index], retval);
+      (void)ToJSValueOrNull(cx, list[index], retval);
       return;
     }
   }
@@ -2141,11 +2191,7 @@ void ClientWebGLContext::Scissor(GLint x, GLint y, GLsizei width,
     return;
   }
 
-  auto& cache = state.mScissor;
-  cache[0] = x;
-  cache[1] = y;
-  cache[2] = width;
-  cache[3] = height;
+  state.mScissor = {x, y, width, height};
 
   Run<RPROC(Scissor)>(x, y, width, height);
 }
@@ -2175,11 +2221,7 @@ void ClientWebGLContext::Viewport(GLint x, GLint y, GLsizei width,
     return;
   }
 
-  auto& cache = state.mViewport;
-  cache[0] = x;
-  cache[1] = y;
-  cache[2] = width;
-  cache[3] = height;
+  state.mViewport = {x, y, width, height};
 
   Run<RPROC(Viewport)>(x, y, width, height);
 }
@@ -3157,7 +3199,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
     case LOCAL_GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING: {
       const auto& buffers = state.mBoundVao->mAttribBuffers;
       const auto& buffer = buffers[index];
-      (void)ToJSValue(cx, buffer, retval);
+      (void)ToJSValueOrNull(cx, buffer, retval);
       return;
     }
 
@@ -3488,7 +3530,7 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
   }
   const auto& query = *slot;
 
-  (void)ToJSValue(cx, query, retval);
+  (void)ToJSValueOrNull(cx, query, retval);
 }
 
 void ClientWebGLContext::GetQueryParameter(
@@ -3965,7 +4007,7 @@ void ClientWebGLContext::AttachShader(WebGLProgramJS& prog,
     }
     return;
   }
-  slot = shader.mInnerWeak.lock();
+  slot = shader.mInnerWeak.get();
   MOZ_ASSERT(slot);
 
   Run<RPROC(AttachShader)>(prog.mId, shader.mId);
@@ -4641,7 +4683,7 @@ WebGLFramebufferJS::WebGLFramebufferJS(const ClientWebGLContext& webgl) : webgl:
 }
 
 WebGLProgramJS::WebGLProgramJS(const ClientWebGLContext& webgl) : webgl::ObjectJS(webgl),
-  mInnerRef(std::make_shared<WebGLProgramPreventDelete>(this)), mInnerWeak(mInnerRef)
+  mInnerRef(new WebGLProgramInner(this)), mInnerWeak(mInnerRef.get())
 {
   (void)mNextLink_Shaders[LOCAL_GL_VERTEX_SHADER];
   (void)mNextLink_Shaders[LOCAL_GL_FRAGMENT_SHADER];
@@ -4651,7 +4693,7 @@ WebGLProgramJS::WebGLProgramJS(const ClientWebGLContext& webgl) : webgl::ObjectJ
 
 WebGLShaderJS::WebGLShaderJS(const ClientWebGLContext& webgl, const GLenum type)
   : webgl::ObjectJS(webgl), mType(type),
-  mInnerRef(std::make_shared<WebGLShaderPreventDelete>(this)), mInnerWeak(mInnerRef)
+  mInnerRef(new WebGLShaderInner(this)), mInnerWeak(mInnerRef.get())
 {
 }
 
@@ -4705,20 +4747,6 @@ bool WebGLShaderPrecisionFormatJS::WrapObject(JSContext* const cx,
 
 // ---------------------
 
-template<typename T>
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const std::shared_ptr<T>& field,
-                                 const char* name, uint32_t flags) {
-  CycleCollectionNoteChild(aCallback, field.get(), aName, aFlags);
-}
-
-template<typename T>
-void ImplCycleCollectionUnlink(std::shared_ptr<T>& field) {
-  field = nullptr;
-}
-
-// -
-
 // Todo: Move this to RefPtr.h.
 template<typename T>
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
@@ -4732,7 +4760,7 @@ void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
 void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
                                  const CcMethods& field,
                                  const char* name, uint32_t flags) {
-  field.CcTraverse(callback, name, flags);
+  field.CcTraverse(callback);
 }
 
 void ImplCycleCollectionUnlink(CcMethods& field) {
@@ -4747,12 +4775,19 @@ NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, CcViaMethods())
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLQueryJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLRenderbufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSamplerJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLShaderJS)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLShaderJS, mInnerRef)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSyncJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLTextureJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, CcViaMethods())
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLUniformLocationJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, CcViaMethods())
+
+NS_IMPL_CYCLE_COLLECTION(WebGLProgramInner, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLProgramInner, AddRef)
+NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLProgramInner, Release)
+NS_IMPL_CYCLE_COLLECTION(WebGLShaderInner, CcViaMethods())
+NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLShaderInner, AddRef)
+NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLShaderInner, Release)
 
 // -
 
@@ -4791,91 +4826,118 @@ _(VertexArray)
 
 // -----------------------------
 
-void WebGLFramebufferJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
-              const char* const name, const uint32_t flags) const {
+void WebGLFramebufferJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
   for (const auto& pair : mAttachments) {
     const auto& attach = pair.second;
-    ImplCycleCollectionTraverse(callback, attach.rb, name, flags);
-    ImplCycleCollectionTraverse(callback, attach.tex, name, flags);
+    ImplCycleCollectionTraverse(callback, attach.rb, "mAttachments[].rb", 0);
+    ImplCycleCollectionTraverse(callback, attach.tex, "mAttachments[].tex", 0);
   }
 }
+
 void WebGLFramebufferJS::CcUnlink() {
   mAttachments = {};
 }
 
-void WebGLProgramJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
-              const char* const name, const uint32_t flags) const {
+// -
+
+void WebGLProgramJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
   for (const auto& pair : mNextLink_Shaders) {
-    ImplCycleCollectionTraverse(callback, pair.second->js, name, flags);
+    ImplCycleCollectionTraverse(callback, pair.second, "mNextLink_Shaders", 0);
   }
+  ImplCycleCollectionTraverse(callback, mInnerRef, "mInnerRef", 0);
 }
+
 void WebGLProgramJS::CcUnlink() {
   mNextLink_Shaders = {};
+  mInnerRef = nullptr;
 }
 
+// -
 
-void WebGLTransformFeedbackJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
-              const char* const name, const uint32_t flags) const {
+void WebGLTransformFeedbackJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
   for (const auto& cur : mAttribBuffers) {
-    ImplCycleCollectionTraverse(callback, cur, name, flags);
+    ImplCycleCollectionTraverse(callback, cur, "mAttribBuffers[]", 0);
   }
+  ImplCycleCollectionTraverse(callback, mActiveProgram, "mActiveProgram", 0);
 }
+
 void WebGLTransformFeedbackJS::CcUnlink() {
   mAttribBuffers = {};
+  mActiveProgram = nullptr;
 }
 
-void WebGLVertexArrayJS::CcTraverse(nsCycleCollectionTraversalCallback& callback,
-              const char* const name, const uint32_t flags) const {
-  ImplCycleCollectionTraverse(callback, mIndexBuffer, name, flags);
+// -
+
+void WebGLVertexArrayJS::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
+  ImplCycleCollectionTraverse(callback, mIndexBuffer, "mIndexBuffer", 0);
 
   for (const auto& cur : mAttribBuffers) {
-    ImplCycleCollectionTraverse(callback, cur, name, flags);
+    ImplCycleCollectionTraverse(callback, cur, "mAttribBuffers[]", 0);
   }
 }
+
 void WebGLVertexArrayJS::CcUnlink() {
   mIndexBuffer = nullptr;
   mAttribBuffers = {};
 }
 
+// -
+
+void WebGLProgramInner::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
+  ImplCycleCollectionTraverse(callback, js, "js", 0);
+}
+
+void WebGLProgramInner::CcUnlink() {
+  const_cast<RefPtr<WebGLProgramJS>&>(js) = nullptr;
+}
+
+void WebGLShaderInner::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
+  ImplCycleCollectionTraverse(callback, js, "js", 0);
+}
+
+void WebGLShaderInner::CcUnlink() {
+  const_cast<RefPtr<WebGLShaderJS>&>(js) = nullptr;
+}
+
 // --------------------------------
 
-void ClientWebGLContext::CcTraverse(nsCycleCollectionTraversalCallback& callback,
-              const char* const name, const uint32_t flags) const {
-  ImplCycleCollectionTraverse(callback, mExtLoseContext, name, flags);
+void ClientWebGLContext::CcTraverse(nsCycleCollectionTraversalCallback& callback) const {
+  ImplCycleCollectionTraverse(callback, mExtLoseContext, "mExtLoseContext", 0);
 
   if (mNotLost) {
     const auto& state = *(mNotLost->generation);
 
-    if (state.mCurrentProgram) {
-      ImplCycleCollectionTraverse(callback, state.mCurrentProgram->js, name, flags);
-    }
+    ImplCycleCollectionTraverse(callback, state.mDefaultTfo, "mDefaultTfo", 0);
+    ImplCycleCollectionTraverse(callback, state.mDefaultVao, "mDefaultVao", 0);
+
+    ImplCycleCollectionTraverse(callback, state.mCurrentProgram, "mCurrentProgram", 0);
 
     for (const auto& pair : state.mBoundBufferByTarget) {
-      ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+      ImplCycleCollectionTraverse(callback, pair.second, "mBoundBufferByTarget", 0);
     }
     for (const auto& cur : state.mBoundUbos) {
-      ImplCycleCollectionTraverse(callback, cur, name, flags);
+      ImplCycleCollectionTraverse(callback, cur, "mBoundUbos", 0);
     }
-    ImplCycleCollectionTraverse(callback, state.mBoundDrawFb, name, flags);
-    ImplCycleCollectionTraverse(callback, state.mBoundReadFb, name, flags);
-    ImplCycleCollectionTraverse(callback, state.mBoundRb, name, flags);
-    ImplCycleCollectionTraverse(callback, state.mBoundTfo, name, flags);
+    ImplCycleCollectionTraverse(callback, state.mBoundDrawFb, "mBoundDrawFb", 0);
+    ImplCycleCollectionTraverse(callback, state.mBoundReadFb, "mBoundReadFb", 0);
+    ImplCycleCollectionTraverse(callback, state.mBoundRb, "mBoundRb", 0);
+    ImplCycleCollectionTraverse(callback, state.mBoundTfo, "mBoundTfo", 0);
+    ImplCycleCollectionTraverse(callback, state.mBoundVao, "mBoundVao", 0);
     for (const auto& pair : state.mCurrentQueryByTarget) {
-      ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+      ImplCycleCollectionTraverse(callback, pair.second, "mCurrentQueryByTarget", 0);
     }
-    ImplCycleCollectionTraverse(callback, state.mBoundVao, name, flags);
 
     for (const auto& texUnit : state.mTexUnits) {
-      ImplCycleCollectionTraverse(callback, texUnit.sampler, name, flags);
+      ImplCycleCollectionTraverse(callback, texUnit.sampler, "mTexUnits[].sampler", 0);
       for (const auto& pair : texUnit.texByTarget) {
-        ImplCycleCollectionTraverse(callback, pair.second, name, flags);
+        ImplCycleCollectionTraverse(callback, pair.second, "mTexUnits[].texByTarget", 0);
       }
     }
 
     // -
 
     for (const auto& cur : mNotLost->extensions) {
-      ImplCycleCollectionTraverse(callback, cur, name, flags);
+      ImplCycleCollectionTraverse(callback, cur, "extensions", 0);
     }
   }
 }

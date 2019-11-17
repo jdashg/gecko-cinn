@@ -394,7 +394,10 @@ class WebGLContext : public VRefCounted,
     ~FuncScope();
   };
 
-  void GenerateErrorImpl(const GLenum err, const nsACString& text) const;
+  void GenerateErrorImpl(const GLenum err, const nsACString& text) const {
+    GenerateErrorImpl(err, std::string(text.BeginReading()));
+  }
+  void GenerateErrorImpl(const GLenum err, const std::string& text) const;
 
   template <typename... Args>
   void GenerateError(const GLenum err, const char* const fmt,

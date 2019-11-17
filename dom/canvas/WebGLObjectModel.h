@@ -16,15 +16,6 @@ class WebGLContext;
 
 ////
 
-class VRefCounted : public RefCounted<VRefCounted> {
-public:
-  virtual ~VRefCounted() = default;
-  virtual const char* typeName() const = 0;
-  virtual size_t typeSize() const = 0;
-};
-
-// -
-
 // This class is a mixin for objects that are tied to a specific
 // context (which is to say, all of them).  They provide initialization
 // as well as comparison with the current context.

@@ -16,6 +16,7 @@
 #include "mozilla/Casting.h"
 #include "mozilla/CheckedInt.h"
 #include "mozilla/Range.h"
+#include "mozilla/RefCounted.h"
 #include "gfxTypes.h"
 
 #include "nsTArray.h"
@@ -116,6 +117,15 @@ class WebGLSync;
 class WebGLTexture;
 class WebGLTransformFeedback;
 class WebGLVertexArray;
+
+// -
+
+class VRefCounted : public RefCounted<VRefCounted> {
+public:
+  virtual ~VRefCounted() = default;
+  virtual const char* typeName() const = 0;
+  virtual size_t typeSize() const = 0;
+};
 
 // -
 

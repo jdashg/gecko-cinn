@@ -7,6 +7,7 @@
 #include "ClientWebGLExtensions.h"
 #include "GLContext.h"
 #include "mozilla/dom/BindingDeclarations.h"
+#include "mozilla/dom/ToJSValue.h"
 #include "mozilla/EnumeratedRange.h"
 #include "mozilla/Preferences.h"
 #include "nsContentUtils.h"
