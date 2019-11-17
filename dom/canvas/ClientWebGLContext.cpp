@@ -1703,7 +1703,32 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
   } else {
     const auto maybe = Run<RPROC(GetParameter)>(pname);
     if (maybe) {
-      retval.set(JS::NumberValue(*maybe));
+      switch (pname) {
+      // WebGL 1:
+      case LOCAL_GL_BLEND:
+      case LOCAL_GL_CULL_FACE:
+      case LOCAL_GL_DEPTH_TEST:
+      case LOCAL_GL_DEPTH_WRITEMASK:
+      case LOCAL_GL_DITHER:
+      case LOCAL_GL_POLYGON_OFFSET_FILL:
+      case LOCAL_GL_SAMPLE_ALPHA_TO_COVERAGE:
+      case LOCAL_GL_SAMPLE_COVERAGE:
+      case LOCAL_GL_SAMPLE_COVERAGE_INVERT:
+      case LOCAL_GL_SCISSOR_TEST:
+      case LOCAL_GL_STENCIL_TEST:
+      case LOCAL_GL_UNPACK_FLIP_Y_WEBGL:
+      case LOCAL_GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL:
+      // WebGL 2:
+      case LOCAL_GL_RASTERIZER_DISCARD:
+      case LOCAL_GL_TRANSFORM_FEEDBACK_ACTIVE:
+      case LOCAL_GL_TRANSFORM_FEEDBACK_PAUSED:
+        retval.set(JS::BooleanValue(*maybe));
+        break;
+
+      default:
+        retval.set(JS::NumberValue(*maybe));
+        break;
+      }
     }
   }
 }
@@ -2916,7 +2941,15 @@ void ClientWebGLContext::GetTexParameter(JSContext* cx, GLenum texTarget,
 
   const auto maybe = Run<RPROC(GetTexParameter)>(tex->mId, pname);
   if (maybe) {
-    retval.set(JS::NumberValue(*maybe));
+    switch (pname) {
+    case LOCAL_GL_TEXTURE_IMMUTABLE_FORMAT:
+      retval.set(JS::BooleanValue(*maybe));
+      break;
+
+    default:
+      retval.set(JS::NumberValue(*maybe));
+      break;
+    }
   }
 }
 
@@ -3194,6 +3227,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
         return;
       }
       retval.set(JS::ObjectValue(*obj));
+      return;
     }
 
     case LOCAL_GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING: {
@@ -3214,7 +3248,17 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
 
   const auto maybe = Run<RPROC(GetVertexAttrib)>(index, pname);
   if (maybe) {
-    retval.set(JS::NumberValue(*maybe));
+    switch (pname) {
+      case LOCAL_GL_VERTEX_ATTRIB_ARRAY_ENABLED:
+      case LOCAL_GL_VERTEX_ATTRIB_ARRAY_NORMALIZED:
+      case LOCAL_GL_VERTEX_ATTRIB_ARRAY_INTEGER:
+        retval.set(JS::BooleanValue(*maybe));
+        break;
+
+      default:
+        retval.set(JS::NumberValue(*maybe));
+        break;
+    }
   }
 }
 
@@ -3356,17 +3400,24 @@ void ClientWebGLContext::VertexAttrib4Tv(GLuint index, webgl::AttribBaseType t,
                                          const Range<const uint8_t>& src) {
   const FuncScope funcScope(*this, "vertexAttrib[1234]u?[fi]{v}");
   if (IsContextLost()) return;
+  auto& state = State();
 
   if (src.length() / sizeof(float) < 4) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "Array must have >=4 elements.");
     return;
   }
 
-  webgl::TypedQuad data;
-  data.type = t;
-  memcpy(data.data, src.begin().get(), sizeof(data.data));
+  auto& list = state.mGenericVertexAttribs;
+  if (index >= list.size()) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` must be < MAX_VERTEX_ATTRIBS.");
+    return;
+  }
 
-  Run<RPROC(VertexAttrib4T)>(index, data);
+  auto& attrib = list[index];
+  attrib.type = t;
+  memcpy(attrib.data, src.begin().get(), sizeof(attrib.data));
+
+  Run<RPROC(VertexAttrib4T)>(index, attrib);
 }
 
 // -
@@ -3542,7 +3593,15 @@ void ClientWebGLContext::GetQueryParameter(
 
   const auto maybe = Run<RPROC(GetQueryParameter)>(query.mId, pname);
   if (maybe) {
-    retval.set(JS::NumberValue(*maybe));
+    switch (pname) {
+    case LOCAL_GL_QUERY_RESULT_AVAILABLE:
+      retval.set(JS::BooleanValue(*maybe));
+      break;
+
+    default:
+      retval.set(JS::NumberValue(*maybe));
+      break;
+    }
   }
 }
 
@@ -4200,10 +4259,10 @@ void ClientWebGLContext::GetActiveUniformBlockParameter(JSContext* const cx,
       }
 
       case LOCAL_GL_REFERENCED_BY_VERTEX_SHADER:
-        return JS::NumberValue(block.referencedByVertexShader);
+        return JS::BooleanValue(block.referencedByVertexShader);
 
       case LOCAL_GL_REFERENCED_BY_FRAGMENT_SHADER:
-        return JS::NumberValue(block.referencedByFragmentShader);
+        return JS::BooleanValue(block.referencedByFragmentShader);
 
       default:
         EnqueueError_ArgEnum("pname", pname);
