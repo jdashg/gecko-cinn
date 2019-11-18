@@ -62,21 +62,21 @@ using namespace mozilla::gl;
 //  WebGL API
 //
 
-void WebGLContext::ActiveTexture(GLenum texture) {
-  const FuncScope funcScope(*this, "activeTexture");
+void WebGLContext::ActiveTexture(uint32_t texUnit) {
+  FuncScope funcScope(*this, "activeTexture");
   if (IsContextLost()) return;
+  funcScope.mBindFailureGuard = true;
 
-  if (texture < LOCAL_GL_TEXTURE0 ||
-      texture >= LOCAL_GL_TEXTURE0 + Limits().maxTexUnits) {
+  if (texUnit >= Limits().maxTexUnits) {
     return ErrorInvalidEnum(
-        "Texture unit %d out of range. "
-        "Accepted values range from TEXTURE0 to TEXTURE0 + %d. "
-        "Notice that TEXTURE0 != 0.",
-        texture, Limits().maxTexUnits);
+        "Texture unit %u out of range (%u).",
+        texUnit, Limits().maxTexUnits);
   }
 
-  mActiveTexture = texture - LOCAL_GL_TEXTURE0;
-  gl->fActiveTexture(texture);
+  mActiveTexture = texUnit;
+  gl->fActiveTexture(LOCAL_GL_TEXTURE0 + texUnit);
+
+  funcScope.mBindFailureGuard = false;
 }
 
 void WebGLContext::AttachShader(WebGLProgram& prog, WebGLShader& shader) {

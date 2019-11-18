@@ -211,6 +211,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
 
   void DidRefresh() { mContext->DidRefresh(); }
 
+  RefPtr<gfx::SourceSurface> GetSurfaceSnapshot(gfxAlphaType* out_alphaType) const {
+    return mContext->GetSurfaceSnapshot(out_alphaType);
+  }
+
   void GenerateError(const GLenum error, const std::string& text) const {
     mContext->GenerateErrorImpl(error, text);
   }
@@ -570,7 +574,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   }
 
   // --------------------------- Texture objects ---------------------------
-  void ActiveTexture(GLenum texUnit) const {
+  void ActiveTexture(uint32_t texUnit) const {
     mContext->ActiveTexture(texUnit);
   }
 

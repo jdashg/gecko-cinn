@@ -751,7 +751,7 @@ NS_IMETHODIMP
 ClientWebGLContext::SetContextOptions(JSContext* cx,
                                       JS::Handle<JS::Value> options,
                                       ErrorResult& aRvForDictionaryInit) {
-  MOZ_ASSERT(!mInitialOptions);
+  if (mInitialOptions && options.isNullOrUndefined()) return NS_OK;
 
   WebGLContextAttributes attributes;
   if (!attributes.Init(cx, options)) {
@@ -792,16 +792,21 @@ ClientWebGLContext::SetContextOptions(JSContext* cx,
     newOpts.antialias = false;
   }
 
+  if (mInitialOptions && *mInitialOptions != newOpts) {
+    // Err if the options asked for aren't the same as what they were originally.
+    return NS_ERROR_FAILURE;
+  }
+
   mInitialOptions.emplace(newOpts);
   return NS_OK;
 }
 
 void ClientWebGLContext::DidRefresh() { Run<RPROC(DidRefresh)>(); }
 
-already_AddRefed<mozilla::gfx::SourceSurface>
+already_AddRefed<gfx::SourceSurface>
 ClientWebGLContext::GetSurfaceSnapshot(gfxAlphaType* out_alphaType) {
-  MOZ_ASSERT_UNREACHABLE("TODO: ClientWebGLContext::GetSurfaceSnapshot");
-  return nullptr;
+  auto ret = Run<RPROC(GetSurfaceSnapshot)>(out_alphaType);
+  return ret.forget();
 }
 
 UniquePtr<uint8_t[]> ClientWebGLContext::GetImageBuffer(int32_t* out_format) {
@@ -1014,7 +1019,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
           BindBuffer(LOCAL_GL_ARRAY_BUFFER, nullptr);
         }
       }
-      VertexAttribPointer(i, 0, 0, false, 0, 0);
+      VertexAttribPointer(i, 4, LOCAL_GL_FLOAT, false, 0, 0);
     }
   }
   if (toRestore && *toRestore) {

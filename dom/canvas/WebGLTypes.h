@@ -385,6 +385,7 @@ struct WebGLContextOptions {
   WebGLContextOptions(const WebGLContextOptions&) = default;
 
   bool operator==(const WebGLContextOptions&) const;
+  bool operator!=(const WebGLContextOptions& rhs) const { return !(*this == rhs); }
 };
 
 // -

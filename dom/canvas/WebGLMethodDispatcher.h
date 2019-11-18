@@ -52,6 +52,7 @@ DEFINE_ASYNC(HostWebGLContext::DeleteTransformFeedback)
 DEFINE_ASYNC(HostWebGLContext::DeleteVertexArray)
 
 DEFINE_ASYNC(HostWebGLContext::ClearVRFrame)
+DEFINE_SYNC(HostWebGLContext::GetSurfaceSnapshot)
 
 DEFINE_ASYNC(HostWebGLContext::Disable)
 DEFINE_ASYNC(HostWebGLContext::Enable)

@@ -722,6 +722,8 @@ RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
 #endif
     }
 
+    const FuncScope funcScope(*webgl, "getContext/restoreContext");
+
     MOZ_ASSERT(!webgl->mDefaultFB);
     if (!webgl->EnsureDefaultFB()) {
       MOZ_ASSERT(!webgl->gl);
@@ -1295,7 +1297,7 @@ void WebGLContext::LoseContext(const webgl::ContextLossReason reason) {
   mHost->OnContextLoss(reason);
 }
 
-already_AddRefed<gfx::SourceSurface> WebGLContext::GetSurfaceSnapshot(
+RefPtr<gfx::SourceSurface> WebGLContext::GetSurfaceSnapshot(
     gfxAlphaType* const out_alphaType) {
   const FuncScope funcScope(*this, "<GetSurfaceSnapshot>");
   if (IsContextLost()) return nullptr;
@@ -1353,6 +1355,7 @@ void WebGLContext::DidRefresh() {
 ////////////////////////////////////////////////////////////////////////////////
 
 uvec2 WebGLContext::DrawingBufferSize() {
+  const FuncScope funcScope(*this, "width/height");
   if (IsContextLost()) return {};
 
   if (!EnsureDefaultFB()) return {};

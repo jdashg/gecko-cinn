@@ -340,13 +340,11 @@ class WebGLContext : public VRefCounted,
   layers::LayersBackend mBackend = layers::LayersBackend::LAYERS_NONE;
 
  public:
-  NS_INLINE_DECL_REFCOUNTING(WebGLContext)
-
   void Resize(uvec2 size);
 
   void SetCompositableHost(RefPtr<layers::CompositableHost>& aCompositableHost);
 
-  virtual already_AddRefed<mozilla::gfx::SourceSurface> GetSurfaceSnapshot(
+  RefPtr<mozilla::gfx::SourceSurface> GetSurfaceSnapshot(
       gfxAlphaType* out_alphaType);
 
   /**
@@ -377,6 +375,7 @@ class WebGLContext : public VRefCounted,
   * BindVertexArray
   * BeginQuery
   * EndQuery
+  * ActiveTexture
 
   */
 
@@ -775,7 +774,7 @@ class WebGLContext : public VRefCounted,
   // -----------------------------------------------------------------------------
   // Texture funcions (WebGLContextTextures.cpp)
  public:
-  void ActiveTexture(GLenum texUnit);
+  void ActiveTexture(uint32_t texUnit);
   void BindTexture(GLenum texTarget, WebGLTexture* tex);
   void GenerateMipmap(GLenum texTarget);
 
