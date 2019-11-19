@@ -517,9 +517,9 @@ struct Limits final {
   uint32_t maxTex2dSize = 0;
   uint32_t maxTexCubeSize = 0;
   uint32_t maxVertexAttribs = 0;
-  uint32_t maxViewportDims[2] = {};
-  float pointSizeRange[2] = {1, 1};
-  float lineWidthRange[2] = {1, 1};
+  std::array<uint32_t,2> maxViewportDims = {};
+  std::array<float,2> pointSizeRange = {1, 1};
+  std::array<float,2> lineWidthRange = {1, 1};
 
   // WebGL 2
   uint32_t maxTexArrayLayers = 0;

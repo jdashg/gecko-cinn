@@ -205,18 +205,18 @@ static webgl::Limits MakeLimits(const WebGLContext& webgl) {
   gl.GetUIntegerv(LOCAL_GL_MAX_TEXTURE_SIZE, &limits.maxTex2dSize);
   gl.GetUIntegerv(LOCAL_GL_MAX_CUBE_MAP_TEXTURE_SIZE, &limits.maxTexCubeSize);
   gl.GetUIntegerv(LOCAL_GL_MAX_VERTEX_ATTRIBS, &limits.maxVertexAttribs);
-  gl.GetUIntegerv(LOCAL_GL_MAX_VIEWPORT_DIMS, limits.maxViewportDims);
+  gl.GetUIntegerv(LOCAL_GL_MAX_VIEWPORT_DIMS, limits.maxViewportDims.data());
 
 
   if (!gl.IsCoreProfile()) {
-    gl.fGetFloatv(LOCAL_GL_ALIASED_LINE_WIDTH_RANGE, limits.lineWidthRange);
+    gl.fGetFloatv(LOCAL_GL_ALIASED_LINE_WIDTH_RANGE, limits.lineWidthRange.data());
   }
 
   {
     const GLenum driverPName = gl.IsCoreProfile()
                                    ? LOCAL_GL_POINT_SIZE_RANGE
                                    : LOCAL_GL_ALIASED_POINT_SIZE_RANGE;
-    gl.fGetFloatv(driverPName, limits.pointSizeRange);
+    gl.fGetFloatv(driverPName, limits.pointSizeRange.data());
   }
 
   if (webgl.IsWebGL2()) {

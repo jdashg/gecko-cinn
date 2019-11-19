@@ -116,11 +116,11 @@ public:
 
   void LoseContext() {
     if (!mContext) return;
-    mContext->LoseContext(webgl::ContextLossReason::Manual);
+    mContext->EmulateLoseContext();
   }
   void RestoreContext() {
     if (!mContext) return;
-    mContext->RestoreContext();
+    mContext->RestoreContext(webgl::LossStatus::LostManually);
   }
 };
 
@@ -236,12 +236,12 @@ public:
     mContext->QueryCounter(query, target);
   }
   void GetQueryEXT(JSContext* cx, GLenum target, GLenum pname,
-                   JS::MutableHandleValue retval) const {
+                   JS::MutableHandle<JS::Value> retval) const {
     if (!mContext) return;
     mContext->GetQuery(cx, target, pname, retval);
   }
   void GetQueryObjectEXT(JSContext* cx, WebGLQueryJS& query,
-                         GLenum pname, JS::MutableHandleValue retval) const {
+                         GLenum pname, JS::MutableHandle<JS::Value> retval) const {
     if (!mContext) return;
     mContext->GetQueryParameter(cx, query, pname, retval);
   }

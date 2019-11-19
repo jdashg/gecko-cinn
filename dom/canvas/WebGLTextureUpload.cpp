@@ -811,6 +811,7 @@ static bool ValidateTargetForFormat(const WebGLContext* webgl, TexImageTarget ta
 
 void WebGLTexture::TexStorage(TexTarget target, uint32_t levels,
                               GLenum sizedFormat, const uvec3& size) {
+  const WebGLContext::FuncScope funcScope(*mContext, "texStorage");
   // Check levels
   if (levels < 1) {
     mContext->ErrorInvalidValue("`levels` must be >= 1.");
@@ -930,6 +931,7 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
                             const webgl::PackingInfo& pi,
                             const TexImageSource& src,
                             const dom::HTMLCanvasElement& canvas) {
+  const WebGLContext::FuncScope funcScope(*mContext, bool(respecFormat) ? "texImage" : "texSubImage");
   dom::Uint8ClampedArray scopedArr;
   const auto blob = mContext->From(canvas, imageTarget, size, src, &scopedArr);
   if (!blob) return;
@@ -1109,6 +1111,7 @@ void WebGLTexture::CompressedTexImage(bool sub, GLenum imageTarget,
                                         const Range<const uint8_t>& src,
                                         const uint32_t pboImageSize,
                                         const Maybe<uint64_t> pboOffset) {
+  const WebGLContext::FuncScope funcScope(*mContext, !sub ? "compressedTexImage" : "compressedTexSubImage");
   auto imageSize = pboImageSize;
   if (pboOffset) {
     const auto& buffer =
@@ -1719,6 +1722,7 @@ void WebGLTexture::CopyTexImage(GLenum imageTarget, uint32_t level,
                                     GLenum respecFormat, const uvec3& dstOffset,
                                     const ivec2& srcOffset,
                                     const uvec2& size2) {
+  const WebGLContext::FuncScope funcScope(*mContext, bool(respecFormat) ? "copyTexImage" : "copyTexSubImage");
   ////////////////////////////////////
   // Get source info
 

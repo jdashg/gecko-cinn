@@ -149,12 +149,12 @@ public:
 
   std::vector<TypedQuad> mGenericVertexAttribs;
 
-  bool mColorWriteMask[4] = {true, true, true, true};
+  std::array<bool,4> mColorWriteMask = {true, true, true, true};
   std::array<int32_t,4> mScissor = {};
   std::array<int32_t,4> mViewport = {};
-  float mClearColor[4] = {1, 1, 1, 1};
-  float mBlendColor[4] = {1, 1, 1, 1};
-  float mDepthRange[2] = {0, 1};
+  std::array<float,4> mClearColor = {1, 1, 1, 1};
+  std::array<float,4> mBlendColor = {1, 1, 1, 1};
+  std::array<float,2> mDepthRange = {0, 1};
 
   std::vector<GLenum> mCompressedTextureFormats;
 
@@ -237,7 +237,7 @@ public:
   };
 
 private:
-  GLenum mTarget = 0; // !IsFramebuffer until Bind
+  bool mHasBeenBound = false; // !IsFramebuffer until Bind
   std::unordered_map<GLenum, Attachment> mAttachments;
 
  public:
@@ -608,9 +608,10 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   JSObject* WrapObject(JSContext* cx,
                        JS::Handle<JSObject*> givenProto) override {
-    if (mIsWebGL2)
-      return dom::WebGLRenderingContext_Binding::Wrap(cx, this, givenProto);
-    return dom::WebGL2RenderingContext_Binding::Wrap(cx, this, givenProto);
+    if (mIsWebGL2) {
+      return dom::WebGL2RenderingContext_Binding::Wrap(cx, this, givenProto);
+    }
+    return dom::WebGLRenderingContext_Binding::Wrap(cx, this, givenProto);
   }
 
   // -
@@ -654,6 +655,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
  private:
   Maybe<NotLostData> mNotLost;
+  mutable GLenum mNextError = 0;
 
  public:
   const auto& Limits() const { return mNotLost->info.limits; }
@@ -664,13 +666,9 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
  public:
-  void LoseContext(const webgl::ContextLossReason reason) {
-    OnContextLoss(reason);
-    MOZ_ASSERT(!mNotLost);
-  }
-
+  void EmulateLoseContext();
   void OnContextLoss(webgl::ContextLossReason);
-  void RestoreContext();
+  void RestoreContext(webgl::LossStatus requiredStatus);
 
  private:
   bool DispatchEvent(const nsAString&) const;
@@ -1253,6 +1251,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void FramebufferTextureLayer(GLenum target, GLenum attachSlot,
                                WebGLTextureJS* tex,
                                GLint mipLevel, GLint zLayer) const {
+    const FuncScope funcScope(*this, "framebufferTextureLayer");
+    if (IsContextLost()) return;
     FramebufferAttach(target, attachSlot, 0, nullptr, tex, static_cast<uint32_t>(mipLevel),
                       static_cast<uint32_t>(zLayer), 0);
   }

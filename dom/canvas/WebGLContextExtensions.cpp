@@ -79,6 +79,7 @@ void ClientWebGLContext::GetExtension(JSContext* cx, const nsAString& wideName,
                                       ErrorResult& rv) {
   retval.set(nullptr);
   const FuncScope funcScope(*this, "getExtension");
+  if (IsContextLost()) return;
 
   const auto name = NS_ConvertUTF16toUTF8(wideName);
 
@@ -95,9 +96,12 @@ void ClientWebGLContext::GetExtension(JSContext* cx, const nsAString& wideName,
 
   if (ext == WebGLExtensionID::Max) return;
 
-  // step 2: if the extension hadn't been previously been created then we
-  // have to tell the host we are using it
-  const auto& extObj = GetExtension(ext, callerType);
+  RefPtr<ClientWebGLExtensionBase> extObj;
+  if (ext == WebGLExtensionID::WEBGL_lose_context) {
+    extObj = mExtLoseContext;
+  } else {
+    extObj = GetExtension(ext, callerType);
+  }
   if (!extObj) return;
 
   // Ugh, this would be easier returning `any` than `object`.

@@ -874,7 +874,7 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
       // Zombie context: the canvas is already destroyed, but something else
       // (typically the compositor) is still holding on to the context.
       // Killing zombies is a no-brainer.
-      context->LoseContext(webgl::ContextLossReason::None);
+      context->OnContextLoss(webgl::ContextLossReason::None);
       continue;
     }
 
@@ -905,7 +905,7 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
     JsWarning(text.BeginReading());
     MOZ_ASSERT(oldestContextThisPrincipal);  // if we reach this point, this
                                              // can't be null
-    oldestContextThisPrincipal->LoseContext(webgl::ContextLossReason::None);
+    oldestContextThisPrincipal->OnContextLoss(webgl::ContextLossReason::None);
   } else if (numContexts > maxWebGLContexts) {
     const auto text = nsPrintfCString(
         "Exceeded %u live WebGL contexts, losing the least "
@@ -913,7 +913,7 @@ void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
         maxWebGLContexts);
     JsWarning(text.BeginReading());
     MOZ_ASSERT(oldestContext);  // if we reach this point, this can't be null
-    oldestContext->LoseContext(webgl::ContextLossReason::None);
+    oldestContext->OnContextLoss(webgl::ContextLossReason::None);
   }
 }
 

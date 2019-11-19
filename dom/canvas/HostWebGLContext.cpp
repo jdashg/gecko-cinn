@@ -170,7 +170,7 @@ void HostWebGLContext::CreateVertexArray(const ObjectId id) {
     MOZ_ASSERT(false, "duplicate ID");
     return;
   }
-  slot = GetWebGL2Context()->CreateVertexArray();
+  slot = mContext->CreateVertexArray();
 }
 
 ////////////////////////
