@@ -213,6 +213,9 @@ void ClientWebGLContext::RestoreContext(const webgl::LossStatus requiredStatus) 
   MOZ_RELEASE_ASSERT(mLossStatus == webgl::LossStatus::Lost ||
                      mLossStatus == webgl::LossStatus::LostManually);
 
+  if (mAwaitingRestore) return;
+  mAwaitingRestore = true;
+
   const auto weak = WeakPtr<ClientWebGLContext>(this);
   const auto fnRun = [weak]() {
     const auto strong = RefPtr<ClientWebGLContext>(weak);
@@ -225,12 +228,14 @@ void ClientWebGLContext::RestoreContext(const webgl::LossStatus requiredStatus) 
 }
 
 void ClientWebGLContext::Event_webglcontextrestored() {
+  mAwaitingRestore = false;
   mLossStatus = webgl::LossStatus::Ready;
+  mNextError = 0;
+
   if (!CreateHostContext()) {
     mLossStatus = webgl::LossStatus::LostForever;
     return;
   }
-  mNextError = 0;
 
   WEBGL_BRIDGE_LOGD("[%p] Posting webglcontextrestored event", this);
   (void)DispatchEvent(NS_LITERAL_STRING("webglcontextrestored"));

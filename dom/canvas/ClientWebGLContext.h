@@ -629,6 +629,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   const RefPtr<ClientWebGLExtensionLoseContext> mExtLoseContext;
 
   webgl::LossStatus mLossStatus = webgl::LossStatus::Ready;
+  bool mAwaitingRestore = false;
 
   // -
  public:

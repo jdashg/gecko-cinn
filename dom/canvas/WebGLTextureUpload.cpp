@@ -939,13 +939,23 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
   ////////////////////////////////////
   // Get dest info
 
+  const auto& fua = mContext->mFormatUsage;
+  const auto fnValidateUnpackEnums = [&]() {
+    if (!fua->AreUnpackEnumsValid(pi.format, pi.type)) {
+      mContext->ErrorInvalidEnum("Invalid unpack format/type: %s/%s",
+                                 EnumString(pi.format).c_str(),
+                                 EnumString(pi.type).c_str());
+      return false;
+    }
+    return true;
+  };
+
   webgl::ImageInfo* imageInfo;
   const webgl::FormatUsageInfo* dstUsage;
   if (respecFormat) {
     if (!ValidateTexImageSpecification(imageTarget, level, size, &imageInfo)) return;
     MOZ_ASSERT(imageInfo);
 
-    const auto& fua = mContext->mFormatUsage;
     if (!fua->IsInternalFormatEnumValid(respecFormat)) {
       mContext->ErrorInvalidValue("Invalid internalformat: 0x%04x",
                                   respecFormat);
@@ -960,6 +970,7 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
          *   internalformat that is not listed as a valid combination
          *   in tables 3.2 or 3.3 generates the error INVALID_OPERATION."
          */
+        if (!fnValidateUnpackEnums()) return;
         mContext->ErrorInvalidOperation(
             "Unsized internalFormat must match"
             " unpack format.");
@@ -970,6 +981,7 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
     }
 
     if (!dstUsage) {
+      if (!fnValidateUnpackEnums()) return;
       mContext->ErrorInvalidOperation(
           "Invalid internalformat/format/type:"
           " 0x%04x/0x%04x/0x%04x",
@@ -1013,6 +1025,7 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
 
   const webgl::DriverUnpackInfo* driverUnpackInfo;
   if (!dstUsage->IsUnpackValid(pi, &driverUnpackInfo)) {
+    if (!fnValidateUnpackEnums()) return;
     mContext->ErrorInvalidOperation(
         "Mismatched internalFormat and format/type:"
         " 0x%04x and 0x%04x/0x%04x",
