@@ -123,8 +123,11 @@ class WebGLVertexArray;
 class VRefCounted : public RefCounted<VRefCounted> {
 public:
   virtual ~VRefCounted() = default;
+
+#ifdef MOZ_REFCOUNTED_LEAK_CHECKING
   virtual const char* typeName() const = 0;
   virtual size_t typeSize() const = 0;
+#endif
 };
 
 // -
@@ -655,7 +658,7 @@ class RawBuffer {
   // Pointer to the raw memory block
   T* mData = nullptr;
   // Length is the number of elements of size T in the array
-  uint64_t mLength = 0;
+  size_t mLength = 0;
   // true if we should delete[] the mData on destruction
   bool mOwnsData = false;
 
@@ -667,11 +670,11 @@ class RawBuffer {
   /**
    * If aTakeData is true, RawBuffer will delete[] the memory when destroyed.
    */
-  RawBuffer(uint64_t len, T* data, bool aTakeData = false)
+  RawBuffer(size_t len, T* data, bool aTakeData = false)
       : mData(data), mLength(len), mOwnsData(aTakeData) {
   }
 
-  RawBuffer(uint64_t len, RefPtr<mozilla::ipc::SharedMemoryBasic>& aSmem)
+  RawBuffer(size_t len, RefPtr<mozilla::ipc::SharedMemoryBasic>& aSmem)
       : mSmem(aSmem), mData(aSmem->memory()), mLength(len), mOwnsData(false) {
     MOZ_ASSERT(mData && mLength);
   }

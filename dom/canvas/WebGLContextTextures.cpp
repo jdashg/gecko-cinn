@@ -224,7 +224,7 @@ void WebGLContext::CompressedTexImage(bool sub, GLenum imageTarget,
                                       uvec3 offset, uvec3 size,
                                       const Range<const uint8_t>& src,
                                       const uint32_t pboImageSize,
-                                      const Maybe<uint64_t> pboOffset) const {
+                                      const Maybe<uint64_t>& pboOffset) const {
   const WebGLContext::FuncScope funcScope(*this,
         !sub ? "compressedTexImage" : "compressedTexSubImage");
 

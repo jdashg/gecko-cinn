@@ -768,7 +768,7 @@ class WebGLContext : public VRefCounted,
                                         uvec3 offset, uvec3 size,
                                         const Range<const uint8_t>& src,
                                         const uint32_t pboImageSize,
-                                        const Maybe<uint64_t> pboOffset) const;
+                                        const Maybe<uint64_t>& pboOffset) const;
 
   // CopyTexSubImage if `!respectFormat`
   void CopyTexImage(GLenum imageTarget, uint32_t level,

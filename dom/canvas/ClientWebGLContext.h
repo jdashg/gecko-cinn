@@ -749,7 +749,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   template <typename... Args>
   void EnqueueError(const GLenum error, const char* const format,
-                    const Args&... args) const /*MOZ_FORMAT_PRINTF(3, 4)*/ {
+                    const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
     MOZ_ASSERT(FuncName());
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
@@ -760,7 +760,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   template <typename... Args>
   void EnqueueWarning(const char* const format, const Args&... args) const
-      /*MOZ_FORMAT_PRINTF(2, 3)*/ {
+      MOZ_FORMAT_PRINTF(2, 3) {
     EnqueueError(0, format, args...);
   }
 
@@ -1596,13 +1596,14 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // -
 
   template<typename T>
-  Maybe<Range<T>> ValidateSubrange(const Range<T>& data, size_t elemOffset, size_t elemLengthOverride = 0) const {
+  Maybe<Range<T>> ValidateSubrange(const Range<T>& data, size_t elemOffset,
+                                   size_t elemLengthOverride = 0) const {
     auto ret = data;
-    if (offset > ret.length()) {
+    if (elemOffset > ret.length()) {
       EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemOffset` too large for `data`.");
       return {};
     }
-    ret = {ret.begin() + offset, ret.end()};
+    ret = {ret.begin() + elemOffset, ret.end()};
     if (elemLengthOverride) {
       if (elemLengthOverride > ret.length()) {
         EnqueueError(LOCAL_GL_INVALID_VALUE,
