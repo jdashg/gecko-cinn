@@ -1903,71 +1903,6 @@ void ClientWebGLContext::GetIndexedParameter(JSContext* cx, GLenum target,
   }
 }
 
-static uint8_t UniformElemCount(const GLenum type) {
-  switch (type) {
-    case LOCAL_GL_BOOL:
-    case LOCAL_GL_FLOAT:
-    case LOCAL_GL_INT:
-    case LOCAL_GL_UNSIGNED_INT:
-    case LOCAL_GL_SAMPLER_2D:
-    case LOCAL_GL_SAMPLER_3D:
-    case LOCAL_GL_SAMPLER_CUBE:
-    case LOCAL_GL_SAMPLER_2D_SHADOW:
-    case LOCAL_GL_SAMPLER_2D_ARRAY:
-    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
-    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
-    case LOCAL_GL_INT_SAMPLER_2D:
-    case LOCAL_GL_INT_SAMPLER_3D:
-    case LOCAL_GL_INT_SAMPLER_CUBE:
-    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
-    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
-      return 1;
-
-    case LOCAL_GL_BOOL_VEC2:
-    case LOCAL_GL_FLOAT_VEC2:
-    case LOCAL_GL_INT_VEC2:
-    case LOCAL_GL_UNSIGNED_INT_VEC2:
-      return 2;
-
-    case LOCAL_GL_BOOL_VEC3:
-    case LOCAL_GL_FLOAT_VEC3:
-    case LOCAL_GL_INT_VEC3:
-    case LOCAL_GL_UNSIGNED_INT_VEC3:
-      return 3;
-
-    case LOCAL_GL_BOOL_VEC4:
-    case LOCAL_GL_FLOAT_VEC4:
-    case LOCAL_GL_INT_VEC4:
-    case LOCAL_GL_UNSIGNED_INT_VEC4:
-    case LOCAL_GL_FLOAT_MAT2:
-      return 4;
-
-    case LOCAL_GL_FLOAT_MAT2x3:
-    case LOCAL_GL_FLOAT_MAT3x2:
-      return 2*3;
-
-    case LOCAL_GL_FLOAT_MAT2x4:
-    case LOCAL_GL_FLOAT_MAT4x2:
-      return 2*4;
-
-    case LOCAL_GL_FLOAT_MAT3:
-      return 3*3;
-
-    case LOCAL_GL_FLOAT_MAT3x4:
-    case LOCAL_GL_FLOAT_MAT4x3:
-      return 3*4;
-
-    case LOCAL_GL_FLOAT_MAT4:
-      return 4*4;
-
-    default:
-      return 0;
-  }
-}
-
 void ClientWebGLContext::GetUniform(JSContext* const cx,
                                     const WebGLProgramJS& prog,
                                     const WebGLUniformLocationJS& loc,
@@ -1978,10 +1913,22 @@ void ClientWebGLContext::GetUniform(JSContext* const cx,
   if (!prog.ValidateUsable(*this, "prog")) return;
   if (!loc.ValidateUsable(*this, "loc")) return;
 
+  const auto& activeLinkResult = GetActiveLinkResult();
+  if (!activeLinkResult) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION, "No active linked Program.");
+    return;
+  }
+  const auto& reqLinkInfo = loc.mParent.lock();
+  if (reqLinkInfo.get() != activeLinkResult) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+      "UniformLocation is not from the current active Program.");
+    return;
+  }
+
   const auto res = Run<RPROC(GetUniform)>(prog.mId, loc.mLocation);
   if (!res.type) return;
 
-  const auto elemCount = UniformElemCount(res.type);
+  const auto elemCount = ElemTypeComponents(res.type);
   MOZ_ASSERT(elemCount);
 
   switch (res.type) {
@@ -3343,14 +3290,49 @@ void ClientWebGLContext::UniformData(const GLenum funcElemType,
     return;
   }
 
-  if (!loc) return;
+  const auto& activeLinkResult = GetActiveLinkResult();
+  if (!activeLinkResult) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION, "No active linked Program.");
+    return;
+  }
+
+  // -
+
+  auto availCount = bytes.length() / sizeof(float);
+  if (elemOffset > availCount) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemOffset` too large for `data`.");
+    return;
+  }
+  availCount -= elemOffset;
+  if (elemCountOverride) {
+    if (elemCountOverride > availCount) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemCountOverride` too large for `data`.");
+      return;
+    }
+    availCount = elemCountOverride;
+  }
+
+  // -
+
+  if (!loc) {
+    // We need to catch INVALID_VALUEs from bad-sized `bytes`. :S
+    // For non-null `loc`, the Host side handles this safely.
+    const auto lengthInType = bytes.length() / sizeof(float);
+    const auto channels = ElemTypeComponents(funcElemType);
+    if (!lengthInType || lengthInType % channels != 0) {
+      EnqueueError(LOCAL_GL_INVALID_VALUE,
+        "`values` length (%u) must be a positive integer multiple of size of %s.",
+        lengthInType, EnumString(funcElemType).c_str());
+      return;
+    }
+    return; // All that validation for a no-op!
+  }
   if (!loc->ValidateUsable(*this, "location")) return;
-  const auto& state = State();
 
   // -
 
   const auto& reqLinkInfo = loc->mParent.lock();
-  if (!reqLinkInfo || reqLinkInfo != state.mActiveLinkResult) {
+  if (reqLinkInfo.get() != activeLinkResult) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
       "UniformLocation is not from the current active Program.");
     return;
@@ -3373,22 +3355,6 @@ void ClientWebGLContext::UniformData(const GLenum funcElemType,
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
       "Uniform's `type` requires uniform setter of type %s.", validSetters.c_str());
     return;
-  }
-
-  // -
-
-  auto availCount = bytes.length() / sizeof(float);
-  if (elemOffset > availCount) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemOffset` too large for `data`.");
-    return;
-  }
-  availCount -= elemOffset;
-  if (elemCountOverride) {
-    if (elemCountOverride > availCount) {
-      EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemCountOverride` too large for `data`.");
-      return;
-    }
-    availCount = elemCountOverride;
   }
 
   // -
@@ -4494,23 +4460,25 @@ ClientWebGLContext::GetUniformLocation(const WebGLProgramJS& prog,
     // must still be called once per array.
     prog.mUniformLocByName.emplace();
 
-    std::ostringstream locName;
     for (const auto& activeUniform : res.active.activeUniforms) {
       if (activeUniform.block_index != -1) continue;
 
-      auto baseName = activeUniform.name;
-      const auto indexed = webgl::ParseIndexed(baseName);
+      auto locName = activeUniform.name;
+      const auto indexed = webgl::ParseIndexed(locName);
       if (indexed) {
-        baseName = indexed->name;
+        locName = indexed->name;
       }
 
+      const auto baseLength = locName.size();
       for (const auto& pair : activeUniform.locByIndex) {
-        locName.str(baseName);
         if (indexed) {
-          locName << "[" << pair.first << "]";
+          locName.erase(baseLength); // Erase previous "[N]".
+          locName += '[';
+          locName += std::to_string(pair.first);
+          locName += ']';
         }
         const auto locInfo = WebGLProgramJS::UniformLocInfo{pair.second, activeUniform.elemType};
-        prog.mUniformLocByName->insert({locName.str(), locInfo});
+        prog.mUniformLocByName->insert({locName, locInfo});
       }
     }
   }

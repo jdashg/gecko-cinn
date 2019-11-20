@@ -2263,14 +2263,16 @@ webgl::LinkActiveInfo GetLinkActiveInfo(gl::GLContext& gl, const GLuint prog, co
 
         // Get uniform locations
         {
-          std::ostringstream locName;
+          auto locName = baseMappedName;
+          const auto baseLength = locName.size();
           for (const auto i : IntegerRange(info.elemCount)) {
-            locName.str(baseMappedName);
             if (isArray) {
-              locName << '"' << i << '"';
+              locName.erase(baseLength); // Erase previous [N], but retain capacity.
+              locName += '[';
+              locName += std::to_string(i);
+              locName += ']';
             }
-            const auto& str = locName.str();
-            const auto loc = gl.fGetUniformLocation(prog, str.c_str());
+            const auto loc = gl.fGetUniformLocation(prog, locName.c_str());
             if (loc != -1) {
               info.locByIndex[i] = static_cast<uint32_t>(loc);
 #ifdef DUMP_MakeLinkResult

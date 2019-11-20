@@ -1580,6 +1580,14 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
 
  private:
+   const webgl::LinkResult* GetActiveLinkResult() const {
+     const auto& state = State();
+     if (state.mCurrentProgram) {
+       (void)GetLinkResult(*state.mCurrentProgram->js);
+     }
+     return state.mActiveLinkResult.get();
+   }
+
   void UniformData(GLenum funcElemType,
     const WebGLUniformLocationJS* const loc, bool transpose,
     const Range<const uint8_t>& bytes, GLuint elemOffset = 0,

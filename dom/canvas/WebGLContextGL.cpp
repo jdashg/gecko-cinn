@@ -1288,7 +1288,7 @@ void WebGLContext::UniformData(const uint32_t loc, const bool transpose,
   if (!lengthInType || lengthInType % channels != 0) {
     const auto& activeInfo = validationInfo.info;
     GenerateError(LOCAL_GL_INVALID_VALUE,
-      "`values` length (%tu) must be a positive integer multiple of size of %s.",
+      "`values` length (%u) must be a positive integer multiple of size of %s.",
       lengthInType, EnumString(activeInfo.elemType).c_str());
     return;
   }

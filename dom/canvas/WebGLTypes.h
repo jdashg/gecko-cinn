@@ -907,6 +907,8 @@ Maybe<webgl::ErrorInfo> CheckVertexAttribPointer(bool webgl2, bool isFuncInt,
                                           bool normalized, uint32_t stride,
                                           uint64_t byteOffset);
 
+uint8_t ElemTypeComponents(GLenum elemType);
+
 }  // namespace mozilla
 
 #endif

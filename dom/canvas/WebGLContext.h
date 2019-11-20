@@ -402,6 +402,10 @@ class WebGLContext : public VRefCounted,
   void GenerateError(const GLenum err, const char* const fmt,
                      const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
     MOZ_ASSERT(FuncName());
+
+    // AppendPrintf doesn't understand size_t %tu types, and SKIPS THEM, which is bad.
+    MOZ_ASSERT(strstr(fmt, "%t") == nullptr);
+
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
     text.AppendPrintf(fmt, args...);

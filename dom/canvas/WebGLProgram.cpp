@@ -933,53 +933,68 @@ static uint8_t NumUsedLocationsByElemType(GLenum elemType) {
   }
 }
 
-static uint8_t NumComponents(GLenum elemType) {
+uint8_t ElemTypeComponents(const GLenum elemType) {
   switch (elemType) {
+    case LOCAL_GL_BOOL:
     case LOCAL_GL_FLOAT:
     case LOCAL_GL_INT:
     case LOCAL_GL_UNSIGNED_INT:
-    case LOCAL_GL_BOOL:
+    case LOCAL_GL_SAMPLER_2D:
+    case LOCAL_GL_SAMPLER_3D:
+    case LOCAL_GL_SAMPLER_CUBE:
+    case LOCAL_GL_SAMPLER_2D_SHADOW:
+    case LOCAL_GL_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_SAMPLER_2D_ARRAY_SHADOW:
+    case LOCAL_GL_SAMPLER_CUBE_SHADOW:
+    case LOCAL_GL_INT_SAMPLER_2D:
+    case LOCAL_GL_INT_SAMPLER_3D:
+    case LOCAL_GL_INT_SAMPLER_CUBE:
+    case LOCAL_GL_INT_SAMPLER_2D_ARRAY:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_3D:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_CUBE:
+    case LOCAL_GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
       return 1;
 
+    case LOCAL_GL_BOOL_VEC2:
     case LOCAL_GL_FLOAT_VEC2:
     case LOCAL_GL_INT_VEC2:
     case LOCAL_GL_UNSIGNED_INT_VEC2:
-    case LOCAL_GL_BOOL_VEC2:
       return 2;
 
+    case LOCAL_GL_BOOL_VEC3:
     case LOCAL_GL_FLOAT_VEC3:
     case LOCAL_GL_INT_VEC3:
     case LOCAL_GL_UNSIGNED_INT_VEC3:
-    case LOCAL_GL_BOOL_VEC3:
       return 3;
 
+    case LOCAL_GL_BOOL_VEC4:
     case LOCAL_GL_FLOAT_VEC4:
     case LOCAL_GL_INT_VEC4:
     case LOCAL_GL_UNSIGNED_INT_VEC4:
-    case LOCAL_GL_BOOL_VEC4:
     case LOCAL_GL_FLOAT_MAT2:
       return 4;
 
     case LOCAL_GL_FLOAT_MAT2x3:
     case LOCAL_GL_FLOAT_MAT3x2:
-      return 6;
+      return 2*3;
 
     case LOCAL_GL_FLOAT_MAT2x4:
     case LOCAL_GL_FLOAT_MAT4x2:
-      return 8;
+      return 2*4;
 
     case LOCAL_GL_FLOAT_MAT3:
-      return 9;
+      return 3*3;
 
     case LOCAL_GL_FLOAT_MAT3x4:
     case LOCAL_GL_FLOAT_MAT4x3:
-      return 12;
+      return 3*4;
 
     case LOCAL_GL_FLOAT_MAT4:
-      return 16;
+      return 4*4;
 
     default:
-      MOZ_CRASH("`elemType`");
+      return 0;
   }
 }
 
@@ -1062,7 +1077,8 @@ bool WebGLProgram::ValidateAfterTentativeLink(
         componentsPerVert.push_back(0);
       }
 
-      size_t varyingComponents = NumComponents(cur.elemType);
+      size_t varyingComponents = ElemTypeComponents(cur.elemType);
+      MOZ_ASSERT(varyingComponents);
       varyingComponents *= cur.elemCount;
 
       auto& totalComponentsForIndex = *(componentsPerVert.rbegin());
