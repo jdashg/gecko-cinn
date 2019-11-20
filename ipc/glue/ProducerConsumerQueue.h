@@ -218,7 +218,7 @@ class ProducerView {
   template <typename Arg>
   PcqStatus WriteTypedParam(const Arg& aArg) {
     return mozilla::ipc::PcqParamTraits<PcqTypedArg<Arg>>::Write(
-        *this, PcqTypedArg(aArg));
+        *this, PcqTypedArg<Arg>(aArg));
   }
 
   /**
@@ -307,7 +307,7 @@ class ConsumerView {
   template <typename Arg>
   PcqStatus ReadTypedParam(Arg* aArg = nullptr) {
     return mozilla::ipc::PcqParamTraits<PcqTypedArg<Arg>>::Read(
-        *this, PcqTypedArg(aArg));
+        *this, PcqTypedArg<Arg>(aArg));
   }
 
   /**
@@ -387,7 +387,7 @@ size_t MinSizeofArgs(View&) {
 
 template <typename View, typename Arg1, typename Arg2, typename... Args>
 size_t MinSizeofArgs(View& aView) {
-  return aView.MinSizeParam<Arg1>(nullptr) +
+  return aView.template MinSizeParam<Arg1>(nullptr) +
          MinSizeofArgs<Arg2, Args...>(aView);
 }
 

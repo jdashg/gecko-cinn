@@ -749,7 +749,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   template <typename... Args>
   void EnqueueError(const GLenum error, const char* const format,
-                    const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
+                    const Args&... args) const /*MOZ_FORMAT_PRINTF(3, 4)*/ {
     MOZ_ASSERT(FuncName());
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
@@ -760,7 +760,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   template <typename... Args>
   void EnqueueWarning(const char* const format, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+      /*MOZ_FORMAT_PRINTF(2, 3)*/ {
     EnqueueError(0, format, args...);
   }
 
@@ -831,7 +831,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
       layers::WebRenderCanvasData* aCanvasData) override;
 
   bool UpdateCompositableHandle(LayerTransactionChild* aLayerTransaction,
-                                CompositableHandle aHandle);
+                                CompositableHandle aHandle) override;
 
   // ------
 

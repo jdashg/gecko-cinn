@@ -208,7 +208,7 @@ class CommandSink : public BasicSink {
     if (!ReadArgs(args)) {
       return false;
     }
-    CallFunction(aObj, aFunc, args, std::index_sequence_for<Args...>{});
+    CallFunction(aFunc, args, std::index_sequence_for<Args...>{});
     return true;
   }
 
@@ -293,7 +293,7 @@ class CommandSink : public BasicSink {
   template <typename FunctionType, typename... Args, size_t... Indices,
             typename ReturnType =
                 typename mozilla::FunctionTypeTraits<FunctionType>::ReturnType>
-  ReturnType CallFunction(FunctionType aFun, std::tuple<Args...>& aArgs,
+  ReturnType CallFunction(FunctionType aFunc, std::tuple<Args...>& aArgs,
                           std::index_sequence<Indices...>) {
     return (*aFunc)(std::forward<Args>(std::get<Indices>(aArgs))...);
   }
@@ -306,7 +306,7 @@ class CommandSink : public BasicSink {
   }
 
   template <typename FunctionType, typename... Args, size_t... Indices>
-  void CallVoidFunction(FunctionType aFun, std::tuple<Args...>& aArgs,
+  void CallVoidFunction(FunctionType aFunc, std::tuple<Args...>& aArgs,
                         std::index_sequence<Indices...>) {
     (*aFunc)(std::forward<Args>(std::get<Indices>(aArgs))...);
   }
