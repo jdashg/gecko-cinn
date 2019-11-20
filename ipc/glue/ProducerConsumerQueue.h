@@ -1091,7 +1091,7 @@ class Consumer : public detail::PcqBase {
   }
 
   template <bool isRemove, typename... Args>
-  PcqStatus TryWaitPeekOrRemove(Maybe<TimeDuration> aDuration,
+  PcqStatus TryWaitPeekOrRemove(const Maybe<TimeDuration>& aDuration,
                                 Args&&... aArgs) {
     return TryWaitPeekOrRemoveImpl<isRemove>(false, aDuration,
                                              std::forward<Args>(aArgs)...);
@@ -1670,7 +1670,7 @@ struct PcqParamTraits<nsAString> {
 
     if (len == 0) {
       if (aArg) {
-        *aArg = L"";
+        *aArg = nsString();
       }
       return PcqStatus::Success;
     }
@@ -1728,10 +1728,10 @@ template <typename NSTArrayType,
 struct NSArrayPcqParamTraits;
 
 // For ElementTypes that are !IsTriviallySerializable
-template <typename ElementType>
-struct NSArrayPcqParamTraits<nsTArray<ElementType>, false> {
+template <typename _ElementType>
+struct NSArrayPcqParamTraits<nsTArray<_ElementType>, false> {
+  using ElementType = _ElementType;
   using ParamType = nsTArray<ElementType>;
-  using ElementType = ElementType;
 
   static PcqStatus Write(ProducerView& aProducerView, const ParamType& aArg) {
     size_t arrayLen = aArg.Length();
@@ -1775,10 +1775,10 @@ struct NSArrayPcqParamTraits<nsTArray<ElementType>, false> {
 };
 
 // For ElementTypes that are IsTriviallySerializable
-template <typename ElementType>
-struct NSArrayPcqParamTraits<nsTArray<ElementType>, true> {
+template <typename _ElementType>
+struct NSArrayPcqParamTraits<nsTArray<_ElementType>, true> {
+  using ElementType = _ElementType;
   using ParamType = nsTArray<ElementType>;
-  using ElementType = ElementType;
 
   // TODO: Are there alignment issues?
 
@@ -1827,10 +1827,10 @@ template <typename ArrayType,
 struct ArrayPcqParamTraits;
 
 // For ElementTypes that are !IsTriviallySerializable
-template <typename ElementType, size_t Length>
-struct ArrayPcqParamTraits<Array<ElementType, Length>, false> {
+template <typename _ElementType, size_t Length>
+struct ArrayPcqParamTraits<Array<_ElementType, Length>, false> {
+  using ElementType = _ElementType;
   using ParamType = Array<ElementType, Length>;
-  using ElementType = ElementType;
 
   static PcqStatus Write(ProducerView& aProducerView, const ParamType& aArg) {
     for (size_t i = 0; i < Length; ++i) {
@@ -1849,6 +1849,7 @@ struct ArrayPcqParamTraits<Array<ElementType, Length>, false> {
 
   template <typename View>
   static size_t MinSize(View& aView, const ParamType* aArg) {
+    size_t ret = 0;
     for (size_t i = 0; i < Length; ++i) {
       ret += aView.MinSizeParam(&((*aArg)[i]));
     }
@@ -1857,10 +1858,10 @@ struct ArrayPcqParamTraits<Array<ElementType, Length>, false> {
 };
 
 // For ElementTypes that are IsTriviallySerializable
-template <typename ElementType, size_t Length>
-struct ArrayPcqParamTraits<Array<ElementType, Length>, true> {
+template <typename _ElementType, size_t Length>
+struct ArrayPcqParamTraits<Array<_ElementType, Length>, true> {
+  using ElementType = _ElementType;
   using ParamType = Array<ElementType, Length>;
-  using ElementType = ElementType;
 
   static PcqStatus Write(ProducerView& aProducerView, const ParamType& aArg) {
     return aProducerView.Write(aArg.begin(), sizeof(ElementType[Length]));
