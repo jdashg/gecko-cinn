@@ -463,35 +463,7 @@ class WebGLContext : public VRefCounted,
 
   void DummyReadFramebufferOperation();
 
-  WebGLTexture* ActiveBoundTextureForTarget(const TexTarget texTarget) const {
-    switch (texTarget.get()) {
-      case LOCAL_GL_TEXTURE_2D:
-        return mBound2DTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_CUBE_MAP:
-        return mBoundCubeMapTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_3D:
-        return mBound3DTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_2D_ARRAY:
-        return mBound2DArrayTextures[mActiveTexture];
-      default:
-        MOZ_CRASH("GFX: bad target");
-    }
-  }
-
-  WebGLTexture* GetActiveTex(const GLenum texTarget) const {
-    switch (texTarget) {
-      case LOCAL_GL_TEXTURE_2D:
-        return mBound2DTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_CUBE_MAP:
-        return mBoundCubeMapTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_3D:
-        return mBound3DTextures[mActiveTexture];
-      case LOCAL_GL_TEXTURE_2D_ARRAY:
-        return mBound2DArrayTextures[mActiveTexture];
-      default:
-        return nullptr;
-    }
-  }
+  WebGLTexture* GetActiveTex(const GLenum texTarget) const;
 
   already_AddRefed<layers::Layer> GetCanvasLayer(nsDisplayListBuilder* builder,
                                                  layers::Layer* oldLayer,
@@ -651,9 +623,8 @@ class WebGLContext : public VRefCounted,
 
   //////////////////////////
 
-  void UniformNTv(uint32_t loc, const Range<const uint8_t>& data) const;
-  void UniformMatrixAxBfv(uint32_t loc, bool transpose,
-                          const Range<const float>& data) const;
+  void UniformData(uint32_t loc, bool transpose,
+                   const Range<const uint8_t>& data) const;
 
   ////////////////////////////////////
 
@@ -1356,10 +1327,6 @@ V RoundUpToMultipleOf(const V& value, const M& multiple) {
 
 const char* GetEnumName(GLenum val, const char* defaultRet = "<unknown>");
 std::string EnumString(GLenum val);
-
-bool ValidateTexTarget(WebGLContext* webgl, uint8_t funcDims,
-                       GLenum rawTexTarget, TexTarget* const out_texTarget,
-                       WebGLTexture** const out_tex);
 
 class ScopedUnpackReset final {
  private:

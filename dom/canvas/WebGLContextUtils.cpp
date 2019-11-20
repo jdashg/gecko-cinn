@@ -483,18 +483,6 @@ void WebGLContext::AssertCachedBindings() const {
   GLuint bound = mCurrentProgram ? mCurrentProgram->mGLName : 0;
   AssertUintParamCorrect(gl, LOCAL_GL_CURRENT_PROGRAM, bound);
 
-  // Textures
-  GLenum activeTexture = mActiveTexture + LOCAL_GL_TEXTURE0;
-  AssertUintParamCorrect(gl, LOCAL_GL_ACTIVE_TEXTURE, activeTexture);
-
-  WebGLTexture* curTex = ActiveBoundTextureForTarget(LOCAL_GL_TEXTURE_2D);
-  bound = curTex ? curTex->mGLName : 0;
-  AssertUintParamCorrect(gl, LOCAL_GL_TEXTURE_BINDING_2D, bound);
-
-  curTex = ActiveBoundTextureForTarget(LOCAL_GL_TEXTURE_CUBE_MAP);
-  bound = curTex ? curTex->mGLName : 0;
-  AssertUintParamCorrect(gl, LOCAL_GL_TEXTURE_BINDING_CUBE_MAP, bound);
-
   // Buffers
   bound = mBoundArrayBuffer ? mBoundArrayBuffer->mGLName : 0;
   AssertUintParamCorrect(gl, LOCAL_GL_ARRAY_BUFFER_BINDING, bound);

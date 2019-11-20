@@ -1194,6 +1194,7 @@ void WebGLContext::ReadPixelsImpl(GLint x, GLint y, GLsizei rawWidth,
 void WebGLContext::RenderbufferStorageMultisample(WebGLRenderbuffer& rb, uint32_t samples,
                                             GLenum internalFormat,
                                             uint32_t width, uint32_t height) const {
+  const FuncScope funcScope(*this, "renderbufferStorage(Multisample)?");
   if (IsContextLost()) return;
 
   rb.RenderbufferStorage(samples, internalFormat, width, height);
@@ -1257,8 +1258,20 @@ void WebGLContext::StencilOpSeparate(GLenum face, GLenum sfail, GLenum dpfail,
 ////////////////////////////////////////////////////////////////////////////////
 // Uniform setters.
 
-void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& data) const {
-  const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
+static inline void MatrixAxBToRowMajor(const uint8_t width,
+                                       const uint8_t height,
+                                       const float* __restrict srcColMajor,
+                                       float* __restrict dstRowMajor) {
+  for (uint8_t x = 0; x < width; ++x) {
+    for (uint8_t y = 0; y < height; ++y) {
+      dstRowMajor[y * width + x] = srcColMajor[x * height + y];
+    }
+  }
+}
+
+void WebGLContext::UniformData(const uint32_t loc, const bool transpose,
+                               const Range<const uint8_t>& data) const {
+  const FuncScope funcScope(*this, "uniform setter");
   const auto& link = mActiveProgramLinkInfo;
   if (!link) return;
 
@@ -1271,8 +1284,17 @@ void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& da
 
   // -
 
-  const auto elemCount = data.length() / (sizeof(float) * channels); // rounds down
-  if (!elemCount) return;
+  const auto lengthInType = data.length() / sizeof(float);
+  if (!lengthInType || lengthInType % channels != 0) {
+    const auto& activeInfo = validationInfo.info;
+    GenerateError(LOCAL_GL_INVALID_VALUE,
+      "`values` length (%tu) must be a positive integer multiple of size of %s.",
+      lengthInType, EnumString(activeInfo.elemType).c_str());
+    return;
+  }
+  const auto elemCount = lengthInType / channels;
+
+  // -
 
   const auto& samplerInfo = locInfo->samplerInfo;
   if (samplerInfo) {
@@ -1281,9 +1303,9 @@ void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& da
     for (const auto& val : Range<const uint32_t>(idata, elemCount)) {
       if (val >= maxTexUnits) {
         ErrorInvalidValue(
-            "This uniform location is a sampler, but %d"
-            " is not a valid texture unit.",
-            val);
+          "This uniform location is a sampler, but %d"
+          " is not a valid texture unit.",
+          val);
         return;
       }
     }
@@ -1293,7 +1315,7 @@ void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& da
 
   // This is a little galaxy-brain, sorry!
   const auto ptr = static_cast<const void*>(data.begin().get());
-  (*pfn)(*gl, static_cast<GLint>(loc), elemCount, false, ptr);
+  (*pfn)(*gl, static_cast<GLint>(loc), elemCount, transpose, ptr);
 
   // -
 
@@ -1309,39 +1331,6 @@ void WebGLContext::UniformNTv(const uint32_t loc, const Range<const uint8_t>& da
       destIndex += 1;
     }
   }
-}
-
-static inline void MatrixAxBToRowMajor(const uint8_t width,
-                                       const uint8_t height,
-                                       const float* __restrict srcColMajor,
-                                       float* __restrict dstRowMajor) {
-  for (uint8_t x = 0; x < width; ++x) {
-    for (uint8_t y = 0; y < height; ++y) {
-      dstRowMajor[y * width + x] = srcColMajor[x * height + y];
-    }
-  }
-}
-
-void WebGLContext::UniformMatrixAxBfv(const uint32_t loc, const bool transpose,
-                                      const Range<const float>& data) const {
-  const FuncScope funcScope(*this, "UniformMatrix[1234]x[1234]fv");
-  const auto& link = mActiveProgramLinkInfo;
-  if (!link) return;
-
-  const auto locInfo = MaybeFind(link->locationMap, loc);
-  if (!locInfo) return;
-
-  const auto& validationInfo = locInfo->info;
-  const auto& channels = validationInfo.channelsPerElem;
-  const auto& pfn = validationInfo.pfn;
-
-  // -
-
-  const auto elemCount = data.length() / channels; // rounds down
-  if (!elemCount) return;
-
-  const auto ptr = static_cast<const void*>(data.begin().get());
-  (*pfn)(*gl, static_cast<GLint>(loc), elemCount, transpose, ptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

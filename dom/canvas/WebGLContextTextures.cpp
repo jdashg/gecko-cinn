@@ -48,57 +48,6 @@
 
 namespace mozilla {
 
-static bool IsValidTexTarget(WebGLContext* webgl, uint8_t funcDims,
-                             GLenum rawTexTarget, TexTarget* const out) {
-  uint8_t targetDims;
-
-  switch (rawTexTarget) {
-    case LOCAL_GL_TEXTURE_2D:
-    case LOCAL_GL_TEXTURE_CUBE_MAP:
-      targetDims = 2;
-      break;
-
-    case LOCAL_GL_TEXTURE_3D:
-    case LOCAL_GL_TEXTURE_2D_ARRAY:
-      if (!webgl->IsWebGL2()) return false;
-
-      targetDims = 3;
-      break;
-
-    default:
-      return false;
-  }
-
-  // Some funcs (like GenerateMipmap) doesn't know the dimension, so don't check
-  // it.
-  if (funcDims && targetDims != funcDims) return false;
-
-  *out = rawTexTarget;
-  return true;
-}
-
-bool ValidateTexTarget(WebGLContext* webgl, uint8_t funcDims,
-                       GLenum rawTexTarget, TexTarget* const out_texTarget,
-                       WebGLTexture** const out_tex) {
-  if (webgl->IsContextLost()) return false;
-
-  TexTarget texTarget;
-  if (!IsValidTexTarget(webgl, funcDims, rawTexTarget, &texTarget)) {
-    webgl->ErrorInvalidEnumInfo("texTarget", rawTexTarget);
-    return false;
-  }
-
-  WebGLTexture* tex = webgl->ActiveBoundTextureForTarget(texTarget);
-  if (!tex) {
-    webgl->ErrorInvalidOperation("No texture is bound to this target.");
-    return false;
-  }
-
-  *out_texTarget = texTarget;
-  *out_tex = tex;
-  return true;
-}
-
 /*virtual*/
 bool WebGLContext::IsTexParamValid(GLenum pname) const {
   switch (pname) {
@@ -165,15 +114,11 @@ void WebGLContext::BindTexture(GLenum rawTarget, WebGLTexture* newTex) {
   funcScope.mBindFailureGuard = false;
 }
 
-void WebGLContext::GenerateMipmap(GLenum rawTexTarget) {
+void WebGLContext::GenerateMipmap(GLenum texTarget) {
   const FuncScope funcScope(*this, "generateMipmap");
-  const uint8_t funcDims = 0;
 
-  TexTarget texTarget;
-  WebGLTexture* tex;
-  if (!ValidateTexTarget(this, funcDims, rawTexTarget, &texTarget, &tex))
-    return;
-
+  const auto& tex = GetActiveTex(texTarget);
+  if (!tex) return;
   tex->GenerateMipmap();
 }
 
@@ -189,16 +134,12 @@ Maybe<double> WebGLContext::GetTexParameter(const WebGLTexture& tex,
   return tex.GetTexParameter(pname);
 }
 
-void WebGLContext::TexParameter_base(GLenum rawTexTarget, GLenum pname,
+void WebGLContext::TexParameter_base(GLenum texTarget, GLenum pname,
                                      const FloatOrInt& param) {
   const FuncScope funcScope(*this, "texParameter");
-  const uint8_t funcDims = 0;
 
-  TexTarget texTarget;
-  WebGLTexture* tex;
-  if (!ValidateTexTarget(this, funcDims, rawTexTarget, &texTarget, &tex))
-    return;
-
+  const auto& tex = GetActiveTex(texTarget);
+  if (!tex) return;
   tex->TexParameter(texTarget, pname, param);
 }
 
@@ -216,14 +157,45 @@ static bool IsTexTarget3D(const GLenum texTarget) {
   }
 }
 
+WebGLTexture* WebGLContext::GetActiveTex(const GLenum texTarget) const {
+  const auto* list = &mBound2DTextures;
+  switch (texTarget) {
+    case LOCAL_GL_TEXTURE_2D:
+      break;
+    case LOCAL_GL_TEXTURE_CUBE_MAP:
+      list = &mBoundCubeMapTextures;
+      break;
+    case LOCAL_GL_TEXTURE_3D:
+      list = IsWebGL2() ? &mBound3DTextures : nullptr;
+      break;
+    case LOCAL_GL_TEXTURE_2D_ARRAY:
+      list = IsWebGL2() ? &mBound2DArrayTextures : nullptr;
+      break;
+    default:
+      list = nullptr;
+  }
+  if (!list) {
+    ErrorInvalidEnumArg("target", texTarget);
+    return nullptr;
+  }
+  const auto& tex = (*list)[mActiveTexture];
+  if (!tex) {
+    GenerateError(LOCAL_GL_INVALID_OPERATION, "No texture bound to %s[%u].",
+                EnumString(texTarget).c_str(), mActiveTexture);
+    return nullptr;
+  }
+  return tex;
+}
 
 void WebGLContext::TexStorage(GLenum texTarget,
                                uint32_t levels, GLenum internalFormat,
                                uvec3 size) const {
+  const FuncScope funcScope(*this, "texStorage(Multisample)?");
   if (!IsTexTarget3D(texTarget)) {
     size.z = 1;
   }
   const auto tex = GetActiveTex(texTarget);
+  if (!tex) return;
   tex->TexStorage(texTarget, levels, internalFormat, size);
 }
 
@@ -232,6 +204,9 @@ void WebGLContext::TexImage(GLenum imageTarget, uint32_t level,
                             const webgl::PackingInfo& pi,
                             const TexImageSource& src,
                             const dom::HTMLCanvasElement& canvas) const {
+  const WebGLContext::FuncScope funcScope(*this,
+      bool(respecFormat) ? "texImage" : "texSubImage");
+
   if (respecFormat) {
     offset = {0,0,0};
   }
@@ -240,6 +215,7 @@ void WebGLContext::TexImage(GLenum imageTarget, uint32_t level,
     size.z = 1;
   }
   const auto tex = GetActiveTex(texTarget);
+  if (!tex) return;
   tex->TexImage(imageTarget, level, respecFormat, offset, size, pi, src, canvas);
 }
 
@@ -249,6 +225,9 @@ void WebGLContext::CompressedTexImage(bool sub, GLenum imageTarget,
                                       const Range<const uint8_t>& src,
                                       const uint32_t pboImageSize,
                                       const Maybe<uint64_t> pboOffset) const {
+  const WebGLContext::FuncScope funcScope(*this,
+        !sub ? "compressedTexImage" : "compressedTexSubImage");
+
   if (!sub) {
     offset = {0,0,0};
   }
@@ -257,6 +236,7 @@ void WebGLContext::CompressedTexImage(bool sub, GLenum imageTarget,
     size.z = 1;
   }
   const auto tex = GetActiveTex(texTarget);
+  if (!tex) return;
   tex->CompressedTexImage(sub, imageTarget, level, format, offset, size,
         src, pboImageSize, pboOffset);
 }
@@ -265,10 +245,14 @@ void WebGLContext::CopyTexImage(GLenum imageTarget, uint32_t level,
                                   GLenum respecFormat, uvec3 dstOffset,
                                   const ivec2& srcOffset,
                                   const uvec2& size) const {
+  const WebGLContext::FuncScope funcScope(*this,
+        bool(respecFormat) ? "copyTexImage" : "copyTexSubImage");
+
   if (respecFormat) {
     dstOffset = {0,0,0};
   }
   const auto tex = GetActiveTex(ImageToTexTarget(imageTarget));
+  if (!tex) return;
   tex->CopyTexImage(imageTarget, level, respecFormat, dstOffset, srcOffset, size);
 }
 

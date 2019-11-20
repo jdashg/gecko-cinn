@@ -123,7 +123,7 @@ private:
   ObjectId mLastId = 0;
 public:
   webgl::ExtensionBits mEnabledExtensions;
-  std::shared_ptr<webgl::LinkResult> mActiveLinkResult;
+  mutable std::shared_ptr<webgl::LinkResult> mActiveLinkResult;
   RefPtr<WebGLProgramInner> mCurrentProgram;
 
   RefPtr<WebGLTransformFeedbackJS> mDefaultTfo;
@@ -247,7 +247,18 @@ private:
   explicit WebGLFramebufferJS(const ClientWebGLContext&);
 private:
   ~WebGLFramebufferJS() = default;
+
+  void EnsureColorAttachments();
+
 public:
+  Attachment* GetAttachment(const GLenum slotEnum) {
+    auto ret = MaybeFind(mAttachments, slotEnum);
+    if (!ret) {
+      EnsureColorAttachments();
+      ret = MaybeFind(mAttachments, slotEnum);
+    }
+    return ret;
+  }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
@@ -1569,8 +1580,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                        JS::MutableHandle<JS::Value> retval, ErrorResult& rv);
 
  private:
-  void UniformNTv(GLenum funcElemType,
-    const WebGLUniformLocationJS* const loc,
+  void UniformData(GLenum funcElemType,
+    const WebGLUniformLocationJS* const loc, bool transpose,
     const Range<const uint8_t>& bytes, GLuint elemOffset = 0,
                             GLuint elemCountOverride = 0) const;
 
@@ -1600,22 +1611,22 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 #define _(T,type_t,TYPE) \
     void Uniform1 ## T(const WebGLUniformLocationJS* const loc, type_t x) const { \
       const type_t arr[] = { x }; \
-      UniformNTv(TYPE, loc, MakeByteRange(arr)); \
+      UniformData(TYPE, loc, false, MakeByteRange(arr)); \
     } \
     void Uniform2 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
                    type_t y) const { \
       const type_t arr[] = { x, y }; \
-      UniformNTv(TYPE##_VEC2, loc, MakeByteRange(arr)); \
+      UniformData(TYPE##_VEC2, loc, false, MakeByteRange(arr)); \
     } \
     void Uniform3 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
                    type_t y, type_t z) const { \
       const type_t arr[] = { x, y, z }; \
-      UniformNTv(TYPE##_VEC3, loc, MakeByteRange(arr)); \
+      UniformData(TYPE##_VEC3, loc, false, MakeByteRange(arr)); \
     } \
     void Uniform4 ## T(const WebGLUniformLocationJS* const loc, type_t x, \
                    type_t y, type_t z, type_t w) const { \
       const type_t arr[] = { x, y, z, w }; \
-      UniformNTv(TYPE##_VEC4, loc, MakeByteRange(arr)); \
+      UniformData(TYPE##_VEC4, loc, false, MakeByteRange(arr)); \
     }
 
   _(f ,float   ,LOCAL_GL_FLOAT)
@@ -1631,7 +1642,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
                                 const TypeListU& list, \
                                 GLuint elemOffset = 0, \
                                 GLuint elemCountOverride = 0) const { \
-      UniformNTv(TYPE, loc, MakeByteRange(list), elemOffset, elemCountOverride); \
+      UniformData(TYPE, loc, false, MakeByteRange(list), elemOffset, elemCountOverride); \
     }
 
   _(1f ,Float32ListU,LOCAL_GL_FLOAT)
@@ -1651,18 +1662,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   // -
 
-  private:
-  void UniformMatrixAxBfv(GLenum funcElemType,
-                          const WebGLUniformLocationJS*, bool transpose,
-                          const Range<const float>&, GLuint elemOffset,
-                          GLuint elemCountOverride) const;
-  public:
-
 #define _(X) \
   void UniformMatrix##X##fv(const WebGLUniformLocationJS* loc, bool transpose, \
                             const Float32ListU& list, GLuint elemOffset = 0, \
                             GLuint elemCountOverride = 0) const { \
-    UniformMatrixAxBfv(LOCAL_GL_FLOAT_MAT##X, loc, transpose, MakeRange(list), \
+    UniformData(LOCAL_GL_FLOAT_MAT##X, loc, transpose, MakeByteRange(list), \
                        elemOffset, elemCountOverride); \
   }
 
@@ -1905,11 +1909,11 @@ public:
                                                 dom::CallerType callerType);
   void RequestExtension(WebGLExtensionID) const;
 
+ public:
   bool IsExtensionEnabled(const WebGLExtensionID id) const {
     return bool(mNotLost->extensions[EnumValue(id)]);
   }
 
- public:
   void AddCompressedFormat(GLenum);
 
   // ---------------------------- Misc Extensions ----------------------------

@@ -230,14 +230,17 @@ webgl::ActiveUniformValidationInfo webgl::ActiveUniformValidationInfo::Make(
       ret.channelsPerElem = 1;
       ret.pfn = &UniformAs1iv;
       break;
+    case LOCAL_GL_BOOL_VEC2:
     case LOCAL_GL_INT_VEC2:
       ret.channelsPerElem = 2;
       ret.pfn = &UniformAs2iv;
       break;
+    case LOCAL_GL_BOOL_VEC3:
     case LOCAL_GL_INT_VEC3:
       ret.channelsPerElem = 3;
       ret.pfn = &UniformAs3iv;
       break;
+    case LOCAL_GL_BOOL_VEC4:
     case LOCAL_GL_INT_VEC4:
       ret.channelsPerElem = 4;
       ret.pfn = &UniformAs4iv;

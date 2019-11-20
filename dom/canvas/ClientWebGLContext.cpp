@@ -1011,7 +1011,8 @@ already_AddRefed<WebGLVertexArrayJS> ClientWebGLContext::CreateVertexArray() con
 void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteBuffer");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind from all bind points and bound containers
@@ -1071,7 +1072,8 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
 void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteFramebuffer");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1093,7 +1095,8 @@ void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
 void ClientWebGLContext::DeleteProgram(WebGLProgramJS* const obj) const {
   const FuncScope funcScope(*this, "deleteProgram");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
 
   // Don't unbind
 
@@ -1104,7 +1107,8 @@ void ClientWebGLContext::DeleteProgram(WebGLProgramJS* const obj) const {
 void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
   const FuncScope funcScope(*this, "deleteQuery");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
 
   // Don't unbind
 
@@ -1115,7 +1119,8 @@ void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
 void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteRenderbuffer");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1146,7 +1151,8 @@ void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
 void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
   const FuncScope funcScope(*this, "deleteSampler");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1163,7 +1169,8 @@ void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
 void ClientWebGLContext::DeleteShader(WebGLShaderJS* const obj) const {
   const FuncScope funcScope(*this, "deleteShader");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
 
   // Don't unbind
 
@@ -1174,7 +1181,8 @@ void ClientWebGLContext::DeleteShader(WebGLShaderJS* const obj) const {
 void ClientWebGLContext::DeleteSync(WebGLSyncJS* const obj) const {
   const FuncScope funcScope(*this, "deleteSync");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
 
   // Nothing to unbind
 
@@ -1185,7 +1193,8 @@ void ClientWebGLContext::DeleteSync(WebGLSyncJS* const obj) const {
 void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
   const FuncScope funcScope(*this, "deleteTexture");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1231,7 +1240,8 @@ void ClientWebGLContext::DeleteTransformFeedback(
     WebGLTransformFeedbackJS* const obj) const {
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
 
   if (obj->mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -1249,7 +1259,8 @@ void ClientWebGLContext::DeleteTransformFeedback(
 void ClientWebGLContext::DeleteVertexArray(WebGLVertexArrayJS* const obj) {
   const FuncScope funcScope(*this, "deleteVertexArray");
   if (IsContextLost()) return;
-  if (obj && !obj->ValidateUsable(*this, "obj")) return;
+  if (!obj) return;
+  if (!obj->ValidateUsable(*this, "obj")) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1419,7 +1430,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
   };
   const auto fnSetRetval_Tex = [&](const GLenum texTarget) {
     const auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
-    const auto tex = *MaybeFind(texUnit.texByTarget, texTarget);
+    const auto tex = Find(texUnit.texByTarget, texTarget, nullptr);
     (void)ToJSValueOrNull(cx, tex, retval);
   };
 
@@ -1809,13 +1820,12 @@ void ClientWebGLContext::GetFramebufferAttachmentParameter(
     return;
   }
 
-  const auto& attachments = fb->mAttachments;
-  const auto itr = attachments.find(attachment);
-  if (itr == attachments.end()) {
+  const auto maybeSlot = fb->GetAttachment(attachment);
+  if (!maybeSlot) {
     EnqueueError_ArgEnum("attachment", attachment);
     return;
   }
-  const auto& attached = itr->second;
+  const auto& attached = *maybeSlot;
 
   if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
     if (attached.rb) {
@@ -2751,7 +2761,7 @@ void ClientWebGLContext::FramebufferAttach(
     return;
   }
 
-  const auto slot = MaybeFind(fb->mAttachments, attachSlot);
+  const auto slot = fb->GetAttachment(attachSlot);
   if (!slot) {
     EnqueueError_ArgEnum("attachment", attachSlot);
     return;
@@ -3236,6 +3246,7 @@ void ClientWebGLContext::UseProgram(const WebGLProgramJS* const prog) {
   // -
 
   state.mCurrentProgram = prog ? prog->mInnerRef : nullptr;
+  state.mActiveLinkResult = prog ? prog->mResult : nullptr;
 
   Run<RPROC(UseProgram)>(prog ? prog->mId : 0);
 }
@@ -3320,15 +3331,30 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
   }
 }
 
-void ClientWebGLContext::UniformNTv(const GLenum funcElemType,
-                                    const WebGLUniformLocationJS* const loc,
-                                    const Range<const uint8_t>& bytes,
-              GLuint elemOffset,
+void ClientWebGLContext::UniformData(const GLenum funcElemType,
+  const WebGLUniformLocationJS* const loc, bool transpose,
+                        const Range<const uint8_t>& bytes, GLuint elemOffset,
                         GLuint elemCountOverride) const {
-  const FuncScope funcScope(*this, "uniform[1234]u?[fi]v?");
+  const FuncScope funcScope(*this, "uniform setter");
   if (IsContextLost()) return;
+
+  if (!mIsWebGL2 && transpose) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`transpose`:true requires WebGL 2.");
+    return;
+  }
+
   if (!loc) return;
   if (!loc->ValidateUsable(*this, "location")) return;
+  const auto& state = State();
+
+  // -
+
+  const auto& reqLinkInfo = loc->mParent.lock();
+  if (!reqLinkInfo || reqLinkInfo != state.mActiveLinkResult) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+      "UniformLocation is not from the current active Program.");
+    return;
+  }
 
   // -
 
@@ -3336,7 +3362,7 @@ void ClientWebGLContext::UniformNTv(const GLenum funcElemType,
   for (const auto allowed : loc->mValidUploadElemTypes) {
     funcMatchesLocation |= (funcElemType == allowed);
   }
-  if (MOZ_UNLIKELY( !funcMatchesLocation )) {
+  if (MOZ_UNLIKELY(!funcMatchesLocation)) {
     std::string validSetters;
     for (const auto allowed : loc->mValidUploadElemTypes) {
       validSetters += EnumString(allowed);
@@ -3345,7 +3371,7 @@ void ClientWebGLContext::UniformNTv(const GLenum funcElemType,
     validSetters.pop_back(); // Cheekily discard the extra trailing '/'.
 
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
-        "Uniform's `type` requires uniform setter of type %s.", validSetters.c_str());
+      "Uniform's `type` requires uniform setter of type %s.", validSetters.c_str());
     return;
   }
 
@@ -3369,52 +3395,7 @@ void ClientWebGLContext::UniformNTv(const GLenum funcElemType,
 
   const auto ptr = bytes.begin().get() + (elemOffset * sizeof(float));
   const auto buffer = RawBuffer<const uint8_t>(availCount * sizeof(float), ptr);
-  Run<RPROC(UniformNTv)>(loc->mLocation, buffer);
-}
-
-void ClientWebGLContext::UniformMatrixAxBfv(const GLenum funcElemType,
-  const WebGLUniformLocationJS* const loc, bool transpose,
-                        const Range<const float>& data, GLuint elemOffset,
-                        GLuint elemCountOverride) const {
-  const FuncScope funcScope(*this, "uniformMatrix[234](x[234])?fv");
-  if (IsContextLost()) return;
-  if (!mIsWebGL2 && transpose) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`transpose`:true requires WebGL 2.");
-    return;
-  }
-
-  if (!loc) return;
-  if (!loc->ValidateUsable(*this, "location")) return;
-
-  // -
-
-  const auto& allowed = loc->mValidUploadElemTypes[0]; // Matrix types must match exactly.
-  if (MOZ_UNLIKELY( funcElemType != allowed )) {
-    EnqueueError(LOCAL_GL_INVALID_OPERATION,
-        "Uniform's `type` requires uniform setter of type %s.", EnumString(allowed).c_str());
-    return;
-  }
-
-  // -
-
-  auto availCount = data.length();
-  if (elemOffset > availCount) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemOffset` too large for `data`.");
-    return;
-  }
-  availCount -= elemOffset;
-  if (elemCountOverride) {
-    if (elemCountOverride > availCount) {
-      EnqueueError(LOCAL_GL_INVALID_VALUE, "`elemCountOverride` too large for `data`.");
-      return;
-    }
-    availCount = elemCountOverride;
-  }
-
-  // -
-
-  const auto buffer = RawBuffer<const float>(availCount, data.begin().get() + elemOffset);
-  Run<RPROC(UniformMatrixAxBfv)>(loc->mLocation, transpose, buffer);
+  Run<RPROC(UniformData)>(loc->mLocation, transpose, buffer);
 }
 
 // -
@@ -4173,8 +4154,9 @@ void ClientWebGLContext::GetAttachedShaders(const WebGLProgramJS& prog,
 
   auto& arr = retval.SetValue();
   for (const auto& pair : prog.mNextLink_Shaders) {
-    const auto& shader = pair.second->js;
-    arr.AppendElement(shader);
+    const auto& shaderInner = pair.second;
+    if (!shaderInner) continue;
+    arr.AppendElement(shaderInner->js);
   }
 }
 
@@ -4747,6 +4729,13 @@ const webgl::LinkResult& ClientWebGLContext::GetLinkResult(const WebGLProgramJS&
   if (prog.mResult->pending) {
     *(prog.mResult) = Run<RPROC(GetLinkResult)>(prog.mId);
     prog.mUniformBlockBindings.resize(prog.mResult->active.activeUniformBlocks.size());
+
+    auto& state = State();
+    if (state.mCurrentProgram &&
+        state.mCurrentProgram->js == &prog &&
+        prog.mResult->success) {
+      state.mActiveLinkResult = prog.mResult;
+    }
   }
   return *(prog.mResult);
 }
@@ -4811,8 +4800,17 @@ WebGLFramebufferJS::WebGLFramebufferJS(const ClientWebGLContext& webgl) : webgl:
     (void)mAttachments[LOCAL_GL_DEPTH_STENCIL_ATTACHMENT];
   }
 
-  const auto& limits = webgl.Limits();
-  for (const auto& i : IntegerRange(limits.maxColorDrawBuffers)) {
+  EnsureColorAttachments();
+}
+
+void WebGLFramebufferJS::EnsureColorAttachments() {
+  const auto& webgl = Context();
+  const auto& limits = webgl->Limits();
+  auto maxColorDrawBuffers = limits.maxColorDrawBuffers;
+  if (!webgl->mIsWebGL2 && !webgl->IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers)) {
+    maxColorDrawBuffers = 1;
+  }
+  for (const auto& i : IntegerRange(maxColorDrawBuffers)) {
     (void)mAttachments[LOCAL_GL_COLOR_ATTACHMENT0 + i];
   }
 }
