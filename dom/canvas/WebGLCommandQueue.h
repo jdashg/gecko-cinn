@@ -35,7 +35,7 @@ enum CommandSyncType { ASYNC, SYNC };
 
 class BasicSource {
  public:
-  BasicSource(UniquePtr<Producer>&& aProducer)
+  explicit BasicSource(UniquePtr<Producer>&& aProducer)
       : mProducer(std::move(aProducer)) {
     MOZ_ASSERT(mProducer);
   }
@@ -51,7 +51,7 @@ class BasicSource {
 
 class BasicSink {
  public:
-  BasicSink(UniquePtr<Consumer>&& aConsumer) : mConsumer(std::move(aConsumer)) {
+  explicit BasicSink(UniquePtr<Consumer>&& aConsumer) : mConsumer(std::move(aConsumer)) {
     MOZ_ASSERT(mConsumer);
   }
   virtual ~BasicSink() {}
@@ -74,7 +74,7 @@ class BasicSink {
 template <typename Command>
 class CommandSource : public BasicSource {
  public:
-  CommandSource(UniquePtr<Producer>&& aProducer)
+  explicit CommandSource(UniquePtr<Producer>&& aProducer)
       : BasicSource(std::move(aProducer)) {}
 
   template <typename... Args>
@@ -111,13 +111,13 @@ class CommandSource : public BasicSource {
 template <typename Command>
 class CommandSink : public BasicSink {
  public:
-  CommandSink(UniquePtr<Consumer>&& aConsumer)
+  explicit CommandSink(UniquePtr<Consumer>&& aConsumer)
       : BasicSink(std::move(aConsumer)) {}
 
   /**
    * Attempts to process the next command in the queue, if one is available.
    */
-  CommandResult ProcessOne(Maybe<TimeDuration> aTimeout) {
+  CommandResult ProcessOne(const Maybe<TimeDuration>& aTimeout) {
     Command command;
     PcqStatus status = (aTimeout.isNothing() || aTimeout.value())
                            ? this->mConsumer->TryWaitRemove(aTimeout, command)

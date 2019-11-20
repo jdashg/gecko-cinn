@@ -97,7 +97,7 @@ struct PcqStatus {
     PcqOOMError,
   } mValue;
 
-  PcqStatus(const EStatus status = Success) : mValue(status) {}
+  MOZ_IMPLICIT PcqStatus(const EStatus status = Success) : mValue(status) {}
   explicit operator bool() const { return mValue == Success; }
   explicit operator int() const { return static_cast<int>(mValue); }
   bool operator==(const EStatus& o) const { return mValue == o; }
@@ -456,7 +456,7 @@ class Marshaller {
 class PcqRCSemaphore {
  public:
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(PcqRCSemaphore)
-  PcqRCSemaphore(CrossProcessSemaphore* aSem) : mSem(aSem) { MOZ_ASSERT(mSem); }
+  explicit PcqRCSemaphore(CrossProcessSemaphore* aSem) : mSem(aSem) { MOZ_ASSERT(mSem); }
 
   bool Wait(const Maybe<TimeDuration>& aTime) { return mSem->Wait(aTime); }
   void Signal() { mSem->Signal(); }
@@ -792,7 +792,7 @@ class Producer : public detail::PcqBase {
    * succeed in the time allotted then the queue is unchanged.
    */
   template <typename... Args>
-  PcqStatus TryWaitInsert(Maybe<TimeDuration> aDuration, Args&&... aArgs) {
+  PcqStatus TryWaitInsert(const Maybe<TimeDuration>& aDuration, Args&&... aArgs) {
     return TryWaitInsertImpl(false, aDuration, std::forward<Args>(aArgs)...);
   }
 
@@ -820,7 +820,7 @@ class Producer : public detail::PcqBase {
   }
 
   template <typename... Args>
-  PcqStatus TryWaitInsertImpl(bool aRecursed, Maybe<TimeDuration> aDuration,
+  PcqStatus TryWaitInsertImpl(bool aRecursed, const Maybe<TimeDuration>& aDuration,
                               Args&&... aArgs) {
     // Wait up to aDuration for the not-full semaphore to be signaled.
     // If we run out of time then quit.
@@ -945,7 +945,7 @@ class Consumer : public detail::PcqBase {
    * unchanged. Pass Nothing to wait until peek succeeds.
    */
   template <typename... Args>
-  PcqStatus TryWaitPeek(Maybe<TimeDuration> aDuration, Args&... aArgs) {
+  PcqStatus TryWaitPeek(const Maybe<TimeDuration>& aDuration, Args&... aArgs) {
     return TryWaitPeekOrRemove<false>(aDuration, aArgs...);
   }
 
@@ -954,7 +954,7 @@ class Consumer : public detail::PcqBase {
    * Pass Nothing to wait until removal succeeds.
    */
   template <typename... Args>
-  PcqStatus TryWaitRemove(Maybe<TimeDuration> aDuration, Args&... aArgs) {
+  PcqStatus TryWaitRemove(const Maybe<TimeDuration>& aDuration, Args&... aArgs) {
     return TryWaitPeekOrRemove<true>(aDuration, aArgs...);
   }
 
@@ -965,7 +965,7 @@ class Consumer : public detail::PcqBase {
    * Pass Nothing to wait until removal succeeds.
    */
   template <typename... Args>
-  PcqStatus TryWaitRemove(Maybe<TimeDuration> aDuration) {
+  PcqStatus TryWaitRemove(const Maybe<TimeDuration>& aDuration) {
     // Wait up to aDuration for the not-empty semaphore to be signaled.
     // If we run out of time then quit.
     TimeStamp start(TimeStamp::Now());
@@ -1099,7 +1099,7 @@ class Consumer : public detail::PcqBase {
 
   template <bool isRemove, typename... Args>
   PcqStatus TryWaitPeekOrRemoveImpl(bool aRecursed,
-                                    Maybe<TimeDuration> aDuration,
+                                    const Maybe<TimeDuration>& aDuration,
                                     Args&... aArgs) {
     // Wait up to aDuration for the not-empty semaphore to be signaled.
     // If we run out of time then quit.

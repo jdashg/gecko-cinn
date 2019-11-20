@@ -20,6 +20,11 @@ struct ParamTraits<mozilla::webgl::ContextLossReason>
 // -
 
 template <typename T>
+bool ValidateParam(const T& val) {
+  return ParamTraits<T>::Validate(val);
+}
+
+template <typename T>
 struct ValidatedPlainOldDataSerializer : public PlainOldDataSerializer<T> {
   static void Write(Message* const msg, const T& in) {
     MOZ_ASSERT(ValidateParam(in));
@@ -34,11 +39,6 @@ struct ValidatedPlainOldDataSerializer : public PlainOldDataSerializer<T> {
 
   // static bool Validate(const T&) = 0;
 };
-
-template <typename T>
-bool ValidateParam(const T& val) {
-  return ParamTraits<T>::Validate(val);
-}
 
 // -
 
