@@ -399,7 +399,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
   template <typename... Args>
   void GenerateError(const GLenum err, const char* const fmt,
-                     const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
+                     const Args&... args) const {
     MOZ_ASSERT(FuncName());
 
     // AppendPrintf doesn't understand size_t %tu types, and SKIPS THEM, which
@@ -408,40 +408,40 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
     text.AppendPrintf(fmt, args...);
+#pragma clang diagnostic pop
+
     GenerateErrorImpl(err, text);
   }
 
   template <typename... Args>
-  void ErrorInvalidEnum(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void ErrorInvalidEnum(const char* const fmt, const Args&... args) const {
     GenerateError(LOCAL_GL_INVALID_ENUM, fmt, args...);
   }
   template <typename... Args>
-  void ErrorInvalidOperation(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void ErrorInvalidOperation(const char* const fmt, const Args&... args) const {
     GenerateError(LOCAL_GL_INVALID_OPERATION, fmt, args...);
   }
   template <typename... Args>
-  void ErrorInvalidValue(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void ErrorInvalidValue(const char* const fmt, const Args&... args) const {
     GenerateError(LOCAL_GL_INVALID_VALUE, fmt, args...);
   }
   template <typename... Args>
   void ErrorInvalidFramebufferOperation(const char* const fmt,
-                                        const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+                                        const Args&... args) const {
     GenerateError(LOCAL_GL_INVALID_FRAMEBUFFER_OPERATION, fmt, args...);
   }
   template <typename... Args>
-  void ErrorOutOfMemory(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void ErrorOutOfMemory(const char* const fmt, const Args&... args) const {
     GenerateError(LOCAL_GL_OUT_OF_MEMORY, fmt, args...);
   }
 
   template <typename... Args>
-  void ErrorImplementationBug(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void ErrorImplementationBug(const char* const fmt,
+                              const Args&... args) const {
     const nsPrintfCString newFmt(
         "Implementation bug, please file at %s! %s",
         "https://bugzilla.mozilla.org/"
@@ -1258,20 +1258,23 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
  public:
   // console logging helpers
   template <typename... Args>
-  void GenerateWarning(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void GenerateWarning(const char* const fmt, const Args&... args) const {
     GenerateError(0, fmt, args...);
   }
 
   template <typename... Args>
-  void GeneratePerfWarning(const char* const fmt, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void GeneratePerfWarning(const char* const fmt, const Args&... args) const {
     if (!ShouldGeneratePerfWarnings()) return;
 
     const auto funcName = FuncName();
     nsCString msg;
     msg.AppendPrintf("WebGL perf warning: %s: ", funcName);
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
     msg.AppendPrintf(fmt, args...);
+#pragma clang diagnostic pop
+
     GenerateErrorImpl(0, msg);
 
     mNumPerfWarnings++;

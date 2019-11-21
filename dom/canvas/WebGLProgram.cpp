@@ -326,8 +326,8 @@ webgl::ActiveUniformValidationInfo webgl::ActiveUniformValidationInfo::Make(
 
 //#define DUMP_SHADERVAR_MAPPINGS
 
-static RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(
-    WebGLProgram* prog, gl::GLContext* gl) {
+RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(WebGLProgram* prog,
+                                                        gl::GLContext* gl) {
   WebGLContext* const webgl = prog->mContext;
 
   RefPtr<webgl::LinkedProgramInfo> info(new webgl::LinkedProgramInfo(prog));

@@ -411,7 +411,6 @@ UNIFIED_SOURCES += [
     'client/ImageClient.cpp',
     'client/MultiTiledContentClient.cpp',
     'client/SingleTiledContentClient.cpp',
-    'client/TextureClient.cpp',
     'client/TextureClientPool.cpp',
     'client/TextureClientRecycleAllocator.cpp',
     'client/TextureClientSharedSurface.cpp',
@@ -545,6 +544,7 @@ UNIFIED_SOURCES += [
 SOURCES += [
     'basic/BasicCompositor.cpp',
     'basic/BasicImageLayer.cpp',
+    'client/TextureClient.cpp',
     'ImageContainer.cpp',
     'PersistentBufferProvider.cpp',
     'protobuf/LayerScopePacket.pb.cc',

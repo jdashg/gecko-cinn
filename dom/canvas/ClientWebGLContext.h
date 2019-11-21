@@ -568,6 +568,14 @@ inline Range<const uint32_t> MakeRange(const Uint32ListU& list) {
   return MakeRange(list.GetAsUnsignedLongSequence());
 }
 
+template <typename T>
+inline Range<const uint8_t> MakeByteRange(const T& x) {
+  const auto typed = MakeRange(x);
+  return Range<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(typed.begin().get()),
+      typed.length() * sizeof(typed[0]));
+}
+
 // -
 
 struct TexImageSourceAdapter final : public TexImageSource {
@@ -773,18 +781,21 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   template <typename... Args>
   void EnqueueError(const GLenum error, const char* const format,
-                    const Args&... args) const MOZ_FORMAT_PRINTF(3, 4) {
+                    const Args&... args) const {
     MOZ_ASSERT(FuncName());
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
     text.AppendPrintf(format, args...);
+#pragma clang diagnostic pop
 
     EnqueueErrorImpl(error, text);
   }
 
   template <typename... Args>
-  void EnqueueWarning(const char* const format, const Args&... args) const
-      MOZ_FORMAT_PRINTF(2, 3) {
+  void EnqueueWarning(const char* const format, const Args&... args) const {
     EnqueueError(0, format, args...);
   }
 

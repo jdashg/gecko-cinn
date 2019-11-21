@@ -884,14 +884,6 @@ inline auto MakeRangeAbv(const T& abv)
   return {abv.DataAllowShared(), abv.LengthAllowShared()};
 }
 
-template <typename T>
-inline Range<const uint8_t> MakeByteRange(const T& x) {
-  const auto typed = MakeRange(x);
-  return Range<const uint8_t>(
-      reinterpret_cast<const uint8_t*>(typed.begin().get()),
-      typed.length() * sizeof(typed[0]));
-}
-
 Maybe<Range<const uint8_t>> GetRangeFromView(const dom::ArrayBufferView& view,
                                              GLuint elemOffset,
                                              GLuint elemCountOverride);

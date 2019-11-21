@@ -2133,7 +2133,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
     {
       const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_ATTRIBUTES);
       ret.activeAttribs.reserve(count);
-      for (const auto& i : IntegerRange(count)) {
+      for (const auto i : IntegerRange(count)) {
         GLsizei lengthWithoutNull = 0;
         GLint elemCount = 0;  // `size`
         GLenum elemType = 0;  // `type`
@@ -2185,7 +2185,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
       if (webgl2) {
         std::vector<GLuint> activeIndices;
         activeIndices.reserve(count);
-        for (const auto& i : IntegerRange(count)) {
+        for (const auto i : IntegerRange(count)) {
           activeIndices.push_back(i);
         }
 
@@ -2210,7 +2210,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
             LOCAL_GL_UNIFORM_IS_ROW_MAJOR, blockIsRowMajorList.data());
       }
 
-      for (const auto& i : IntegerRange(count)) {
+      for (const auto i : IntegerRange(count)) {
         GLsizei lengthWithoutNull = 0;
         GLint elemCount = 0;  // `size`
         GLenum elemType = 0;  // `type`
@@ -2303,7 +2303,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
         const auto count = fnGetProgramui(LOCAL_GL_ACTIVE_UNIFORM_BLOCKS);
         ret.activeUniformBlocks.reserve(count);
 
-        for (const auto& i : IntegerRange(count)) {
+        for (const auto i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
           gl.fGetActiveUniformBlockName(prog, i, stringBuffer.size(),
                                         &lengthWithoutNull,
@@ -2348,7 +2348,7 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
         const auto count = fnGetProgramui(LOCAL_GL_TRANSFORM_FEEDBACK_VARYINGS);
         ret.activeTfVaryings.reserve(count);
 
-        for (const auto& i : IntegerRange(count)) {
+        for (const auto i : IntegerRange(count)) {
           GLsizei lengthWithoutNull = 0;
           GLsizei elemCount = 0;  // `size`
           GLenum elemType = 0;    // `type`

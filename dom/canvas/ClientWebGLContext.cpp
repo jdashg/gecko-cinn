@@ -1027,7 +1027,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   // Unbind from all bind points and bound containers
 
   // UBOs
-  for (const auto& i : IntegerRange(state.mBoundUbos.size())) {
+  for (const auto i : IntegerRange(state.mBoundUbos.size())) {
     if (state.mBoundUbos[i] == obj) {
       BindBufferBase(LOCAL_GL_UNIFORM_BUFFER, i, nullptr);
     }
@@ -1036,7 +1036,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   // TFO only if not active
   if (!state.mBoundTfo->mActiveOrPaused) {
     const auto& buffers = state.mBoundTfo->mAttribBuffers;
-    for (const auto& i : IntegerRange(buffers.size())) {
+    for (const auto i : IntegerRange(buffers.size())) {
       if (buffers[i] == obj) {
         BindBufferBase(LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER, i, nullptr);
       }
@@ -1057,7 +1057,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
 
   const auto& vaoBuffers = state.mBoundVao->mAttribBuffers;
   Maybe<WebGLBufferJS*> toRestore;
-  for (const auto& i : IntegerRange(vaoBuffers.size())) {
+  for (const auto i : IntegerRange(vaoBuffers.size())) {
     if (vaoBuffers[i] == obj) {
       if (!toRestore) {
         toRestore =
@@ -1169,7 +1169,7 @@ void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
   const auto& state = *(mNotLost->generation);
 
   // Unbind
-  for (const auto& i : IntegerRange(state.mTexUnits.size())) {
+  for (const auto i : IntegerRange(state.mTexUnits.size())) {
     if (state.mTexUnits[i].sampler == obj) {
       BindSampler(i, nullptr);
     }
@@ -1215,7 +1215,7 @@ void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
   if (target) {
     // Unbind from tex units
     Maybe<uint32_t> restoreTexUnit;
-    for (const auto& i : IntegerRange(state.mTexUnits.size())) {
+    for (const auto i : IntegerRange(state.mTexUnits.size())) {
       if (state.mTexUnits[i].texByTarget[target] == obj) {
         if (!restoreTexUnit) {
           restoreTexUnit = Some(state.mActiveTexUnit);
@@ -2332,10 +2332,11 @@ Maybe<webgl::ErrorInfo> CheckBindBufferRange(
 
       if (isBuffer) {
         if (offset % 4 != 0 || size % 4 != 0) {
-          const auto info = nsPrintfCString(
-              "`offset` (%u) and `size` (%u) must both be aligned to 4 for"
-              " TRANSFORM_FEEDBACK_BUFFER.",
-              offset, size);
+          const auto info =
+              nsPrintfCString("`offset` (%" PRIu64 ") and `size` (%" PRIu64
+                              ") must both be aligned to 4 for"
+                              " TRANSFORM_FEEDBACK_BUFFER.",
+                              offset, size);
           return fnSome(LOCAL_GL_INVALID_VALUE, info);
         }
       }
@@ -2351,10 +2352,11 @@ Maybe<webgl::ErrorInfo> CheckBindBufferRange(
 
       if (isBuffer) {
         if (offset % limits.uniformBufferOffsetAlignment != 0) {
-          const auto info = nsPrintfCString(
-              "`offset` (%u) must be aligned to "
-              "UNIFORM_BUFFER_OFFSET_ALIGNMENT (%u).",
-              offset, limits.uniformBufferOffsetAlignment);
+          const auto info =
+              nsPrintfCString("`offset` (%" PRIu64
+                              ") must be aligned to "
+                              "UNIFORM_BUFFER_OFFSET_ALIGNMENT (%u).",
+                              offset, limits.uniformBufferOffsetAlignment);
           return fnSome(LOCAL_GL_INVALID_VALUE, info);
         }
       }
@@ -2717,6 +2719,7 @@ Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
     case LOCAL_GL_TEXTURE_3D:
       maxSize = limits.maxTex3dSize;
       maxZ = limits.maxTex3dSize;
+      break;
     default:
       MOZ_CRASH();
   }
@@ -3879,7 +3882,7 @@ void ClientWebGLContext::WaitSync(const WebGLSyncJS& sync,
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`flags` must be 0.");
     return;
   }
-  if (timeout != LOCAL_GL_TIMEOUT_IGNORED) {
+  if (timeout != -1) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`timeout` must be TIMEOUT_IGNORED.");
     return;
   }
@@ -3953,7 +3956,7 @@ void ClientWebGLContext::BeginTransformFeedback(const GLenum primMode) {
   }
 
   const auto& buffers = tfo.mAttribBuffers;
-  for (const auto& i : IntegerRange(tfBufferCount)) {
+  for (const auto i : IntegerRange(tfBufferCount)) {
     if (!buffers[i]) {
       EnqueueError(LOCAL_GL_INVALID_OPERATION,
                    "Transform Feedback buffer %u is null.", i);
@@ -4401,7 +4404,7 @@ void ClientWebGLContext::GetActiveUniforms(
   JS::Rooted<JSObject*> array(cx, JS_NewArrayObject(cx, count));
   if (!array) return;  // Just bail.
 
-  for (const auto& i : IntegerRange(count)) {
+  for (const auto i : IntegerRange(count)) {
     const auto index = uniformIndices[i];
     if (index >= list.size()) {
       EnqueueError(LOCAL_GL_INVALID_VALUE,
@@ -4505,7 +4508,7 @@ GLuint ClientWebGLContext::GetUniformBlockIndex(
 
   const auto& res = GetLinkResult(prog);
   const auto& list = res.active.activeUniformBlocks;
-  for (const auto& i : IntegerRange(list.size())) {
+  for (const auto i : IntegerRange(list.size())) {
     const auto& cur = list[i];
     if (cur.name == nameU8) {
       return i;
@@ -4889,7 +4892,7 @@ void WebGLFramebufferJS::EnsureColorAttachments() {
       !webgl->IsExtensionEnabled(WebGLExtensionID::WEBGL_draw_buffers)) {
     maxColorDrawBuffers = 1;
   }
-  for (const auto& i : IntegerRange(maxColorDrawBuffers)) {
+  for (const auto i : IntegerRange(maxColorDrawBuffers)) {
     (void)mAttachments[LOCAL_GL_COLOR_ATTACHMENT0 + i];
   }
 }

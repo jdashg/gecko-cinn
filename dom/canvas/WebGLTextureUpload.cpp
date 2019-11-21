@@ -1272,8 +1272,7 @@ void WebGLTexture::CompressedTexImage(bool sub, GLenum imageTarget,
     } else {
       call = nsPrintfCString(
           "DoCompressedTexSubImage(0x%04x, %u, %u,%u,%u, %u,%u,%u, 0x%04x, %u, "
-          "%p) "
-          "-> 0x%04x",
+          "%p)",
           imageTarget, level, offset.x, offset.y, offset.z, size.x, size.y,
           size.z, formatEnum, imageSize, ptr);
     }

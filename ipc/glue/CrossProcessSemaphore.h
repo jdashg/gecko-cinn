@@ -39,6 +39,17 @@ typedef mozilla::ipc::SharedMemoryBasic::Handle CrossProcessSemaphoreHandle;
 typedef uintptr_t CrossProcessSemaphoreHandle;
 #endif
 
+template <typename T>
+inline bool IsHandleValid(const T& handle) {
+  return bool(handle);
+}
+
+template <>
+inline bool IsHandleValid<mozilla::ipc::SharedMemoryBasic::Handle>(
+    const mozilla::ipc::SharedMemoryBasic::Handle& handle) {
+  return !(handle == mozilla::ipc::SharedMemoryBasic::NULLHandle());
+}
+
 class CrossProcessSemaphore {
  public:
   /**
