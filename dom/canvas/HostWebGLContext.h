@@ -532,7 +532,7 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
                           GLenum format, const uvec3& offset, const uvec3& size,
                           const RawBuffer<const uint8_t>& src,
                           const uint32_t pboImageSize,
-                          const Maybe<uint64_t> pboOffset) const {
+                          const Maybe<uint64_t>& pboOffset) const {
     mContext->CompressedTexImage(sub, imageTarget, level, format, offset, size,
                                  MakeRange(src), pboImageSize, pboOffset);
   }

@@ -1122,7 +1122,7 @@ void WebGLTexture::CompressedTexImage(bool sub, GLenum imageTarget,
                                       const uvec3& offset, const uvec3& size,
                                       const Range<const uint8_t>& src,
                                       const uint32_t pboImageSize,
-                                      const Maybe<uint64_t> pboOffset) {
+                                      const Maybe<uint64_t>& pboOffset) {
   auto imageSize = pboImageSize;
   if (pboOffset) {
     const auto& buffer =
