@@ -402,10 +402,6 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
                      const Args&... args) const {
     MOZ_ASSERT(FuncName());
 
-    // AppendPrintf doesn't understand size_t %tu types, and SKIPS THEM, which
-    // is bad.
-    MOZ_ASSERT(strstr(fmt, "%t") == nullptr);
-
     nsCString text;
     text.AppendPrintf("WebGL warning: %s: ", FuncName());
 

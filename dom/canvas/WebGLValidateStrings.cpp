@@ -183,7 +183,7 @@ bool ValidateGLSLVariableName(const std::string& name, WebGLContext* webgl) {
   const uint32_t maxSize = webgl->IsWebGL2() ? 1024 : 256;
   if (name.size() > maxSize) {
     webgl->ErrorInvalidValue(
-        "Identifier is %tu characters long, exceeds the"
+        "Identifier is %zu characters long, exceeds the"
         " maximum allowed length of %u characters.",
         name.size(), maxSize);
     return false;

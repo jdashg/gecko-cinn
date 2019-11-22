@@ -2927,7 +2927,7 @@ void ClientWebGLContext::ActiveTexture(const GLenum texUnitEnum) {
   auto& state = *(mNotLost->generation);
   if (texUnit >= state.mTexUnits.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE,
-                 "TEXTURE%u must be < MAX_COMBINED_TEXTURE_IMAGE_UNITS (%tu).",
+                 "TEXTURE%u must be < MAX_COMBINED_TEXTURE_IMAGE_UNITS (%zu).",
                  texUnit, state.mTexUnits.size());
     return;
   }
@@ -3780,7 +3780,7 @@ void ClientWebGLContext::BindSampler(const GLuint unit,
 
   auto& texUnits = state.mTexUnits;
   if (unit >= texUnits.size()) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "`unit` (%u) larger than %tu.", unit,
+    EnqueueError(LOCAL_GL_INVALID_VALUE, "`unit` (%u) larger than %zu.", unit,
                  texUnits.size());
     return;
   }
@@ -4267,14 +4267,14 @@ void ClientWebGLContext::UniformBlockBinding(WebGLProgramJS& prog,
   if (blockIndex >= list.size()) {
     EnqueueError(
         LOCAL_GL_INVALID_VALUE,
-        "`blockIndex` (%u) must be less than ACTIVE_UNIFORM_BLOCKS (%tu).",
+        "`blockIndex` (%u) must be less than ACTIVE_UNIFORM_BLOCKS (%zu).",
         blockIndex, list.size());
     return;
   }
   if (blockBinding >= state.mBoundUbos.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE,
                  "`blockBinding` (%u) must be less than "
-                 "MAX_UNIFORM_BUFFER_BINDINGS (%tu).",
+                 "MAX_UNIFORM_BUFFER_BINDINGS (%zu).",
                  blockBinding, state.mBoundUbos.size());
     return;
   }
