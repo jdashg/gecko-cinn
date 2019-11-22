@@ -211,7 +211,7 @@ RefPtr<ClientWebGLExtensionBase> ClientWebGLContext::GetExtension(
         case WebGLExtensionID::Max:
           break;
       }
-      MOZ_ASSERT_UNREACHABLE("illegal extension enum");
+      MOZ_CRASH("illegal extension enum");
     }();
     MOZ_ASSERT(extSlot);
     RequestExtension(ext);
