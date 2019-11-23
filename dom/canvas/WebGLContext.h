@@ -635,7 +635,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   void UseProgram(WebGLProgram* prog);
 
   bool ValidateAttribArraySetter(uint32_t count, uint32_t arrayLength);
-  void ValidateProgram(const WebGLProgram& prog);
+  bool ValidateProgram(const WebGLProgram& prog) const;
   void Viewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
   // -----------------------------------------------------------------------------

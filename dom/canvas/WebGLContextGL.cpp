@@ -1362,11 +1362,11 @@ void WebGLContext::UseProgram(WebGLProgram* prog) {
   funcScope.mBindFailureGuard = false;
 }
 
-void WebGLContext::ValidateProgram(const WebGLProgram& prog) {
+bool WebGLContext::ValidateProgram(const WebGLProgram& prog) const {
   const FuncScope funcScope(*this, "validateProgram");
-  if (IsContextLost()) return;
+  if (IsContextLost()) return false;
 
-  prog.ValidateProgram();
+  return prog.ValidateProgram();
 }
 
 RefPtr<WebGLFramebuffer> WebGLContext::CreateFramebuffer() {

@@ -173,7 +173,9 @@ Maybe<double> WebGLContext::GetParameter(const GLenum pname) {
     case LOCAL_GL_IMPLEMENTATION_COLOR_READ_TYPE: {
       const webgl::FormatUsageInfo* usage;
       uint32_t width, height;
-      if (!BindCurFBForColorRead(&usage, &width, &height)) return Nothing();
+      if (!BindCurFBForColorRead(&usage, &width, &height,
+                                 LOCAL_GL_INVALID_OPERATION))
+        return Nothing();
 
       const auto implPI = ValidImplementationColorReadPI(usage);
 

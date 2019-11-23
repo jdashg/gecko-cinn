@@ -1137,7 +1137,7 @@ bool WebGLProgram::UseProgram() const {
   return true;
 }
 
-void WebGLProgram::ValidateProgram() const {
+bool WebGLProgram::ValidateProgram() const {
   gl::GLContext* gl = mContext->gl;
 
 #ifdef XP_MACOSX
@@ -1147,11 +1147,14 @@ void WebGLProgram::ValidateProgram() const {
     mContext->GenerateWarning(
         "Implemented as a no-op on"
         " Mac to work around crashes.");
-    return;
+    return true;
   }
 #endif
 
   gl->fValidateProgram(mGLName);
+  GLint ok = 0;
+  gl->fGetProgramiv(mGLName, LOCAL_GL_VALIDATE_STATUS, &ok);
+  return bool(ok);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

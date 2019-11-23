@@ -573,10 +573,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   // ------------------- Programs and shaders --------------------------------
   void UseProgram(ObjectId id) const { mContext->UseProgram(AutoResolve(id)); }
 
-  void ValidateProgram(ObjectId id) const {
+  bool ValidateProgram(ObjectId id) const {
     const auto obj = ById<WebGLProgram>(id);
-    if (!obj) return;
-    mContext->ValidateProgram(*obj);
+    if (!obj) return false;
+    return mContext->ValidateProgram(*obj);
   }
 
   // ------------------------ Uniforms and attributes ------------------------

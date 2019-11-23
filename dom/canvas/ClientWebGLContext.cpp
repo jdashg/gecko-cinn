@@ -3102,23 +3102,27 @@ static inline bool DoesJSTypeMatchUnpackType(GLenum unpackType,
   }
 }
 
-////////////////////////////////////
-/*
-bool ClientWebGLContext::ValidateViewType(GLenum unpackType,
-                                          const TexImageSource& src) {
-  if (!src.mView) return true;
-  const auto& view = *(src.mView);
-
-  const auto& jsType = view.Type();
-  if (!DoesJSTypeMatchUnpackType(unpackType, jsType)) {
-    EnqueueError(LOCAL_GL_INVALID_OPERATION,
-                 "ArrayBufferView type not compatible with `type`.");
-    return false;
+static std::string ToString(const js::Scalar::Type type) {
+  switch (type) {
+#define _(X)                \
+  case js::Scalar::Type::X: \
+    return #X;
+    _(Int8)
+    _(Uint8)
+    _(Uint8Clamped)
+    _(Int16)
+    _(Uint16)
+    _(Int32)
+    _(Uint32)
+    _(Float32)
+#undef _
+    default:
+      break;
   }
-
-  return true;
+  MOZ_ASSERT(false);
+  return std::string("#") + std::to_string(EnumValue(type));
 }
-*/
+
 /////////////////////////////////////////////////
 
 static inline uvec2 CastUvec2(const ivec2& val) {
@@ -3192,6 +3196,18 @@ void ClientWebGLContext::TexImage(uint8_t funcDims, GLenum imageTarget,
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`border` must be 0.");
     return;
   }
+
+  if (src.mView) {
+    const auto& view = *src.mView;
+    const auto& jsType = view.Type();
+    if (!DoesJSTypeMatchUnpackType(pi.type, jsType)) {
+      EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                   "ArrayBufferView type %s not compatible with `type` %s.",
+                   ToString(jsType).c_str(), EnumString(pi.type).c_str());
+      return;
+    }
+  }
+
   // TODO: Convert TexImageSource into something IPC-capable.
   Run<RPROC(TexImage)>(imageTarget, static_cast<uint32_t>(level), respecFormat,
                        CastUvec3(offset), CastUvec3(size), pi, src,
@@ -3293,7 +3309,10 @@ void ClientWebGLContext::UseProgram(WebGLProgramJS* const prog) {
 }
 
 void ClientWebGLContext::ValidateProgram(WebGLProgramJS& prog) const {
-  Run<RPROC(ValidateProgram)>(prog.mId);
+  const FuncScope funcScope(*this, "validateProgram");
+  if (IsContextLost()) return;
+  if (!prog.ValidateUsable(*this, "prog")) return;
+  prog.mLastValidate = Run<RPROC(ValidateProgram)>(prog.mId);
 }
 
 // ------------------------ Uniforms and attributes ------------------------

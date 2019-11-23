@@ -146,7 +146,7 @@ class WebGLProgram final : public WebGLContextBoundObject {
 
   void LinkProgram();
   bool UseProgram() const;
-  void ValidateProgram() const;
+  bool ValidateProgram() const;
 
   ////////////////
 
