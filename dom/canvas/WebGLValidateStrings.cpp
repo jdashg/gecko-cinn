@@ -138,35 +138,35 @@ Maybe<char> CheckGLSLPreprocString(const bool webgl2,
   return {};
 }
 
-bool ValidateGLSLVariableName(const std::string& name, WebGLContext* webgl) {
-  if (name.empty()) return false;
+Maybe<webgl::ErrorInfo> CheckGLSLVariableName(const bool webgl2,
+                                              const std::string& name) {
+  if (name.empty()) return {};
 
-  const uint32_t maxSize = webgl->IsWebGL2() ? 1024 : 256;
+  const uint32_t maxSize = webgl2 ? 1024 : 256;
   if (name.size() > maxSize) {
-    webgl->ErrorInvalidValue(
+    const auto info = nsPrintfCString(
         "Identifier is %zu characters long, exceeds the"
         " maximum allowed length of %u characters.",
         name.size(), maxSize);
-    return false;
+    return Some(webgl::ErrorInfo{LOCAL_GL_INVALID_VALUE, info.BeginReading()});
   }
 
   for (const auto cur : name) {
     if (!IsValidGLSLChar(cur)) {
-      webgl->ErrorInvalidValue("String contains the illegal character 0x%x'.",
-                               cur);
-      return false;
+      const auto info =
+          nsPrintfCString("String contains the illegal character 0x%x'.", cur);
+      return Some(
+          webgl::ErrorInfo{LOCAL_GL_INVALID_VALUE, info.BeginReading()});
     }
   }
 
-  nsString prefix1 = NS_LITERAL_STRING("webgl_");
-  nsString prefix2 = NS_LITERAL_STRING("_webgl_");
-
   if (name.find("webgl_") == 0 || name.find("_webgl_") == 0) {
-    webgl->ErrorInvalidOperation("String contains a reserved GLSL prefix.");
-    return false;
+    return Some(webgl::ErrorInfo{
+        LOCAL_GL_INVALID_OPERATION,
+        "String matches reserved GLSL prefix pattern /_?webgl_/."});
   }
 
-  return true;
+  return {};
 }
 
 }  // namespace mozilla

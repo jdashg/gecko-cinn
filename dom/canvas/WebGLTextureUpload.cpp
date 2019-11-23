@@ -1607,7 +1607,7 @@ static const webgl::FormatUsageInfo* ValidateCopyDestUsage(
 
 static bool ValidateCopyTexImageForFeedback(const WebGLContext& webgl,
                                             const WebGLTexture& tex,
-                                            const uint8_t mipLevel,
+                                            const uint32_t mipLevel,
                                             const uint32_t zLayer) {
   const auto& fb = webgl.BoundReadFb();
   if (fb) {
@@ -1756,8 +1756,7 @@ void WebGLTexture::CopyTexImage(GLenum imageTarget, uint32_t level,
   const auto& srcFormat = srcUsage->format;
 
   const uint32_t zOffset = 0;
-  if (!ValidateCopyTexImageForFeedback(*mContext, *this,
-                                       AssertedCast<uint8_t>(level), zOffset))
+  if (!ValidateCopyTexImageForFeedback(*mContext, *this, level, zOffset))
     return;
 
   const auto size = uvec3{size2.x, size2.y, 1};

@@ -35,9 +35,9 @@ webgl::ContextGenerationInfo::~ContextGenerationInfo() = default;
 
 void webgl::ObjectJS::WarnInvalidUse(const ClientWebGLContext& targetContext,
                                      const char* const argName) const {
-  targetContext.EnqueueError(LOCAL_GL_INVALID_OPERATION,
-                             "`%s` is from a different WebGL context.",
-                             argName);
+  targetContext.EnqueueError(
+      LOCAL_GL_INVALID_OPERATION,
+      "`%s` is from a different WebGL context or has been deleted.", argName);
 }
 
 static bool GetJSScalarFromGLType(GLenum type,
@@ -1021,7 +1021,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteBuffer");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind from all bind points and bound containers
@@ -1083,14 +1083,15 @@ void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteFramebuffer");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
   const auto fnDetach = [&](const GLenum target,
                             const WebGLFramebufferJS* const fb) {
-    if (!fb) return;
-    BindFramebuffer(target, nullptr);
+    if (obj == fb) {
+      BindFramebuffer(target, nullptr);
+    }
   };
   if (state.mBoundDrawFb == state.mBoundReadFb) {
     fnDetach(LOCAL_GL_FRAMEBUFFER, state.mBoundDrawFb.get());
@@ -1107,19 +1108,30 @@ void ClientWebGLContext::DeleteProgram(WebGLProgramJS* const obj) const {
   const FuncScope funcScope(*this, "deleteProgram");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
 
   // Don't unbind
 
-  obj->mInnerRef = nullptr;
-  Run<RPROC(DeleteProgram)>(obj->mId);
+  obj->mKeepAlive = nullptr;
+}
+
+webgl::ProgramKeepAlive::~ProgramKeepAlive() {
+  if (!mParent) return;
+  const auto& context = mParent->Context();
+  if (!context) return;
+  context->DoDeleteProgram(*mParent);
+}
+
+void ClientWebGLContext::DoDeleteProgram(WebGLProgramJS& obj) const {
+  obj.mNextLink_Shaders = {};
+  Run<RPROC(DeleteProgram)>(obj.mId);
 }
 
 void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
   const FuncScope funcScope(*this, "deleteQuery");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
 
   // Don't unbind
 
@@ -1131,7 +1143,7 @@ void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteRenderbuffer");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1165,7 +1177,7 @@ void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
   const FuncScope funcScope(*this, "deleteSampler");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1183,19 +1195,29 @@ void ClientWebGLContext::DeleteShader(WebGLShaderJS* const obj) const {
   const FuncScope funcScope(*this, "deleteShader");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
 
   // Don't unbind
 
-  obj->mInnerRef = nullptr;
-  Run<RPROC(DeleteShader)>(obj->mId);
+  obj->mKeepAlive = nullptr;
+}
+
+webgl::ShaderKeepAlive::~ShaderKeepAlive() {
+  if (!mParent) return;
+  const auto& context = mParent->Context();
+  if (!context) return;
+  context->DoDeleteShader(*mParent);
+}
+
+void ClientWebGLContext::DoDeleteShader(const WebGLShaderJS& obj) const {
+  Run<RPROC(DeleteShader)>(obj.mId);
 }
 
 void ClientWebGLContext::DeleteSync(WebGLSyncJS* const obj) const {
   const FuncScope funcScope(*this, "deleteSync");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
 
   // Nothing to unbind
 
@@ -1207,7 +1229,7 @@ void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
   const FuncScope funcScope(*this, "deleteTexture");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1256,7 +1278,7 @@ void ClientWebGLContext::DeleteTransformFeedback(
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
 
   if (obj->mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -1274,7 +1296,7 @@ void ClientWebGLContext::DeleteVertexArray(WebGLVertexArrayJS* const obj) {
   const FuncScope funcScope(*this, "deleteVertexArray");
   if (IsContextLost()) return;
   if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj")) return;
+  if (!obj->ValidateUsable(*this, "obj", true)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1463,9 +1485,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       return;
 
     case LOCAL_GL_CURRENT_PROGRAM:
-      (void)ToJSValueOrNull(
-          cx, state.mCurrentProgram ? state.mCurrentProgram->js : nullptr,
-          retval);
+      (void)ToJSValueOrNull(cx, state.mCurrentProgram, retval);
       return;
 
     case LOCAL_GL_ELEMENT_ARRAY_BUFFER_BINDING:
@@ -1487,6 +1507,19 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
     case LOCAL_GL_TEXTURE_BINDING_CUBE_MAP:
       fnSetRetval_Tex(LOCAL_GL_TEXTURE_CUBE_MAP);
       return;
+
+    case LOCAL_GL_VERTEX_ARRAY_BINDING: {
+      if (!mIsWebGL2 &&
+          !IsExtensionEnabled(WebGLExtensionID::OES_vertex_array_object))
+        break;
+
+      auto ret = state.mBoundVao;
+      if (ret == state.mDefaultVao) {
+        ret = nullptr;
+      }
+      (void)ToJSValueOrNull(cx, ret, retval);
+      return;
+    }
 
     case LOCAL_GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS:
       retval.set(JS::NumberValue(limits.maxTexUnits));
@@ -1630,15 +1663,6 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       case LOCAL_GL_UNIFORM_BUFFER_BINDING:
         fnSetRetval_Buffer(LOCAL_GL_UNIFORM_BUFFER);
         return;
-
-      case LOCAL_GL_VERTEX_ARRAY_BINDING: {
-        auto ret = state.mBoundVao;
-        if (ret == state.mDefaultVao) {
-          ret = nullptr;
-        }
-        (void)ToJSValueOrNull(cx, ret, retval);
-        return;
-      }
 
       case LOCAL_GL_MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS:
         retval.set(JS::NumberValue(limits.maxTransformFeedbackSeparateAttribs));
@@ -1857,6 +1881,10 @@ void ClientWebGLContext::GetFramebufferAttachmentParameter(
     if (attached.rb) {
       (void)ToJSValueOrNull(cx, attached.rb, retval);
     } else {
+      if (!mIsWebGL2 && !attached.tex) {
+        EnqueueError_ArgEnum("pname", pname);
+        return;
+      }
       (void)ToJSValueOrNull(cx, attached.tex, retval);
     }
     return;
@@ -2976,8 +3004,8 @@ void ClientWebGLContext::BindTexture(const GLenum texTarget,
 
   auto& state = *(mNotLost->generation);
   auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
+  texUnit.texByTarget[texTarget] = tex;
   if (tex) {
-    texUnit.texByTarget[texTarget] = tex;
     tex->mTarget = texTarget;
   }
 
@@ -2998,14 +3026,14 @@ void ClientWebGLContext::GetTexParameter(
 
   auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
 
-  const auto maybeTex = MaybeFind(texUnit.texByTarget, texTarget);
-  if (!maybeTex) {
-    EnqueueError_ArgEnum("texTarget", texTarget);
-    return;
-  }
-  const auto& tex = *maybeTex;
+  const auto& tex = Find(texUnit.texByTarget, texTarget, nullptr);
   if (!tex) {
-    EnqueueError(LOCAL_GL_INVALID_VALUE, "No texture bound.");
+    if (!IsTexTarget(texTarget, mIsWebGL2)) {
+      EnqueueError_ArgEnum("texTarget", texTarget);
+    } else {
+      EnqueueError(LOCAL_GL_INVALID_OPERATION, "No texture bound to %s[%u].",
+                   EnumString(texTarget).c_str(), state.mActiveTexUnit);
+    }
     return;
   }
 
@@ -3233,7 +3261,7 @@ void ClientWebGLContext::CopyTexImage(uint8_t funcDims, GLenum imageTarget,
 
 // ------------------- Programs and shaders --------------------------------
 
-void ClientWebGLContext::UseProgram(const WebGLProgramJS* const prog) {
+void ClientWebGLContext::UseProgram(WebGLProgramJS* const prog) {
   const FuncScope funcScope(*this, "useProgram");
   if (IsContextLost()) return;
   if (prog && !prog->ValidateUsable(*this, "prog")) return;
@@ -3257,7 +3285,8 @@ void ClientWebGLContext::UseProgram(const WebGLProgramJS* const prog) {
 
   // -
 
-  state.mCurrentProgram = prog ? prog->mInnerRef : nullptr;
+  state.mCurrentProgram = prog;
+  state.mProgramKeepAlive = prog ? prog->mKeepAliveWeak.lock() : nullptr;
   state.mActiveLinkResult = prog ? prog->mResult : nullptr;
 
   Run<RPROC(UseProgram)>(prog ? prog->mId : 0);
@@ -3937,7 +3966,7 @@ void ClientWebGLContext::BeginTransformFeedback(const GLenum primMode) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION, "No program in use.");
     return;
   }
-  const auto& linkResult = GetLinkResult(*prog->js);
+  const auto& linkResult = GetLinkResult(*prog);
   if (!linkResult.success) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
                  "Program is not successfully linked.");
@@ -3979,7 +4008,8 @@ void ClientWebGLContext::BeginTransformFeedback(const GLenum primMode) {
 
   tfo.mActiveOrPaused = true;
   tfo.mActiveProgram = prog;
-  prog->js->mActiveTfos.insert(&tfo);
+  tfo.mActiveProgramKeepAlive = prog->mKeepAliveWeak.lock();
+  prog->mActiveTfos.insert(&tfo);
   state.mTfActiveAndNotPaused = true;
 
   Run<RPROC(BeginTransformFeedback)>(primMode);
@@ -3998,8 +4028,9 @@ void ClientWebGLContext::EndTransformFeedback() {
   }
 
   tfo.mActiveOrPaused = false;
-  tfo.mActiveProgram->js->mActiveTfos.erase(&tfo);
+  tfo.mActiveProgram->mActiveTfos.erase(&tfo);
   tfo.mActiveProgram = nullptr;
+  tfo.mActiveProgramKeepAlive = nullptr;
   state.mTfActiveAndNotPaused = false;
   Run<RPROC(EndTransformFeedback)>();
 }
@@ -4156,15 +4187,15 @@ void ClientWebGLContext::EnqueueError_ArgEnum(const char* const argName,
 // WebGLProgramJS
 
 void ClientWebGLContext::AttachShader(WebGLProgramJS& prog,
-                                      const WebGLShaderJS& shader) const {
+                                      WebGLShaderJS& shader) const {
   const FuncScope funcScope(*this, "attachShader");
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
   if (!shader.ValidateUsable(*this, "shader")) return;
 
   auto& slot = *MaybeFind(prog.mNextLink_Shaders, shader.mType);
-  if (slot) {
-    if (&shader == slot->js) {
+  if (slot.shader) {
+    if (&shader == slot.shader) {
       EnqueueError(LOCAL_GL_INVALID_OPERATION, "`shader` is already attached.");
     } else {
       EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -4173,8 +4204,7 @@ void ClientWebGLContext::AttachShader(WebGLProgramJS& prog,
     }
     return;
   }
-  slot = shader.mInnerWeak.get();
-  MOZ_ASSERT(slot);
+  slot = {&shader, shader.mKeepAliveWeak.lock()};
 
   Run<RPROC(AttachShader)>(prog.mId, shader.mId);
 }
@@ -4186,8 +4216,8 @@ void ClientWebGLContext::BindAttribLocation(WebGLProgramJS& prog,
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
 
-  const auto& nameU8 = NS_ConvertUTF16toUTF8(name);
-  Run<RPROC(BindAttribLocation)>(prog.mId, location, nameU8.BeginReading());
+  const auto& nameU8 = ToString(NS_ConvertUTF16toUTF8(name));
+  Run<RPROC(BindAttribLocation)>(prog.mId, location, nameU8);
 }
 
 void ClientWebGLContext::DetachShader(WebGLProgramJS& prog,
@@ -4199,11 +4229,11 @@ void ClientWebGLContext::DetachShader(WebGLProgramJS& prog,
 
   auto& slot = *MaybeFind(prog.mNextLink_Shaders, shader.mType);
 
-  if (!slot || slot->js != &shader) {
+  if (slot.shader != &shader) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION, "`shader` is not attached.");
     return;
   }
-  slot = nullptr;
+  slot = {};
 
   Run<RPROC(DetachShader)>(prog.mId, shader.mId);
 }
@@ -4217,9 +4247,9 @@ void ClientWebGLContext::GetAttachedShaders(
 
   auto& arr = retval.SetValue();
   for (const auto& pair : prog.mNextLink_Shaders) {
-    const auto& shaderInner = pair.second;
-    if (!shaderInner) continue;
-    arr.AppendElement(shaderInner->js);
+    const auto& attachment = pair.second;
+    if (!attachment.shader) continue;
+    arr.AppendElement(attachment.shader);
   }
 }
 
@@ -4247,8 +4277,8 @@ void ClientWebGLContext::TransformFeedbackVaryings(
   std::vector<std::string> varyingsU8;
   varyingsU8.reserve(varyings.Length());
   for (const auto& cur : varyings) {
-    const auto curU8 = NS_ConvertUTF16toUTF8(cur);
-    varyingsU8.push_back(curU8.BeginReading());
+    const auto curU8 = ToString(NS_ConvertUTF16toUTF8(cur));
+    varyingsU8.push_back(curU8);
   }
 
   Run<RPROC(TransformFeedbackVaryings)>(prog.mId, varyingsU8, bufferMode);
@@ -4477,12 +4507,16 @@ GLint ClientWebGLContext::GetAttribLocation(const WebGLProgramJS& prog,
   if (IsContextLost()) return -1;
   if (!prog.ValidateUsable(*this, "program")) return -1;
 
-  const auto nameU8 = std::string(NS_ConvertUTF16toUTF8(name).BeginReading());
+  const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(name));
   const auto& res = GetLinkResult(prog);
   for (const auto& cur : res.active.activeAttribs) {
     if (cur.name == nameU8) return cur.location;
   }
 
+  const auto err = CheckGLSLVariableName(mIsWebGL2, nameU8);
+  if (err) {
+    EnqueueError(err->type, "%s", err->info.c_str());
+  }
   return -1;
 }
 
@@ -4492,7 +4526,7 @@ GLint ClientWebGLContext::GetFragDataLocation(const WebGLProgramJS& prog,
   if (IsContextLost()) return -1;
   if (!prog.ValidateUsable(*this, "program")) return -1;
 
-  const auto nameU8 = std::string(NS_ConvertUTF16toUTF8(name).BeginReading());
+  const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(name));
 
   return Run<RPROC(GetFragDataLocation)>(prog.mId, nameU8);
 }
@@ -4503,8 +4537,7 @@ GLuint ClientWebGLContext::GetUniformBlockIndex(
   if (IsContextLost()) return LOCAL_GL_INVALID_INDEX;
   if (!prog.ValidateUsable(*this, "program")) return LOCAL_GL_INVALID_INDEX;
 
-  const auto nameU8 =
-      std::string(NS_ConvertUTF16toUTF8(blockName).BeginReading());
+  const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(blockName));
 
   const auto& res = GetLinkResult(prog);
   const auto& list = res.active.activeUniformBlocks;
@@ -4528,8 +4561,7 @@ void ClientWebGLContext::GetUniformIndices(
   auto ret = nsTArray<GLuint>(uniformNames.Length());
 
   for (const auto& uniformName : uniformNames) {
-    const auto nameU8 =
-        std::string(NS_ConvertUTF16toUTF8(uniformName).BeginReading());
+    const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(uniformName));
 
     for (const auto& cur : res.active.activeUniforms) {
       if (cur.name == nameU8) {
@@ -4587,12 +4619,18 @@ already_AddRefed<WebGLUniformLocationJS> ClientWebGLContext::GetUniformLocation(
   }
   const auto& locByName = *(prog.mUniformLocByName);
 
-  const auto nameU8 = std::string(NS_ConvertUTF16toUTF8(name).BeginReading());
+  const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(name));
   auto loc = MaybeFind(locByName, nameU8);
   if (!loc) {
     loc = MaybeFind(locByName, nameU8 + "[0]");
   }
-  if (!loc) return nullptr;
+  if (!loc) {
+    const auto err = CheckGLSLVariableName(mIsWebGL2, nameU8);
+    if (err) {
+      EnqueueError(err->type, "%s", err->info.c_str());
+    }
+    return nullptr;
+  }
 
   return AsAddRefed(new WebGLUniformLocationJS(*this, prog.mResult,
                                                loc->location, loc->elemType));
@@ -4671,7 +4709,7 @@ void ClientWebGLContext::GetProgramParameter(
     switch (pname) {
       case LOCAL_GL_DELETE_STATUS:
         // "Is flagged for deletion?"
-        return JS::BooleanValue(!prog.mInnerRef);
+        return JS::BooleanValue(!prog.mKeepAlive);
       case LOCAL_GL_VALIDATE_STATUS:
         return JS::BooleanValue(prog.mLastValidate);
       case LOCAL_GL_ATTACHED_SHADERS:
@@ -4745,7 +4783,7 @@ void ClientWebGLContext::GetShaderParameter(
         return JS::NumberValue(shader.mType);
 
       case LOCAL_GL_DELETE_STATUS:  // "Is flagged for deletion?"
-        return JS::BooleanValue(!shader.mInnerRef);
+        return JS::BooleanValue(!shader.mKeepAlive);
 
       case LOCAL_GL_COMPILE_STATUS: {
         const auto& result = GetCompileResult(shader);
@@ -4818,8 +4856,7 @@ const webgl::LinkResult& ClientWebGLContext::GetLinkResult(
         prog.mResult->active.activeUniformBlocks.size());
 
     auto& state = State();
-    if (state.mCurrentProgram && state.mCurrentProgram->js == &prog &&
-        prog.mResult->success) {
+    if (state.mCurrentProgram == &prog && prog.mResult->success) {
       state.mActiveLinkResult = prog.mResult;
     }
   }
@@ -4902,8 +4939,8 @@ void WebGLFramebufferJS::EnsureColorAttachments() {
 
 WebGLProgramJS::WebGLProgramJS(const ClientWebGLContext& webgl)
     : webgl::ObjectJS(webgl),
-      mInnerRef(new WebGLProgramInner(this)),
-      mInnerWeak(mInnerRef.get()) {
+      mKeepAlive(std::make_shared<webgl::ProgramKeepAlive>(*this)),
+      mKeepAliveWeak(mKeepAlive) {
   (void)mNextLink_Shaders[LOCAL_GL_VERTEX_SHADER];
   (void)mNextLink_Shaders[LOCAL_GL_FRAGMENT_SHADER];
 
@@ -4913,8 +4950,8 @@ WebGLProgramJS::WebGLProgramJS(const ClientWebGLContext& webgl)
 WebGLShaderJS::WebGLShaderJS(const ClientWebGLContext& webgl, const GLenum type)
     : webgl::ObjectJS(webgl),
       mType(type),
-      mInnerRef(new WebGLShaderInner(this)),
-      mInnerWeak(mInnerRef.get()) {}
+      mKeepAlive(std::make_shared<webgl::ShaderKeepAlive>(*this)),
+      mKeepAliveWeak(mKeepAlive) {}
 
 WebGLTransformFeedbackJS::WebGLTransformFeedbackJS(
     const ClientWebGLContext& webgl)
@@ -5045,6 +5082,23 @@ void ImplCycleCollectionUnlink(
 
 // -
 
+void ImplCycleCollectionTraverse(
+    nsCycleCollectionTraversalCallback& callback,
+    const std::unordered_map<GLenum, WebGLProgramJS::Attachment>& field,
+    const char* name, uint32_t flags) {
+  for (const auto& pair : field) {
+    const auto& attach = pair.second;
+    ImplCycleCollectionTraverse(callback, attach.shader, name, flags);
+  }
+}
+
+void ImplCycleCollectionUnlink(
+    std::unordered_map<GLenum, WebGLProgramJS::Attachment>& field) {
+  field = {};
+}
+
+// -
+
 void ImplCycleCollectionUnlink(
     const RefPtr<ClientWebGLExtensionLoseContext>& field) {
   const_cast<RefPtr<ClientWebGLExtensionLoseContext>&>(field) = nullptr;
@@ -5107,12 +5161,11 @@ void ImplCycleCollectionUnlink(Maybe<ClientWebGLContext::NotLostData>& field) {
 
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLBufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLFramebufferJS, mAttachments)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, mInnerRef,
-                                      mNextLink_Shaders)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLProgramJS, mNextLink_Shaders)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLQueryJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLRenderbufferJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSamplerJS)
-NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLShaderJS, mInnerRef)
+NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLShaderJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLSyncJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLTextureJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, mAttribBuffers,
@@ -5120,13 +5173,6 @@ NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLTransformFeedbackJS, mAttribBuffers,
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE_0(WebGLUniformLocationJS)
 NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(WebGLVertexArrayJS, mIndexBuffer,
                                       mAttribBuffers)
-
-NS_IMPL_CYCLE_COLLECTION(WebGLProgramInner, js)
-NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLProgramInner, AddRef)
-NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLProgramInner, Release)
-NS_IMPL_CYCLE_COLLECTION(WebGLShaderInner, js)
-NS_IMPL_CYCLE_COLLECTION_ROOT_NATIVE(WebGLShaderInner, AddRef)
-NS_IMPL_CYCLE_COLLECTION_UNROOT_NATIVE(WebGLShaderInner, Release)
 
 // -
 

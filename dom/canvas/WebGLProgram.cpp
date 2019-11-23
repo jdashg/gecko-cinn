@@ -724,7 +724,11 @@ void WebGLProgram::AttachShader(WebGLShader& shader) {
 }
 
 void WebGLProgram::BindAttribLocation(GLuint loc, const std::string& name) {
-  if (!ValidateGLSLVariableName(name, mContext)) return;
+  const auto err = CheckGLSLVariableName(mContext->IsWebGL2(), name);
+  if (err) {
+    mContext->GenerateError(err->type, "%s", err->info.c_str());
+    return;
+  }
 
   if (loc >= mContext->MaxVertexAttribs()) {
     mContext->ErrorInvalidValue(
