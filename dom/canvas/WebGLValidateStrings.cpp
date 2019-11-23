@@ -7,93 +7,74 @@
 
 #include "WebGLContext.h"
 
+#include <regex>
+
 namespace mozilla {
 
-bool TruncateComments(const nsAString& src, nsAString* const out) {
-  const size_t dstByteCount = src.Length() * sizeof(src[0]);
-  const UniqueBuffer dst(malloc(dstByteCount));
-  if (!dst) return false;
+/* GLSL ES 3.00 p17:
+  - Comments are delimited by / * and * /, or by // and a newline.
 
-  auto srcItr = src.BeginReading();
-  const auto srcEnd = src.EndReading();
-  const auto dstBegin = (decltype(src[0])*)dst.get();
-  auto dstItr = dstBegin;
+  - '//' style comments include the initial '//' marker and continue up to, but
+not including, the terminating newline.
 
-  const auto fnEmitUntil = [&](const decltype(srcItr)& nextSrcItr) {
-    while (srcItr != nextSrcItr) {
-      *dstItr = *srcItr;
-      ++srcItr;
-      ++dstItr;
-    }
-  };
+  - '/ * ... * /' comments include both the start and end marker.
 
-  const auto fnFindSoonestOf = [&](const nsString* needles, size_t needleCount,
-                                   size_t* const out_foundId) {
-    auto foundItr = srcItr;
-    while (foundItr != srcEnd) {
-      const auto haystack = Substring(foundItr, srcEnd);
-      for (size_t i = 0; i < needleCount; i++) {
-        if (StringBeginsWith(haystack, needles[i])) {
-          *out_foundId = i;
-          return foundItr;
-        }
+  - The begin comment delimiters (/ * or //) are not recognized as comment
+delimiters inside of a comment, hence comments cannot be nested.
+
+  - Comments are treated syntactically as a single space.
+
+However, since we want to keep line/character numbers the same, replace
+char-for-char with spaces and newlines.
+*/
+
+std::string CommentsToSpaces(const std::string& src) {
+// `[^]` is any-including-newline
+// `*?` is non-greedy `*`, matching the fewest characters, instead of the most.
+// Non-continuing line comment is: `//[^]*?\n`
+// But line-continuation is `\\\n`
+// So we need to match `//[^]*?[^\\]\n`
+// But we need to recognize "//\n", thus: `//([^]*?[^\\])??\n`
+#define LINE_COMMENT "//(?:[^]*?[^\\\\])??\n"
+
+// The fewest characters that match /*...*/
+#define BLOCK_COMMENT "/[*][^]*?[*]/"
+
+  static const std::regex COMMENT_RE(
+      "(?:" LINE_COMMENT ")|(?:" BLOCK_COMMENT ")",
+      std::regex::ECMAScript | std::regex::nosubs | std::regex::optimize);
+
+#undef LINE_COMMENT
+#undef BLOCK_COMMENT
+
+  static const std::regex TRAILING_RE("/[*/]", std::regex::ECMAScript |
+                                                   std::regex::nosubs |
+                                                   std::regex::optimize);
+
+  std::string ret;
+  ret.reserve(src.size());
+
+  auto itr = src.begin();
+  auto end = src.end();
+  std::smatch match;
+  while (std::regex_search(itr, end, match, COMMENT_RE)) {
+    const auto matchBegin = itr + match.position();
+    const auto matchEnd = matchBegin + match.length();
+    ret.append(itr, matchBegin);
+    for (itr = matchBegin; itr != matchEnd; ++itr) {
+      auto cur = *itr;
+      if (cur != '\n') {  // Keep newlines
+        cur = ' ';
       }
-      ++foundItr;
-    }
-    *out_foundId = needleCount;
-    return foundItr;
-  };
-
-  ////
-
-  const nsString commentBeginnings[] = {NS_LITERAL_STRING("//"),
-                                        NS_LITERAL_STRING("/*"),
-                                        nsString()};  // Final empty string for
-                                                      // "found nothing".
-  const nsString lineCommentEndings[] = {NS_LITERAL_STRING("\\\n"),
-                                         NS_LITERAL_STRING("\n"), nsString()};
-  const nsString blockCommentEndings[] = {NS_LITERAL_STRING("\n"),
-                                          NS_LITERAL_STRING("*/"), nsString()};
-
-  while (srcItr != srcEnd) {
-    size_t foundId;
-    fnEmitUntil(fnFindSoonestOf(commentBeginnings, 2, &foundId));
-    fnEmitUntil(srcItr +
-                commentBeginnings[foundId].Length());  // Final empty string
-                                                       // allows us to skip
-                                                       // forward here
-                                                       // unconditionally.
-    switch (foundId) {
-      case 0:  // line comment
-        while (true) {
-          size_t endId;
-          srcItr = fnFindSoonestOf(lineCommentEndings, 2, &endId);
-          fnEmitUntil(srcItr + lineCommentEndings[endId].Length());
-          if (endId == 0) continue;
-          break;
-        }
-        break;
-
-      case 1:  // block comment
-        while (true) {
-          size_t endId;
-          srcItr = fnFindSoonestOf(blockCommentEndings, 2, &endId);
-          fnEmitUntil(srcItr + blockCommentEndings[endId].Length());
-          if (endId == 0) continue;
-          break;
-        }
-        break;
-
-      default:  // not found
-        break;
+      ret += cur;
     }
   }
 
-  MOZ_ASSERT((dstBegin + 1) - dstBegin == 1);
-  const uint32_t dstCharLen = dstItr - dstBegin;
-  if (!out->Assign(dstBegin, dstCharLen, mozilla::fallible)) return false;
-
-  return true;
+  if (std::regex_search(itr, end, match, TRAILING_RE)) {
+    end = itr + match.position();
+  }
+  ret.append(itr, end);
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -143,38 +124,18 @@ static bool IsValidGLSLChar(const char c) {
   }
 }
 
-static bool IsValidGLSLPreprocChar(const char c) {
-  if (IsValidGLSLChar(c)) return true;
-
-  switch (c) {
-    case '\\':
-    case '#':
-      return true;
-
-    default:
-      return false;
-  }
-}
-
 ////
 
-bool ValidateGLSLPreprocString(WebGLContext* webgl, const std::string& string) {
-  for (const auto cur : string) {
-    if (!IsValidGLSLPreprocChar(cur)) {
-      webgl->ErrorInvalidValue("String contains the illegal character 0x%x.",
-                               cur);
-      return false;
-    }
+Maybe<char> CheckGLSLPreprocString(const bool webgl2,
+                                   const std::string& string) {
+  for (const auto c : string) {
+    if (IsValidGLSLChar(c)) continue;
+    if (c == '#') continue;
+    if (c == '\\' && webgl2) continue;
 
-    if (cur == '\\' && !webgl->IsWebGL2()) {
-      // Todo: Backslash is technically still invalid in WebGLSL 1 under even
-      // under WebGL 2.
-      webgl->ErrorInvalidValue("Backslash is not valid in WebGL 1.");
-      return false;
-    }
+    return Some(c);
   }
-
-  return true;
+  return {};
 }
 
 bool ValidateGLSLVariableName(const std::string& name, WebGLContext* webgl) {

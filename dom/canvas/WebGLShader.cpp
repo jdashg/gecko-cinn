@@ -80,10 +80,11 @@ WebGLShader::~WebGLShader() {
   mContext->gl->fDeleteShader(mGLName);
 }
 
-void WebGLShader::ShaderSource(const std::string& source) {
-  if (!ValidateGLSLPreprocString(mContext, source)) return;
-
-  mSource = source;
+void WebGLShader::ShaderSource(const std::string& cleanSource) {
+  const auto badChar =
+      CheckGLSLPreprocString(mContext->IsWebGL2(), cleanSource);
+  if (badChar) return;
+  mSource = cleanSource;
 }
 
 void WebGLShader::CompileShader() {

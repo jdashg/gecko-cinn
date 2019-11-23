@@ -926,12 +926,18 @@ void WebGLTexture::TexStorage(TexTarget target, uint32_t levels,
 // TexSubImage iff `!respectFormat`
 void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
                             GLenum respecFormat, const uvec3& offset,
-                            const uvec3& size, const webgl::PackingInfo& pi,
+                            const uvec3& claimedSize,
+                            const webgl::PackingInfo& pi,
                             const TexImageSource& src,
                             const dom::HTMLCanvasElement& canvas) {
   dom::Uint8ClampedArray scopedArr;
-  const auto blob = mContext->From(canvas, imageTarget, size, src, &scopedArr);
+  const auto blob =
+      mContext->From(canvas, imageTarget, claimedSize, src, &scopedArr);
   if (!blob) return;
+
+  // Some DOM element upload entrypoints have no size arguments, so claimedSize
+  // is sometimes 0.
+  const auto size = uvec3{blob->mWidth, blob->mHeight, blob->mDepth};
 
   ////////////////////////////////////
   // Get dest info

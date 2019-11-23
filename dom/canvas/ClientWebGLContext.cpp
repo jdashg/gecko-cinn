@@ -4781,20 +4781,23 @@ void ClientWebGLContext::GetTranslatedShaderSource(const WebGLShaderJS& shader,
 }
 
 void ClientWebGLContext::ShaderSource(WebGLShaderJS& shader,
-                                      const nsAString& source) const {
+                                      const nsAString& sourceU16) const {
   const FuncScope funcScope(*this, "detachShader");
   if (IsContextLost()) return;
   if (!shader.ValidateUsable(*this, "shader")) return;
 
-  nsString forValidationOnly;
-  if (!TruncateComments(source, &forValidationOnly)) {
-    EnqueueError(LOCAL_GL_OUT_OF_MEMORY, "Allocation failed.");
+  auto source = ToString(NS_ConvertUTF16toUTF8(sourceU16));
+  const auto cleanSource = CommentsToSpaces(source);
+
+  const auto badChar = CheckGLSLPreprocString(mIsWebGL2, cleanSource);
+  if (badChar) {
+    EnqueueError(LOCAL_GL_INVALID_VALUE,
+                 "`source` contains illegal character 0x%x.", *badChar);
     return;
   }
 
-  shader.mSource = NS_ConvertUTF16toUTF8(source).BeginReading();
-
-  Run<RPROC(ShaderSource)>(shader.mId, shader.mSource);
+  shader.mSource = std::move(source);
+  Run<RPROC(ShaderSource)>(shader.mId, cleanSource);
 }
 
 // -

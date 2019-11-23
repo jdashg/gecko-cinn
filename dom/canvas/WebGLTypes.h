@@ -20,6 +20,7 @@
 #include "gfxTypes.h"
 
 #include "nsTArray.h"
+#include "nsString.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/ipc/SharedMemoryBasic.h"
 //#include "WebGLStrongTypes.h"
@@ -915,6 +916,10 @@ Maybe<webgl::ErrorInfo> CheckVertexAttribPointer(bool webgl2, bool isFuncInt,
                                                  uint64_t byteOffset);
 
 uint8_t ElemTypeComponents(GLenum elemType);
+
+inline std::string ToString(const nsACString& text) {
+  return {text.BeginReading(), text.Length()};
+}
 
 }  // namespace mozilla
 

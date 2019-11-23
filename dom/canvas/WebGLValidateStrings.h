@@ -27,14 +27,16 @@
 #ifndef WEBGL_VALIDATE_STRINGS_H_
 #define WEBGL_VALIDATE_STRINGS_H_
 
-#include "nsString.h"
+#include "mozilla/Maybe.h"
+
+#include <string>
 
 namespace mozilla {
 
 class WebGLContext;
 
-bool TruncateComments(const nsAString& src, nsAString* const out);
-bool ValidateGLSLPreprocString(WebGLContext* webgl, const std::string& string);
+std::string CommentsToSpaces(const std::string& src);
+Maybe<char> CheckGLSLPreprocString(bool webgl2, const std::string& string);
 bool ValidateGLSLVariableName(const std::string& name, WebGLContext* webgl);
 
 }  // namespace mozilla
