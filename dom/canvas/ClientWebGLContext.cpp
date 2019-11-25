@@ -2670,9 +2670,12 @@ void ClientWebGLContext::FramebufferTexture2D(GLenum target, GLenum attachSlot,
   if (IsContextLost()) return;
 
   const auto bindTexTarget = ImageToTexTarget(bindImageTarget);
+  uint32_t zLayer = 0;
   switch (bindTexTarget) {
     case LOCAL_GL_TEXTURE_2D:
+      break;
     case LOCAL_GL_TEXTURE_CUBE_MAP:
+      zLayer = bindImageTarget - LOCAL_GL_TEXTURE_CUBE_MAP_POSITIVE_X;
       break;
     default:
       EnqueueError_ArgEnum("imageTarget", bindImageTarget);
@@ -2689,7 +2692,7 @@ void ClientWebGLContext::FramebufferTexture2D(GLenum target, GLenum attachSlot,
   }
 
   FramebufferAttach(target, attachSlot, bindImageTarget, nullptr, tex,
-                    static_cast<uint32_t>(mipLevel), 0, 0);
+                    static_cast<uint32_t>(mipLevel), zLayer, 0);
 }
 
 Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
@@ -2738,7 +2741,7 @@ Maybe<webgl::ErrorInfo> CheckFramebufferAttach(const GLenum bindImageTarget,
       break;
     case LOCAL_GL_TEXTURE_CUBE_MAP:
       maxSize = limits.maxTexCubeSize;
-      maxZ = 1;
+      maxZ = 6;
       break;
     case LOCAL_GL_TEXTURE_2D_ARRAY:
       maxSize = limits.maxTex2dSize;
@@ -4621,6 +4624,9 @@ already_AddRefed<WebGLUniformLocationJS> ClientWebGLContext::GetUniformLocation(
       if (indexed) {
         locName = indexed->name;
       }
+
+      const auto err = CheckGLSLVariableName(mIsWebGL2, locName);
+      if (err) continue;
 
       const auto baseLength = locName.size();
       for (const auto& pair : activeUniform.locByIndex) {

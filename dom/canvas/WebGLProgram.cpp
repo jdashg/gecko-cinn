@@ -197,9 +197,16 @@ void UniformAsMatrix4x4fv(gl::GLContext& gl, GLint location, GLsizei count,
 
 // -
 
+static bool EndsWith(const std::string& str, const std::string& needle) {
+  if (str.length() < needle.length()) return false;
+  return str.compare(str.length() - needle.length(), needle.length(), needle) ==
+         0;
+}
+
 webgl::ActiveUniformValidationInfo webgl::ActiveUniformValidationInfo::Make(
     const webgl::ActiveUniformInfo& info) {
   auto ret = webgl::ActiveUniformValidationInfo{info};
+  ret.isArray = EndsWith(info.name, "[0]");
 
   switch (info.elemType) {
     case LOCAL_GL_FLOAT:

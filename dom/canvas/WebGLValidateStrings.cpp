@@ -63,8 +63,15 @@ std::string CommentsToSpaces(const std::string& src) {
     ret.append(itr, matchBegin);
     for (itr = matchBegin; itr != matchEnd; ++itr) {
       auto cur = *itr;
-      if (cur != '\n') {  // Keep newlines
-        cur = ' ';
+      switch (cur) {
+        case '/':
+        case '*':
+        case '\n':
+        case '\\':
+          break;
+        default:
+          cur = ' ';
+          break;
       }
       ret += cur;
     }

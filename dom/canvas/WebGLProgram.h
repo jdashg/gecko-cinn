@@ -60,6 +60,7 @@ void UniformAs1fv(gl::GLContext& gl, GLint location, GLsizei count,
 
 struct ActiveUniformValidationInfo final {
   const ActiveUniformInfo& info;
+  bool isArray = false;
   uint8_t channelsPerElem = 0;
   decltype(&UniformAs1fv) pfn = nullptr;
 

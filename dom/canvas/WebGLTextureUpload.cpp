@@ -1037,6 +1037,8 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
     return;
   }
 
+  if (!blob->Validate(mContext, pi)) return;
+
   ////////////////////////////////////
   // Do the thing!
 
