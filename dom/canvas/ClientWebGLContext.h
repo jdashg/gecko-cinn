@@ -650,8 +650,8 @@ struct TexImageSourceAdapter final : public TexImageSource {
  * Base class for all IDL implementations of WebGLContext
  */
 class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
-                                 public SupportsWeakPtr<ClientWebGLContext>,
-                                 public nsWrapperCache {
+                                 public nsWrapperCache,
+                                 public SupportsWeakPtr<ClientWebGLContext> {
   friend class WebGLContextUserData;
   friend class webgl::ObjectJS;
   friend class webgl::ProgramKeepAlive;
@@ -663,8 +663,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   // ----------------------------- Lifetime and DOM ---------------------------
  public:
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
-  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS_AMBIGUOUS(
-      ClientWebGLContext, nsICanvasRenderingContextInternal)
+  NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(ClientWebGLContext)
 
   JSObject* WrapObject(JSContext* cx,
                        JS::Handle<JSObject*> givenProto) override {
