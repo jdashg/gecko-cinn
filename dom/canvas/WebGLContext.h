@@ -1158,13 +1158,15 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   // spec state tables, this isn't vertex shader /object/ state. This array is
   // merely state useful to vertex shaders, but is global state.
   std::vector<webgl::AttribBaseType> mGenericVertexAttribTypes;
-  uint8_t mGenericVertexAttrib0Data[sizeof(float) * 4];
   CacheInvalidator mGenericVertexAttribTypeInvalidator;
 
   GLuint mFakeVertexAttrib0BufferObject = 0;
   size_t mFakeVertexAttrib0BufferObjectSize = 0;
   bool mFakeVertexAttrib0DataDefined = false;
-  uint8_t mFakeVertexAttrib0Data[sizeof(float) * 4];
+  alignas(alignof(float)) uint8_t
+      mGenericVertexAttrib0Data[sizeof(float) * 4] = {};
+  alignas(alignof(float)) uint8_t
+      mFakeVertexAttrib0Data[sizeof(float) * 4] = {};
 
   GLint mStencilRefFront = 0;
   GLint mStencilRefBack = 0;
