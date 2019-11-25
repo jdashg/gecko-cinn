@@ -429,6 +429,15 @@ RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(WebGLProgram* prog,
 
   // -
 
+  for (const auto& attrib : info->active.activeAttribs) {
+    if (attrib.location == 0) {
+      info->attrib0Active = true;
+      break;
+    }
+  }
+
+  // -
+
   for (const auto& uniform : info->active.activeUniforms) {
     const auto& elemType = uniform.elemType;
     webgl::SamplerUniformInfo* samplerInfo = nullptr;
@@ -500,8 +509,8 @@ RefPtr<const webgl::LinkedProgramInfo> QueryProgramInfo(WebGLProgram* prog,
 
 webgl::LinkedProgramInfo::LinkedProgramInfo(WebGLProgram* prog)
     : prog(prog),
-      transformFeedbackBufferMode(prog->mNextLink_TransformFeedbackBufferMode),
-      attrib0Active(false) {}
+      transformFeedbackBufferMode(prog->mNextLink_TransformFeedbackBufferMode) {
+}
 
 webgl::LinkedProgramInfo::~LinkedProgramInfo() {}
 

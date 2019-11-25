@@ -16,8 +16,8 @@ class WebGLBuffer;
 
 class WebGLVertexAttribData final {
  public:
-  uint32_t mDivisor;
-  bool mEnabled;
+  uint32_t mDivisor = 0;
+  bool mEnabled = false;
 
  private:
   bool mIntegerFunc;
@@ -52,17 +52,7 @@ class WebGLVertexAttribData final {
 #undef GETTER
 
   // note that these initial values are what GL initializes vertex attribs to
-  WebGLVertexAttribData()
-      : mDivisor(0),
-        mEnabled(false),
-        mIntegerFunc(false),
-        mType(0),
-        mSize(0),
-        mBytesPerVertex(0),
-        mNormalized(false),
-        mStride(0),
-        mExplicitStride(0),
-        mByteOffset(0) {
+  WebGLVertexAttribData() {
     VertexAttribPointer(false, nullptr, 4, LOCAL_GL_FLOAT, false, 0, 0);
   }
 
