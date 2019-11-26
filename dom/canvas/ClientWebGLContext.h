@@ -1044,7 +1044,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void DeleteShader(WebGLShaderJS*) const;
   void DeleteSync(WebGLSyncJS*) const;
   void DeleteTexture(WebGLTextureJS*);
-  void DeleteTransformFeedback(WebGLTransformFeedbackJS*) const;
+  void DeleteTransformFeedback(WebGLTransformFeedbackJS*);
   void DeleteVertexArray(WebGLVertexArrayJS*);
 
  private:

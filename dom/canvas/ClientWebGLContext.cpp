@@ -1283,10 +1283,11 @@ void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
 }
 
 void ClientWebGLContext::DeleteTransformFeedback(
-    WebGLTransformFeedbackJS* const obj) const {
+    WebGLTransformFeedbackJS* const obj) {
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
+  const auto& state = *(mNotLost->generation);
 
   if (obj->mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -1294,7 +1295,10 @@ void ClientWebGLContext::DeleteTransformFeedback(
     return;
   }
 
-  // Don't unbind
+  // Unbind
+  if (state.mBoundTfo == obj) {
+    BindTransformFeedback(LOCAL_GL_TRANSFORM_FEEDBACK, nullptr);
+  }
 
   obj->mDeleteRequested = true;
   Run<RPROC(DeleteTransformFeedback)>(obj->mId);
@@ -1704,7 +1708,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
 
       case LOCAL_GL_SHADING_LANGUAGE_VERSION:
         if (mIsWebGL2) {
-          ret = "WebGL GLSL ES 3.0";
+          ret = "WebGL GLSL ES 3.00";
         } else {
           ret = "WebGL GLSL ES 1.0";
         }
@@ -3147,15 +3151,21 @@ static inline uvec3 CastUvec3(const ivec3& val) {
           static_cast<uint32_t>(val.z)};
 }
 
+template <typename T>
+Range<T> SubRange(const Range<T>& full, const size_t offset,
+                  const size_t length) {
+  const auto newBegin = full.begin() + offset;
+  return Range<T>{newBegin, newBegin + length};
+}
+
 Maybe<Range<const uint8_t>> GetRangeFromView(const dom::ArrayBufferView& view,
                                              GLuint elemOffset,
                                              GLuint elemCountOverride) {
-  auto range = MakeRangeAbv(view);
-  // view.ComputeLengthAndData();
-  // const auto bytes = view.DataAllowShared();
-  // const auto byteLen = view.LengthAllowShared();
+  const auto byteRange = MakeRangeAbv(view);  // In bytes.
+  const auto& elemType = view.Type();
+  const auto bytesPerElem = js::Scalar::byteSize(elemType);
 
-  auto elemCount = range.length();
+  auto elemCount = byteRange.length() / bytesPerElem;
   if (elemOffset > elemCount) return {};
   elemCount -= elemOffset;
 
@@ -3163,7 +3173,9 @@ Maybe<Range<const uint8_t>> GetRangeFromView(const dom::ArrayBufferView& view,
     if (elemCountOverride > elemCount) return {};
     elemCount = elemCountOverride;
   }
-  return Some(Range<const uint8_t>{range.begin().get(), elemCount});
+  const auto subrange =
+      SubRange(byteRange, elemOffset * bytesPerElem, elemCount * bytesPerElem);
+  return Some(subrange);
 }
 
 // -
@@ -4315,6 +4327,10 @@ void ClientWebGLContext::LinkProgram(WebGLProgramJS& prog) const {
 void ClientWebGLContext::TransformFeedbackVaryings(
     WebGLProgramJS& prog, const dom::Sequence<nsString>& varyings,
     const GLenum bufferMode) const {
+  const FuncScope funcScope(*this, "transformFeedbackVaryings");
+  if (IsContextLost()) return;
+  if (!prog.ValidateUsable(*this, "program")) return;
+
   std::vector<std::string> varyingsU8;
   varyingsU8.reserve(varyings.Length());
   for (const auto& cur : varyings) {
@@ -4601,20 +4617,25 @@ void ClientWebGLContext::GetUniformIndices(
   const auto& res = GetLinkResult(prog);
   auto ret = nsTArray<GLuint>(uniformNames.Length());
 
-  for (const auto& uniformName : uniformNames) {
-    const auto nameU8 = ToString(NS_ConvertUTF16toUTF8(uniformName));
+  std::unordered_map<std::string, size_t> retIdByName;
+  retIdByName.reserve(ret.Length());
 
-    for (const auto& cur : res.active.activeUniforms) {
-      if (cur.name == nameU8) {
-        uint32_t index = LOCAL_GL_INVALID_INDEX;
-        if (cur.block_index != -1) {
-          index = static_cast<uint32_t>(cur.block_index);
-        }
-        ret.AppendElement(index);
-        continue;
-      }
-    }
+  for (const auto i : IntegerRange(uniformNames.Length())) {
+    const auto& name = uniformNames[i];
+    auto nameU8 = ToString(NS_ConvertUTF16toUTF8(name));
+    retIdByName.insert({std::move(nameU8), i});
+    ret.AppendElement(LOCAL_GL_INVALID_INDEX);
   }
+
+  GLuint i = 0;
+  for (const auto& cur : res.active.activeUniforms) {
+    const auto maybeRetId = MaybeFind(retIdByName, cur.name);
+    if (maybeRetId) {
+      ret[*maybeRetId] = i;
+    }
+    i += 1;
+  }
+
   retval.SetValue(std::move(ret));
 }
 

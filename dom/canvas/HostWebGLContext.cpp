@@ -27,19 +27,29 @@
 #include "WebGLVertexArray.h"
 #include "WebGLQuery.h"
 
+#include "mozilla/StaticMutex.h"
+
 namespace mozilla {
 
 LazyLogModule gWebGLBridgeLog("webglbridge");
 
 // -
 
-StaticMutex gContextSetLock;
-static std::unordered_set<const HostWebGLContext*> gContextSet;
+static StaticMutex sContextSetLock;
+
+static std::unordered_set<const HostWebGLContext*>& DeferredStaticContextSet() {
+  static std::unordered_set<const HostWebGLContext*> sContextSet;
+  return sContextSet;
+}
 
 LockedOutstandingContexts::LockedOutstandingContexts()
-    : lock(gContextSetLock), contexts(gContextSet) {}
+    : contexts(DeferredStaticContextSet()) {
+  sContextSetLock.Lock();
+}
 
-LockedOutstandingContexts::~LockedOutstandingContexts() = default;
+LockedOutstandingContexts::~LockedOutstandingContexts() {
+  sContextSetLock.Unlock();
+}
 
 // -
 
@@ -60,14 +70,16 @@ HostWebGLContext::HostWebGLContext(OwnerData&& ownerData)
   }
 
   {
-    StaticMutexAutoLock lock(gContextSetLock);
-    (void)gContextSet.insert(this);
+    StaticMutexAutoLock lock(sContextSetLock);
+    auto& contexts = DeferredStaticContextSet();
+    (void)contexts.insert(this);
   }
 }
 
 HostWebGLContext::~HostWebGLContext() {
-  StaticMutexAutoLock lock(gContextSetLock);
-  (void)gContextSet.erase(this);
+  StaticMutexAutoLock lock(sContextSetLock);
+  auto& contexts = DeferredStaticContextSet();
+  (void)contexts.erase(this);
 }
 
 // -

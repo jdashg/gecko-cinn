@@ -13,15 +13,11 @@
 #include "WebGLContext.h"
 #include "WebGL2Context.h"
 #include "WebGLFramebuffer.h"
-//#include "WebGLSync.h"
-//#include "WebGLTransformFeedback.h"
 #include "WebGLTypes.h"
 
 #include <unordered_map>
-#include <vector>
-#include "mozilla/StaticMutex.h"
-
 #include <unordered_set>
+#include <vector>
 
 #ifndef WEBGL_BRIDGE_LOG_
 #  define WEBGL_BRIDGE_LOG_(lvl, ...) \
@@ -45,7 +41,8 @@ class CompositableHost;
 
 struct LockedOutstandingContexts final {
  private:
-  StaticMutexAutoLock lock;
+  // StaticMutexAutoLock lock; // We can't use it directly (STACK_CLASS), but
+  // this is effectively what we hold via RAII.
 
  public:
   const std::unordered_set<const HostWebGLContext*>& contexts;
