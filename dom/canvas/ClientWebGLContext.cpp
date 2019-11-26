@@ -17,7 +17,9 @@
 #include "mozilla/layers/LayerTransactionChild.h"
 #include "mozilla/layers/OOPCanvasRenderer.h"
 #include "mozilla/layers/TextureClientSharedSurface.h"
+#include "mozilla/Preferences.h"
 #include "mozilla/StaticPrefs_webgl.h"
+#include "nsContentUtils.h"
 #include "nsIGfxInfo.h"
 #include "TexUnpackBlob.h"
 #include "WebGLMethodDispatcher.h"
@@ -33,11 +35,24 @@ webgl::ContextGenerationInfo::~ContextGenerationInfo() = default;
 
 // -
 
+bool webgl::ObjectJS::ValidateForContext(
+    const ClientWebGLContext& targetContext, const char* const argName) const {
+  if (!IsForContext(targetContext)) {
+    targetContext.EnqueueError(
+        LOCAL_GL_INVALID_OPERATION,
+        "`%s` is from a different (or lost) WebGL context.", argName);
+    return false;
+  }
+  return true;
+}
+
 void webgl::ObjectJS::WarnInvalidUse(const ClientWebGLContext& targetContext,
                                      const char* const argName) const {
-  targetContext.EnqueueError(
-      LOCAL_GL_INVALID_OPERATION,
-      "`%s` is from a different WebGL context or has been deleted.", argName);
+  if (!ValidateForContext(targetContext, argName)) return;
+
+  const auto errEnum = ErrorOnDeleted();
+  targetContext.EnqueueError(errEnum, "Object `%s` is already deleted.",
+                             argName);
 }
 
 static bool GetJSScalarFromGLType(GLenum type,
@@ -1012,11 +1027,18 @@ already_AddRefed<WebGLVertexArrayJS> ClientWebGLContext::CreateVertexArray()
 
 // -
 
+static bool ValidateOrSkipForDelete(const ClientWebGLContext& context,
+                                    const webgl::ObjectJS* const obj) {
+  if (!obj) return false;
+  if (!obj->ValidateForContext(context, "obj")) return false;
+  if (obj->IsDeleted()) return false;
+  return true;
+}
+
 void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteBuffer");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind from all bind points and bound containers
@@ -1077,8 +1099,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
 void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteFramebuffer");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1102,8 +1123,7 @@ void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
 void ClientWebGLContext::DeleteProgram(WebGLProgramJS* const obj) const {
   const FuncScope funcScope(*this, "deleteProgram");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
 
   // Don't unbind
 
@@ -1125,8 +1145,7 @@ void ClientWebGLContext::DoDeleteProgram(WebGLProgramJS& obj) const {
 void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
   const FuncScope funcScope(*this, "deleteQuery");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
 
   // Don't unbind
 
@@ -1137,8 +1156,7 @@ void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
 void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteRenderbuffer");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1171,8 +1189,7 @@ void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
 void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
   const FuncScope funcScope(*this, "deleteSampler");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1189,8 +1206,7 @@ void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
 void ClientWebGLContext::DeleteShader(WebGLShaderJS* const obj) const {
   const FuncScope funcScope(*this, "deleteShader");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
 
   // Don't unbind
 
@@ -1211,8 +1227,7 @@ void ClientWebGLContext::DoDeleteShader(const WebGLShaderJS& obj) const {
 void ClientWebGLContext::DeleteSync(WebGLSyncJS* const obj) const {
   const FuncScope funcScope(*this, "deleteSync");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
 
   // Nothing to unbind
 
@@ -1223,8 +1238,7 @@ void ClientWebGLContext::DeleteSync(WebGLSyncJS* const obj) const {
 void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
   const FuncScope funcScope(*this, "deleteTexture");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1272,8 +1286,7 @@ void ClientWebGLContext::DeleteTransformFeedback(
     WebGLTransformFeedbackJS* const obj) const {
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
 
   if (obj->mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -1290,8 +1303,7 @@ void ClientWebGLContext::DeleteTransformFeedback(
 void ClientWebGLContext::DeleteVertexArray(WebGLVertexArrayJS* const obj) {
   const FuncScope funcScope(*this, "deleteVertexArray");
   if (IsContextLost()) return;
-  if (!obj) return;
-  if (!obj->ValidateUsable(*this, "obj", true)) return;
+  if (!ValidateOrSkipForDelete(*this, obj)) return;
   const auto& state = *(mNotLost->generation);
 
   // Unbind
@@ -1589,17 +1601,11 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
       return;
     }
 
-      // any
-
-    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS: {
-      const auto& formats = state.mCompressedTextureFormats;
-      JS::Rooted<JS::Value> obj(cx);
-      if (!dom::ToJSValue(cx, formats.data(), formats.size(), &obj)) {
-        rv = NS_ERROR_OUT_OF_MEMORY;
-      }
-      retval.set(obj);
+    // any
+    case LOCAL_GL_COMPRESSED_TEXTURE_FORMATS:
+      retval.set(Create<dom::Uint32Array>(cx, this,
+                                          state.mCompressedTextureFormats, rv));
       return;
-    }
   }
 
   if (mIsWebGL2) {
@@ -2023,8 +2029,12 @@ void ClientWebGLContext::GetUniform(JSContext* const cx,
     case LOCAL_GL_BOOL_VEC2:
     case LOCAL_GL_BOOL_VEC3:
     case LOCAL_GL_BOOL_VEC4: {
-      const auto ptr = reinterpret_cast<const bool*>(res.data);
-      MOZ_ALWAYS_TRUE(ToJSValue(cx, ptr, elemCount, retval));
+      const auto intArr = reinterpret_cast<const int32_t*>(res.data);
+      bool boolArr[4] = {};
+      for (const auto i : IntegerRange(elemCount)) {
+        boolArr[i] = bool(intArr[i]);
+      }
+      MOZ_ALWAYS_TRUE(ToJSValue(cx, boolArr, elemCount, retval));
       return;
     }
 
@@ -2826,6 +2836,11 @@ void ClientWebGLContext::FramebufferAttach(
     }
     id = tex->mId;
   } else if (rb) {
+    if (!rb->mHasBeenBound) {
+      EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                   "`rb` has not yet been bound with BindRenderbuffer.");
+      return;
+    }
     id = rb->mId;
   }
 
@@ -4126,9 +4141,18 @@ static bool IsExtensionForbiddenForCaller(const WebGLExtensionID ext,
 
   if (StaticPrefs::webgl_enable_privileged_extensions()) return false;
 
+  const bool resistFingerprinting =
+      nsContentUtils::ShouldResistFingerprinting();
   switch (ext) {
     case WebGLExtensionID::MOZ_debug:
       return true;
+
+    case WebGLExtensionID::WEBGL_debug_renderer_info:
+      return resistFingerprinting ||
+             !Preferences::GetBool("webgl.enable-debug-renderer-info", false);
+
+    case WebGLExtensionID::WEBGL_debug_shaders:
+      return resistFingerprinting;
 
     default:
       return false;
@@ -4751,18 +4775,22 @@ void ClientWebGLContext::GetProgramParameter(
         return JS::NumberValue(res.active.activeUniforms.size());
 
       case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_MODE:
+        if (!mIsWebGL2) break;
         return JS::NumberValue(res.tfBufferMode);
 
       case LOCAL_GL_TRANSFORM_FEEDBACK_VARYINGS:
+        if (!mIsWebGL2) break;
         return JS::NumberValue(res.active.activeTfVaryings.size());
 
       case LOCAL_GL_ACTIVE_UNIFORM_BLOCKS:
+        if (!mIsWebGL2) break;
         return JS::NumberValue(res.active.activeUniformBlocks.size());
 
       default:
-        EnqueueError_ArgEnum("pname", pname);
-        return JS::NullValue();
+        break;
     }
+    EnqueueError_ArgEnum("pname", pname);
+    return JS::NullValue();
   }());
 }
 

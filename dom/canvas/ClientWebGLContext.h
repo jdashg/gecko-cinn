@@ -177,8 +177,8 @@ class ContextGenerationInfo final {
   std::array<bool, 4> mColorWriteMask = {true, true, true, true};
   std::array<int32_t, 4> mScissor = {};
   std::array<int32_t, 4> mViewport = {};
-  std::array<float, 4> mClearColor = {1, 1, 1, 1};
-  std::array<float, 4> mBlendColor = {1, 1, 1, 1};
+  std::array<float, 4> mClearColor = {0, 0, 0, 0};
+  std::array<float, 4> mBlendColor = {0, 0, 0, 0};
   std::array<float, 2> mDepthRange = {0, 1};
 
   std::vector<GLenum> mCompressedTextureFormats;
@@ -212,22 +212,31 @@ class ObjectJS {
 
   ClientWebGLContext* GetParentObject() const { return Context(); }
 
-  bool IsUsable(const ClientWebGLContext&, bool allowDeleted = false) const;
+  // A la carte:
+  bool IsForContext(const ClientWebGLContext&) const;
+  virtual bool IsDeleted() const { return mDeleteRequested; }
 
+  bool IsUsable(const ClientWebGLContext& context) const {
+    return IsForContext(context) && !IsDeleted();
+  }
+
+  // The workhorse:
   bool ValidateUsable(const ClientWebGLContext& context,
-                      const char* const argName,
-                      bool ignoreDeleted = false) const {
+                      const char* const argName) const {
     if (MOZ_LIKELY(IsUsable(context))) return true;
-    if (ignoreDeleted && IsUsable(context, true)) return false;
     WarnInvalidUse(context, argName);
     return false;
   }
 
+  // Use by DeleteFoo:
+  bool ValidateForContext(const ClientWebGLContext& context,
+                          const char* const argName) const;
+
  private:
   void WarnInvalidUse(const ClientWebGLContext&, const char* argName) const;
 
- public:
-  virtual bool IsDeleted() const { return mDeleteRequested; }
+  // The enum is INVALID_VALUE for Program/Shader :(
+  virtual GLenum ErrorOnDeleted() const { return LOCAL_GL_INVALID_OPERATION; }
 };
 
 }  // namespace webgl
@@ -341,6 +350,7 @@ class WebGLProgramJS final : public nsWrapperCache, public webgl::ObjectJS {
 
  public:
   bool IsDeleted() const override { return !mKeepAliveWeak.lock(); }
+  GLenum ErrorOnDeleted() const override { return LOCAL_GL_INVALID_VALUE; }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
@@ -435,6 +445,7 @@ class WebGLShaderJS final : public nsWrapperCache, public webgl::ObjectJS {
 
  public:
   bool IsDeleted() const override { return !mKeepAliveWeak.lock(); }
+  GLenum ErrorOnDeleted() const override { return LOCAL_GL_INVALID_VALUE; }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override;
 };
@@ -2134,12 +2145,12 @@ const char* GetExtensionName(WebGLExtensionID);
 
 // -
 
-inline bool webgl::ObjectJS::IsUsable(const ClientWebGLContext& context,
-                                      const bool allowDeleted) const {
+inline bool webgl::ObjectJS::IsForContext(
+    const ClientWebGLContext& context) const {
   const auto& notLost = context.mNotLost;
   if (!notLost) return false;
   if (notLost->generation.get() != mGeneration.lock().get()) return false;
-  return allowDeleted || !IsDeleted();
+  return true;
 }
 
 }  // namespace mozilla

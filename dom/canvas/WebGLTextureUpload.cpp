@@ -1060,6 +1060,10 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
       isRespec = true;
     }
   } else {
+    if (!blob->HasData()) {
+      mContext->ErrorInvalidValue("`source` cannot be null.");
+      return;
+    }
     if (!EnsureImageDataInitializedForUpload(this, imageTarget, level, offset,
                                              size, imageInfo)) {
       return;
