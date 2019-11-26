@@ -31,6 +31,18 @@ namespace mozilla {
 
 LazyLogModule gWebGLBridgeLog("webglbridge");
 
+// -
+
+StaticMutex gContextSetLock;
+static std::unordered_set<const HostWebGLContext*> gContextSet;
+
+LockedOutstandingContexts::LockedOutstandingContexts()
+    : lock(gContextSetLock), contexts(gContextSet) {}
+
+LockedOutstandingContexts::~LockedOutstandingContexts() = default;
+
+// -
+
 /*static*/
 UniquePtr<HostWebGLContext> HostWebGLContext::Create(
     OwnerData&& ownerData, const webgl::InitContextDesc& desc,
@@ -46,11 +58,16 @@ HostWebGLContext::HostWebGLContext(OwnerData&& ownerData)
   if (mOwnerData.outOfProcess) {
     mOwnerData.outOfProcess->mCommandSink->mHostContext = this;
   }
-  WebGLMemoryTracker::AddContext(this);
+
+  {
+    StaticMutexAutoLock lock(gContextSetLock);
+    (void)gContextSet.insert(this);
+  }
 }
 
 HostWebGLContext::~HostWebGLContext() {
-  WebGLMemoryTracker::RemoveContext(this);
+  StaticMutexAutoLock lock(gContextSetLock);
+  (void)gContextSet.erase(this);
 }
 
 // -

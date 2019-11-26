@@ -19,6 +19,9 @@
 
 #include <unordered_map>
 #include <vector>
+#include "mozilla/StaticMutex.h"
+
+#include <unordered_set>
 
 #ifndef WEBGL_BRIDGE_LOG_
 #  define WEBGL_BRIDGE_LOG_(lvl, ...) \
@@ -40,6 +43,17 @@ namespace layers {
 class CompositableHost;
 }
 
+struct LockedOutstandingContexts final {
+ private:
+  StaticMutexAutoLock lock;
+
+ public:
+  const std::unordered_set<const HostWebGLContext*>& contexts;
+
+  LockedOutstandingContexts();
+  ~LockedOutstandingContexts();
+};
+
 /**
  * Host endpoint of a WebGLContext.  HostWebGLContext owns a WebGLContext
  * that it uses to execute commands sent from its ClientWebGLContext.
@@ -58,6 +72,10 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   friend class WebGLMemoryTracker;
 
   using ObjectId = webgl::ObjectId;
+
+  static std::unique_ptr<LockedOutstandingContexts> OutstandingContexts() {
+    return std::make_unique<LockedOutstandingContexts>();
+  }
 
  public:
   MOZ_DECLARE_WEAKREFERENCE_TYPENAME(HostWebGLContext)

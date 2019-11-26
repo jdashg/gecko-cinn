@@ -368,15 +368,10 @@ ReturnType ClientWebGLContext::Run(Args&&... aArgs) const {
 // ------------------------- Composition, etc -------------------------
 
 void ClientWebGLContext::UpdateLastUseIndex() {
-  static CheckedInt<uint64_t> sIndex = 0;
+  static uint64_t sIndex = 0;
 
   sIndex++;
-
-  // should never happen with 64-bit; trying to handle this would be riskier
-  // than not handling it as the handler code would never get exercised.
-  if (!sIndex.isValid())
-    MOZ_CRASH("Can't believe it's been 2^64 transactions already!");
-  mLastUseIndex = sIndex.value();
+  mLastUseIndex = sIndex;
 }
 
 static uint8_t gWebGLLayerUserData;

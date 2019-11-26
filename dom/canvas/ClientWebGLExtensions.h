@@ -27,7 +27,7 @@ class ClientWebGLExtensionBase : public nsWrapperCache {
   virtual ~ClientWebGLExtensionBase() = default;
 
  public:
-  auto GetParentObject() const { return mContext.get(); }
+  ClientWebGLContext* GetParentObject() const { return mContext.get(); }
 };
 
 // -
