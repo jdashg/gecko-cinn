@@ -1194,14 +1194,11 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   // be Flushed while doing hundreds of draw calls.
   int mDrawCallsSinceLastFlush;
 
-  mutable int mAlreadyGeneratedWarnings;
-  int mMaxWarnings;
+  mutable uint64_t mWarningCount = 0;
+  uint64_t mMaxWarnings = -1;
   bool mAlreadyWarnedAboutFakeVertexAttrib0;
 
-  bool ShouldGenerateWarnings() const {
-    if (mMaxWarnings == -1) return true;
-    return mAlreadyGeneratedWarnings < mMaxWarnings;
-  }
+  bool ShouldGenerateWarnings() const { return mWarningCount < mMaxWarnings; }
 
   bool ShouldGeneratePerfWarnings() const {
     return mNumPerfWarnings < mMaxPerfWarnings;

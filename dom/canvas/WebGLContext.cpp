@@ -163,17 +163,10 @@ WebGLContext::WebGLContext(HostWebGLContext& host,
   mScissorTestEnabled = 0;
   mStencilTestEnabled = 0;
 
-  mAlreadyGeneratedWarnings = 0;
   mAlreadyWarnedAboutFakeVertexAttrib0 = false;
   mAlreadyWarnedAboutViewportLargerThanDest = false;
 
   mMaxWarnings = StaticPrefs::webgl_max_warnings_per_context();
-  if (mMaxWarnings < -1) {
-    GenerateWarning(
-        "webgl.max-warnings-per-context size is too large (seems like a "
-        "negative value wrapped)");
-    mMaxWarnings = 0;
-  }
 
   mDisableFragHighP = false;
 
@@ -2004,8 +1997,20 @@ void WebGLContext::GenerateErrorImpl(const GLenum err,
    */
   if (!mWebGLError) mWebGLError = err;
 
-  if (mHost) {
-    mHost->JsWarning(text);
+  if (!mHost) return;
+
+  if (!ShouldGenerateWarnings()) return;
+
+  mHost->JsWarning(text);
+  mWarningCount += 1;
+
+  if (!ShouldGenerateWarnings()) {
+    auto info = std::string(
+        "WebGL: No further warnings will be reported for this WebGL "
+        "context. (already reported ");
+    info += std::to_string(mWarningCount);
+    info += " warnings)";
+    mHost->JsWarning(info);
   }
 }
 
