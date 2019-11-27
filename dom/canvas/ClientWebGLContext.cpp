@@ -1143,14 +1143,14 @@ void ClientWebGLContext::DoDeleteProgram(WebGLProgramJS& obj) const {
   Run<RPROC(DeleteProgram)>(obj.mId);
 }
 
-GLenum QuerySlotTarget(const GLenum specificTarget);
+static GLenum QuerySlotTarget(const GLenum specificTarget);
 
-void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
+void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) {
   const FuncScope funcScope(*this, "deleteQuery");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
 
-  // Don't unbind
+  // Unbind if current
 
   obj->mDeleteRequested = true;
   Run<RPROC(DeleteQuery)>(obj->mId);
@@ -1160,7 +1160,10 @@ void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
   const auto slotTarget = QuerySlotTarget(obj->mTarget);
   const auto& curForTarget =
       *MaybeFind(state.mCurrentQueryByTarget, slotTarget);
-  if (obj != curForTarget) {
+
+  if (curForTarget == obj) {
+    EndQuery(obj->mTarget);
+  } else {
     // Not currently active, so fully-delete immediately.
     obj->mIsFullyDeleted = true;
   }

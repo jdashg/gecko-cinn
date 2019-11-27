@@ -1040,7 +1040,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   void DeleteBuffer(WebGLBufferJS*);
   void DeleteFramebuffer(WebGLFramebufferJS*);
   void DeleteProgram(WebGLProgramJS*) const;
-  void DeleteQuery(WebGLQueryJS*) const;
+  void DeleteQuery(WebGLQueryJS*);
   void DeleteRenderbuffer(WebGLRenderbufferJS*);
   void DeleteSampler(WebGLSamplerJS*);
   void DeleteShader(WebGLShaderJS*) const;
