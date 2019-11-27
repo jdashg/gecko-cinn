@@ -772,7 +772,8 @@ bool ClientWebGLContext::CreateHostContext() {
     (void)state.mBoundBufferByTarget[LOCAL_GL_UNIFORM_BUFFER];
 
     (void)state.mCurrentQueryByTarget[LOCAL_GL_ANY_SAMPLES_PASSED];
-    (void)state.mCurrentQueryByTarget[LOCAL_GL_ANY_SAMPLES_PASSED_CONSERVATIVE];
+    //(void)state.mCurrentQueryByTarget[LOCAL_GL_ANY_SAMPLES_PASSED_CONSERVATIVE];
+    //// Same slot as ANY_SAMPLES_PASSED.
     (void)state
         .mCurrentQueryByTarget[LOCAL_GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN];
   }
@@ -1142,6 +1143,8 @@ void ClientWebGLContext::DoDeleteProgram(WebGLProgramJS& obj) const {
   Run<RPROC(DeleteProgram)>(obj.mId);
 }
 
+GLenum QuerySlotTarget(const GLenum specificTarget);
+
 void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
   const FuncScope funcScope(*this, "deleteQuery");
   if (IsContextLost()) return;
@@ -1151,6 +1154,16 @@ void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) const {
 
   obj->mDeleteRequested = true;
   Run<RPROC(DeleteQuery)>(obj->mId);
+
+  if (!obj->mTarget) return;
+  const auto& state = *(mNotLost->generation);
+  const auto slotTarget = QuerySlotTarget(obj->mTarget);
+  const auto& curForTarget =
+      *MaybeFind(state.mCurrentQueryByTarget, slotTarget);
+  if (obj != curForTarget) {
+    // Not currently active, so fully-delete immediately.
+    obj->mIsFullyDeleted = true;
+  }
 }
 
 void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
@@ -3110,18 +3123,22 @@ void ClientWebGLContext::TexParameteri(GLenum texTarget, GLenum pname,
 
 ////////////////////////////////////
 
-static inline bool DoesJSTypeMatchUnpackType(GLenum unpackType,
-                                             js::Scalar::Type jsType) {
+static GLenum JSTypeMatchUnpackTypeError(GLenum unpackType,
+                                         js::Scalar::Type jsType) {
+  bool matches = false;
   switch (unpackType) {
     case LOCAL_GL_BYTE:
-      return jsType == js::Scalar::Type::Int8;
+      matches = (jsType == js::Scalar::Type::Int8);
+      break;
 
     case LOCAL_GL_UNSIGNED_BYTE:
-      return jsType == js::Scalar::Type::Uint8 ||
-             jsType == js::Scalar::Type::Uint8Clamped;
+      matches = (jsType == js::Scalar::Type::Uint8 ||
+                 jsType == js::Scalar::Type::Uint8Clamped);
+      break;
 
     case LOCAL_GL_SHORT:
-      return jsType == js::Scalar::Type::Int16;
+      matches = (jsType == js::Scalar::Type::Int16);
+      break;
 
     case LOCAL_GL_UNSIGNED_SHORT:
     case LOCAL_GL_UNSIGNED_SHORT_4_4_4_4:
@@ -3129,24 +3146,30 @@ static inline bool DoesJSTypeMatchUnpackType(GLenum unpackType,
     case LOCAL_GL_UNSIGNED_SHORT_5_6_5:
     case LOCAL_GL_HALF_FLOAT:
     case LOCAL_GL_HALF_FLOAT_OES:
-      return jsType == js::Scalar::Type::Uint16;
+      matches = (jsType == js::Scalar::Type::Uint16);
+      break;
 
     case LOCAL_GL_INT:
-      return jsType == js::Scalar::Type::Int32;
+      matches = (jsType == js::Scalar::Type::Int32);
+      break;
 
     case LOCAL_GL_UNSIGNED_INT:
     case LOCAL_GL_UNSIGNED_INT_2_10_10_10_REV:
     case LOCAL_GL_UNSIGNED_INT_10F_11F_11F_REV:
     case LOCAL_GL_UNSIGNED_INT_5_9_9_9_REV:
     case LOCAL_GL_UNSIGNED_INT_24_8:
-      return jsType == js::Scalar::Type::Uint32;
+      matches = (jsType == js::Scalar::Type::Uint32);
+      break;
 
     case LOCAL_GL_FLOAT:
-      return jsType == js::Scalar::Type::Float32;
+      matches = (jsType == js::Scalar::Type::Float32);
+      break;
 
     default:
-      return false;
+      return LOCAL_GL_INVALID_ENUM;
   }
+  if (!matches) return LOCAL_GL_INVALID_OPERATION;
+  return 0;
 }
 
 static std::string ToString(const js::Scalar::Type type) {
@@ -3255,11 +3278,18 @@ void ClientWebGLContext::TexImage(uint8_t funcDims, GLenum imageTarget,
   if (src.mView) {
     const auto& view = *src.mView;
     const auto& jsType = view.Type();
-    if (!DoesJSTypeMatchUnpackType(pi.type, jsType)) {
-      EnqueueError(LOCAL_GL_INVALID_OPERATION,
-                   "ArrayBufferView type %s not compatible with `type` %s.",
-                   ToString(jsType).c_str(), EnumString(pi.type).c_str());
-      return;
+    const auto err = JSTypeMatchUnpackTypeError(pi.type, jsType);
+    switch (err) {
+      case LOCAL_GL_INVALID_ENUM:
+        EnqueueError_ArgEnum("unpackType", pi.type);
+        return;
+      case LOCAL_GL_INVALID_OPERATION:
+        EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                     "ArrayBufferView type %s not compatible with `type` %s.",
+                     ToString(jsType).c_str(), EnumString(pi.type).c_str());
+        return;
+      default:
+        break;
     }
   }
 
@@ -3735,7 +3765,16 @@ bool ClientWebGLContext::ReadPixels_SharedPrecheck(
 }
 
 // --------------------------------- GL Query ---------------------------------
-void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
+
+static inline GLenum QuerySlotTarget(const GLenum specificTarget) {
+  if (specificTarget == LOCAL_GL_ANY_SAMPLES_PASSED_CONSERVATIVE) {
+    return LOCAL_GL_ANY_SAMPLES_PASSED;
+  }
+  return specificTarget;
+}
+
+void ClientWebGLContext::GetQuery(JSContext* cx, GLenum specificTarget,
+                                  GLenum pname,
                                   JS::MutableHandle<JS::Value> retval) const {
   retval.set(JS::NullValue());
   const FuncScope funcScope(*this, "getQuery");
@@ -3745,7 +3784,7 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
 
   if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query)) {
     if (pname == LOCAL_GL_QUERY_COUNTER_BITS) {
-      switch (target) {
+      switch (specificTarget) {
         case LOCAL_GL_TIME_ELAPSED_EXT:
           retval.set(JS::NumberValue(limits.queryCounterBitsTimeElapsed));
           return;
@@ -3755,7 +3794,7 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
           return;
 
         default:
-          EnqueueError_ArgEnum("target", target);
+          EnqueueError_ArgEnum("target", specificTarget);
           return;
       }
     }
@@ -3766,12 +3805,17 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum target, GLenum pname,
     return;
   }
 
-  const auto& slot = MaybeFind(state.mCurrentQueryByTarget, target);
+  const auto slotTarget = QuerySlotTarget(specificTarget);
+  const auto& slot = MaybeFind(state.mCurrentQueryByTarget, slotTarget);
   if (!slot) {
-    EnqueueError_ArgEnum("target", target);
+    EnqueueError_ArgEnum("target", specificTarget);
     return;
   }
-  const auto& query = *slot;
+
+  auto query = *slot;
+  if (query && query->mTarget != specificTarget) {
+    query = nullptr;
+  }
 
   (void)ToJSValueOrNull(cx, query, retval);
 }
@@ -3798,44 +3842,66 @@ void ClientWebGLContext::GetQueryParameter(
   }
 }
 
-void ClientWebGLContext::BeginQuery(const GLenum target, WebGLQueryJS& query) {
+void ClientWebGLContext::BeginQuery(const GLenum specificTarget,
+                                    WebGLQueryJS& query) {
   const FuncScope funcScope(*this, "beginQuery");
   if (IsContextLost()) return;
   if (!query.ValidateUsable(*this, "query")) return;
   auto& state = *(mNotLost->generation);
 
-  const auto& slot = MaybeFind(state.mCurrentQueryByTarget, target);
+  const auto slotTarget = QuerySlotTarget(specificTarget);
+  const auto& slot = MaybeFind(state.mCurrentQueryByTarget, slotTarget);
   if (!slot) {
-    EnqueueError_ArgEnum("target", target);
+    EnqueueError_ArgEnum("target", specificTarget);
     return;
   }
 
-  if (query.mTarget && query.mTarget != target) {
+  if (*slot) {
+    auto enumStr = EnumString(slotTarget);
+    if (slotTarget == LOCAL_GL_ANY_SAMPLES_PASSED) {
+      enumStr += "/ANY_SAMPLES_PASSED_CONSERVATIVE";
+    }
+    EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                 "A Query is already active for %s.", enumStr.c_str());
+    return;
+  }
+
+  if (query.mTarget && query.mTarget != specificTarget) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
                  "`query` cannot be changed to a different target.");
     return;
   }
 
   *slot = &query;
-  query.mTarget = target;
+  query.mTarget = specificTarget;
 
-  Run<RPROC(BeginQuery)>(target, query.mId);
+  Run<RPROC(BeginQuery)>(specificTarget, query.mId);
 }
 
-void ClientWebGLContext::EndQuery(const GLenum target) {
+void ClientWebGLContext::EndQuery(const GLenum specificTarget) {
   const FuncScope funcScope(*this, "endQuery");
   if (IsContextLost()) return;
   auto& state = *(mNotLost->generation);
 
-  const auto& slot = MaybeFind(state.mCurrentQueryByTarget, target);
-  if (!slot) {
-    EnqueueError_ArgEnum("target", target);
+  const auto slotTarget = QuerySlotTarget(specificTarget);
+  const auto& maybeSlot = MaybeFind(state.mCurrentQueryByTarget, slotTarget);
+  if (!maybeSlot) {
+    EnqueueError_ArgEnum("target", specificTarget);
     return;
   }
+  auto& slot = *maybeSlot;
+  if (!slot || slot->mTarget != specificTarget) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION, "No Query is active for %s.",
+                 EnumString(specificTarget).c_str());
+    return;
+  }
+  if (slot->mDeleteRequested) {
+    slot->mIsFullyDeleted = true;
+  }
 
-  *slot = nullptr;
+  slot = nullptr;
 
-  Run<RPROC(EndQuery)>(target);
+  Run<RPROC(EndQuery)>(specificTarget);
 }
 
 void ClientWebGLContext::QueryCounter(WebGLQueryJS& query,
