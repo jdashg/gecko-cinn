@@ -2544,6 +2544,8 @@ void ClientWebGLContext::GetBufferSubData(GLenum target, GLintptr srcByteOffset,
                                           const dom::ArrayBufferView& dstData,
                                           GLuint dstElemOffset,
                                           GLuint dstElemCountOverride) {
+  const FuncScope funcScope(*this, "getBufferSubData");
+  if (IsContextLost()) return;
   if (!ValidateNonNegative("srcByteOffset", srcByteOffset)) return;
 
   uint8_t* bytes;
