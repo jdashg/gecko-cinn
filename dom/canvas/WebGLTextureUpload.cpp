@@ -42,7 +42,7 @@ static UniquePtr<webgl::TexUnpackBytes> FromView(
     const auto range =
         GetRangeFromView(*view, viewElemOffset, viewElemLengthOverride);
     if (!range) {
-      webgl->GenerateError(LOCAL_GL_INVALID_VALUE, "`source` too small.");
+      webgl->GenerateError(LOCAL_GL_INVALID_OPERATION, "`source` too small.");
       return nullptr;
     }
     bytes = range->begin().get();
@@ -1053,12 +1053,10 @@ void WebGLTexture::TexImage(GLenum imageTarget, uint32_t level,
           Some(std::vector<bool>(blob->mDepth, true));
     }
 
-    if (imageInfo->mWidth == newImageInfo->mWidth &&
-        imageInfo->mHeight == newImageInfo->mHeight &&
-        imageInfo->mDepth == newImageInfo->mDepth &&
-        imageInfo->mFormat == newImageInfo->mFormat) {
-      isRespec = true;
-    }
+    isRespec = (imageInfo->mWidth != newImageInfo->mWidth ||
+                imageInfo->mHeight != newImageInfo->mHeight ||
+                imageInfo->mDepth != newImageInfo->mDepth ||
+                imageInfo->mFormat != newImageInfo->mFormat);
   } else {
     if (!blob->HasData()) {
       mContext->ErrorInvalidValue("`source` cannot be null.");
@@ -1761,8 +1759,7 @@ void WebGLTexture::CopyTexImage(GLenum imageTarget, uint32_t level,
   }
   const auto& srcFormat = srcUsage->format;
 
-  const uint32_t zOffset = 0;
-  if (!ValidateCopyTexImageForFeedback(*mContext, *this, level, zOffset))
+  if (!ValidateCopyTexImageForFeedback(*mContext, *this, level, dstOffset.z))
     return;
 
   const auto size = uvec3{size2.x, size2.y, 1};

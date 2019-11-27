@@ -1853,8 +1853,9 @@ bool IsFramebufferTarget(const bool isWebgl2, const GLenum target) {
 }
 
 void ClientWebGLContext::GetFramebufferAttachmentParameter(
-    JSContext* cx, GLenum target, GLenum attachment, GLenum pname,
-    JS::MutableHandle<JS::Value> retval, ErrorResult& rv) const {
+    JSContext* const cx, const GLenum target, const GLenum attachment,
+    const GLenum pname, JS::MutableHandle<JS::Value> retval,
+    ErrorResult& rv) const {
   retval.set(JS::NullValue());
   const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
   if (IsContextLost()) return;
@@ -1870,33 +1871,42 @@ void ClientWebGLContext::GetFramebufferAttachmentParameter(
     fb = state.mBoundReadFb;
   }
 
-  if (!fb) {
-    EnqueueError(LOCAL_GL_INVALID_OPERATION, "No framebuffer bound.");
-    return;
-  }
-
-  const auto maybeSlot = fb->GetAttachment(attachment);
-  if (!maybeSlot) {
-    EnqueueError_ArgEnum("attachment", attachment);
-    return;
-  }
-  const auto& attached = *maybeSlot;
-
-  if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
-    if (attached.rb) {
-      (void)ToJSValueOrNull(cx, attached.rb, retval);
-    } else {
-      if (!mIsWebGL2 && !attached.tex) {
-        EnqueueError_ArgEnum("pname", pname);
-        return;
-      }
-      (void)ToJSValueOrNull(cx, attached.tex, retval);
+  if (fb) {
+    auto attachmentSlotEnum = attachment;
+    if (mIsWebGL2 && attachment == LOCAL_GL_DEPTH_STENCIL_ATTACHMENT) {
+      // In webgl2, DEPTH_STENCIL is valid iff the DEPTH and STENCIL images
+      // match, so check if the server errors.
+      const auto maybe = Run<RPROC(GetFramebufferAttachmentParameter)>(
+          fb->mId, attachment, LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
+      if (!maybe) return;
+      attachmentSlotEnum = LOCAL_GL_DEPTH_ATTACHMENT;
     }
-    return;
+
+    const auto maybeSlot = fb->GetAttachment(attachmentSlotEnum);
+    if (!maybeSlot) {
+      EnqueueError_ArgEnum("attachment", attachment);
+      return;
+    }
+    const auto& attached = *maybeSlot;
+
+    // -
+
+    if (pname == LOCAL_GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME) {
+      if (attached.rb) {
+        (void)ToJSValueOrNull(cx, attached.rb, retval);
+      } else {
+        if (!mIsWebGL2 && !attached.tex) {
+          EnqueueError_ArgEnum("pname", pname);
+          return;
+        }
+        (void)ToJSValueOrNull(cx, attached.tex, retval);
+      }
+      return;
+    }
   }
 
-  const auto maybe =
-      Run<RPROC(GetFramebufferAttachmentParameter)>(fb->mId, attachment, pname);
+  const auto maybe = Run<RPROC(GetFramebufferAttachmentParameter)>(
+      fb ? fb->mId : 0, attachment, pname);
   if (maybe) {
     retval.set(JS::NumberValue(*maybe));
   }
@@ -2468,6 +2478,7 @@ void ClientWebGLContext::BindBufferRangeImpl(const GLenum target,
                                              const uint64_t offset,
                                              const uint64_t size) {
   if (buffer && !buffer->ValidateUsable(*this, "buffer")) return;
+  auto& state = *(mNotLost->generation);
 
   // -
 
@@ -2491,6 +2502,15 @@ void ClientWebGLContext::BindBufferRangeImpl(const GLenum target,
     return;
   }
 
+  if (target == LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER) {
+    if (state.mTfActiveAndNotPaused) {
+      EnqueueError(LOCAL_GL_INVALID_OPERATION,
+                   "Cannot change TRANSFORM_FEEDBACK_BUFFER while "
+                   "TransformFeedback is active and not paused.");
+      return;
+    }
+  }
+
   // -
   // Validation complete
 
@@ -2499,8 +2519,6 @@ void ClientWebGLContext::BindBufferRangeImpl(const GLenum target,
   }
 
   // -
-
-  auto& state = *(mNotLost->generation);
 
   switch (target) {
     case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER:
@@ -2800,12 +2818,6 @@ void ClientWebGLContext::FramebufferAttach(
     return;
   }
 
-  const auto slot = fb->GetAttachment(attachSlot);
-  if (!slot) {
-    EnqueueError_ArgEnum("attachment", attachSlot);
-    return;
-  }
-
   // -
   // Multiview-specific validation skipped by Host.
 
@@ -2849,12 +2861,28 @@ void ClientWebGLContext::FramebufferAttach(
   }
 
   // Ready!
+  // But DEPTH_STENCIL in webgl2 is actually two slots!
 
-  slot->rb = rb;
-  slot->tex = tex;
+  const auto fnAttachTo = [&](const GLenum actualAttachSlot) {
+    const auto slot = fb->GetAttachment(actualAttachSlot);
+    if (!slot) {
+      EnqueueError_ArgEnum("attachment", actualAttachSlot);
+      return;
+    }
 
-  Run<RPROC(FramebufferAttach)>(target, attachSlot, bindImageTarget, id,
-                                mipLevel, zLayerBase, numViewLayers);
+    slot->rb = rb;
+    slot->tex = tex;
+
+    Run<RPROC(FramebufferAttach)>(target, actualAttachSlot, bindImageTarget, id,
+                                  mipLevel, zLayerBase, numViewLayers);
+  };
+
+  if (mIsWebGL2 && attachSlot == LOCAL_GL_DEPTH_STENCIL_ATTACHMENT) {
+    fnAttachTo(LOCAL_GL_DEPTH_ATTACHMENT);
+    fnAttachTo(LOCAL_GL_STENCIL_ATTACHMENT);
+  } else {
+    fnAttachTo(attachSlot);
+  }
 
   if (bindImageTarget) {
     if (rb) {
@@ -4085,7 +4113,7 @@ void ClientWebGLContext::PauseTransformFeedback() {
   auto& state = *(mNotLost->generation);
   auto& tfo = *(state.mBoundTfo);
 
-  if (tfo.mActiveOrPaused) {
+  if (!tfo.mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
                  "Transform Feedback is not active.");
     return;
@@ -4415,6 +4443,11 @@ void ClientWebGLContext::GetActiveUniformBlockName(const WebGLProgramJS& prog,
   if (!prog.ValidateUsable(*this, "program")) return;
 
   const auto& res = GetLinkResult(prog);
+  if (!res.success) {
+    EnqueueError(LOCAL_GL_INVALID_OPERATION, "Program has not been linked.");
+    return;
+  }
+
   const auto& list = res.active.activeUniformBlocks;
   if (index >= list.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE, "`index` too large.");
@@ -4462,10 +4495,10 @@ void ClientWebGLContext::GetActiveUniformBlockParameter(
         return JS::ObjectOrNullValue(obj);
       }
 
-      case LOCAL_GL_REFERENCED_BY_VERTEX_SHADER:
+      case LOCAL_GL_UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER:
         return JS::BooleanValue(block.referencedByVertexShader);
 
-      case LOCAL_GL_REFERENCED_BY_FRAGMENT_SHADER:
+      case LOCAL_GL_UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER:
         return JS::BooleanValue(block.referencedByFragmentShader);
 
       default:

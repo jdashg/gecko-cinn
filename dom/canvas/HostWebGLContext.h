@@ -378,8 +378,8 @@ class HostWebGLContext final : public SupportsWeakPtr<HostWebGLContext> {
   Maybe<double> GetFramebufferAttachmentParameter(ObjectId id,
                                                   GLenum attachment,
                                                   GLenum pname) const {
-    const auto obj = ById<WebGLFramebuffer>(id);
-    return mContext->GetFramebufferAttachmentParameter(obj, attachment, pname);
+    return mContext->GetFramebufferAttachmentParameter(AutoResolve(id),
+                                                       attachment, pname);
   }
 
   webgl::LinkResult GetLinkResult(ObjectId id) const {

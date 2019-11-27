@@ -82,6 +82,7 @@
 #include "WebGLShaderValidator.h"
 #include "WebGLSync.h"
 #include "WebGLTransformFeedback.h"
+#include "WebGLValidateStrings.h"
 #include "WebGLVertexArray.h"
 #include "WebGLVertexAttribData.h"
 
@@ -2408,11 +2409,29 @@ webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram& prog) const {
 
 GLint WebGLContext::GetFragDataLocation(const WebGLProgram& prog,
                                         const std::string& userName) const {
+  const auto err = CheckGLSLVariableName(IsWebGL2(), userName);
+  if (err) {
+    GenerateError(err->type, "%s", err->info.c_str());
+    return -1;
+  }
+
   const auto& info = prog.LinkInfo();
   if (!info) return -1;
   const auto& nameMap = info->nameMap;
 
-  const auto mappedName = Find(nameMap, userName, userName);
+  const auto parts = ExplodeName(userName);
+
+  std::ostringstream ret;
+  for (const auto& part : parts) {
+    const auto maybe = MaybeFind(nameMap, part);
+    if (maybe) {
+      ret << *maybe;
+    } else {
+      ret << part;
+    }
+  }
+  const auto mappedName = ret.str();
+
   return gl->fGetFragDataLocation(prog.mGLName, mappedName.c_str());
 }
 
