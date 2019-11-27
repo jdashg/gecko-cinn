@@ -37,8 +37,8 @@ LazyLogModule gWebGLBridgeLog("webglbridge");
 
 static StaticMutex sContextSetLock;
 
-static std::unordered_set<const HostWebGLContext*>& DeferredStaticContextSet() {
-  static std::unordered_set<const HostWebGLContext*> sContextSet;
+static std::unordered_set<HostWebGLContext*>& DeferredStaticContextSet() {
+  static std::unordered_set<HostWebGLContext*> sContextSet;
   return sContextSet;
 }
 

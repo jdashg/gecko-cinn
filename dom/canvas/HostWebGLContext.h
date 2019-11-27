@@ -45,7 +45,7 @@ struct LockedOutstandingContexts final {
   // this is effectively what we hold via RAII.
 
  public:
-  const std::unordered_set<const HostWebGLContext*>& contexts;
+  const std::unordered_set<HostWebGLContext*>& contexts;
 
   LockedOutstandingContexts();
   ~LockedOutstandingContexts();
