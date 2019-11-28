@@ -3168,6 +3168,10 @@ static GLenum JSTypeMatchUnpackTypeError(GLenum unpackType,
       matches = (jsType == js::Scalar::Type::Float32);
       break;
 
+    case LOCAL_GL_FLOAT_32_UNSIGNED_INT_24_8_REV:
+      matches = false;  // No valid jsType, but we allow uploads with null.
+      break;
+
     default:
       return LOCAL_GL_INVALID_ENUM;
   }
