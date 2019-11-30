@@ -279,6 +279,36 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   };
 
  private:
+  class LruPosition final {
+    std::list<WebGLContext*>::iterator mItr;
+
+    void reset();
+
+   public:
+    LruPosition();
+    explicit LruPosition(WebGLContext&);
+
+    LruPosition& operator=(LruPosition&& rhs) {
+      reset();
+      std::swap(mItr, rhs.mItr);
+      return *this;
+    }
+
+    ~LruPosition() { reset(); }
+  };
+
+  LruPosition mLruPosition;
+
+ public:
+  void BumpLru() {
+    LruPosition next{*this};
+    mLruPosition = std::move(next);
+  }
+
+  void LoseLruContextIfLimitExceeded();
+
+  // -
+
   // We've had issues in the past with nulling `gl` without actually releasing
   // all of our resources. This construction ensures that we are aware that we
   // should only null `gl` in DestroyResourcesAndContext.
@@ -304,6 +334,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   const WeakPtr<HostWebGLContext> mHost;
   const bool mResistFingerprinting;
   WebGLContextOptions mOptions;
+  const uint32_t mPrincipalKey;
   Maybe<webgl::Limits> mLimits;
 
   bool mIsContextLost = false;
@@ -484,10 +515,6 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
   // Present to compositor
   bool Present();
-
-  // a number that increments every time we have an event that causes
-  // all context resources to be lost.
-  auto Generation() const { return mGeneration; }
 
   void RunContextLossTimer();
   void CheckForContextLoss();
@@ -745,7 +772,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
   uint64_t GetNumGLDataAllocCalls() const { return mDataAllocGLCallCount; }
 
-  void OnEndOfFrame() const;
+  void OnEndOfFrame();
 
   // -----------------------------------------------------------------------------
   // Texture funcions (WebGLContextTextures.cpp)
@@ -859,8 +886,6 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   WebGLVertexAttrib0Status WhatDoesVertexAttrib0Need() const;
   bool DoFakeVertexAttrib0(uint64_t vertexCount);
   void UndoFakeVertexAttrib0();
-
-  uint64_t mGeneration = 0;
 
   bool mResetLayer = true;
   bool mOptionsFrozen;

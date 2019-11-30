@@ -130,12 +130,28 @@ bool WebGLContextOptions::operator==(const WebGLContextOptions& r) const {
   return eq;
 }
 
+static std::list<WebGLContext*> sWebglLru;
+
+WebGLContext::LruPosition::LruPosition() : mItr(sWebglLru.end()) {}
+
+WebGLContext::LruPosition::LruPosition(WebGLContext& context)
+    : mItr(sWebglLru.insert(sWebglLru.end(), &context)) {}
+
+void WebGLContext::LruPosition::reset() {
+  const auto end = sWebglLru.end();
+  if (mItr != end) {
+    sWebglLru.erase(mItr);
+    mItr = end;
+  }
+}
+
 WebGLContext::WebGLContext(HostWebGLContext& host,
                            const webgl::InitContextDesc& desc)
     : gl(mGL_OnlyClearInDestroyResourcesAndContext),  // const reference
       mHost(&host),
       mResistFingerprinting(desc.resistFingerprinting),
       mOptions(desc.options),
+      mPrincipalKey(desc.principalKey),
       mMaxPerfWarnings(StaticPrefs::webgl_perf_max_warnings()),
       mMaxAcceptableFBStatusInvals(
           StaticPrefs::webgl_perf_max_acceptable_fb_status_invals()),
@@ -805,6 +821,7 @@ void WebGLContext::FinishInit() {
   //////
 
   gl->ResetSyncCallCount("WebGLContext Initialization");
+  LoseLruContextIfLimitExceeded();
 }
 
 void WebGLContext::SetCompositableHost(
@@ -812,100 +829,54 @@ void WebGLContext::SetCompositableHost(
   mCompositableHost = aCompositableHost;
 }
 
-void ClientWebGLContext::LoseOldestWebGLContextIfLimitExceeded() {
-  const auto maxWebGLContexts = StaticPrefs::webgl_max_contexts();
-  auto maxWebGLContextsPerPrincipal =
-      StaticPrefs::webgl_max_contexts_per_principal();
-
-  // maxWebGLContextsPerPrincipal must be less than maxWebGLContexts
-  MOZ_ASSERT(maxWebGLContextsPerPrincipal <= maxWebGLContexts);
-  maxWebGLContextsPerPrincipal =
-      std::min(maxWebGLContextsPerPrincipal, maxWebGLContexts);
-
-  if (!NS_IsMainThread()) {
-    // XXX mtseng: bug 709490, WebGLMemoryTracker is not thread safe.
-    return;
-  }
+void WebGLContext::LoseLruContextIfLimitExceeded() {
+  const auto maxContexts = std::max(1u, StaticPrefs::webgl_max_contexts());
+  const auto maxContextsPerPrincipal =
+      std::max(1u, StaticPrefs::webgl_max_contexts_per_principal());
 
   // it's important to update the index on a new context before losing old
   // contexts, otherwise new unused contexts would all have index 0 and we
   // couldn't distinguish older ones when choosing which one to lose first.
-  UpdateLastUseIndex();
+  BumpLru();
 
-  auto cbc = layers::CompositorBridgeChild::Get();
-  MOZ_ASSERT(cbc);
-  nsTArray<dom::PWebGLChild*> childArray;
-  cbc->ManagedPWebGLChild(childArray);
-
-  // quick exit path, should cover a majority of cases
-  if (childArray.Length() <= maxWebGLContextsPerPrincipal) return;
-
-  // note that here by "context" we mean "non-lost context". See the check for
-  // IsContextLost() below. Indeed, the point of this function is to maybe lose
-  // some currently non-lost context.
-
-  uint64_t oldestIndex = UINT64_MAX;
-  uint64_t oldestIndexThisPrincipal = UINT64_MAX;
-  ClientWebGLContext* oldestContext = nullptr;
-  ClientWebGLContext* oldestContextThisPrincipal = nullptr;
-  size_t numContexts = 0;
-  size_t numContextsThisPrincipal = 0;
-
-  for (size_t i = 0; i < childArray.Length(); ++i) {
-    const auto context =
-        &(static_cast<dom::WebGLChild*>(childArray[i])->mContext);
-    MOZ_ASSERT(context);
-    if (!context) {
-      continue;
+  {
+    size_t forPrincipal = 0;
+    for (const auto& context : sWebglLru) {
+      if (context->mPrincipalKey == mPrincipalKey) {
+        forPrincipal += 1;
+      }
     }
 
-    // don't want to lose ourselves.
-    if (context == this) continue;
+    while (forPrincipal > maxContextsPerPrincipal) {
+      const auto text = nsPrintfCString(
+          "Exceeded %u live WebGL contexts for this principal, losing the "
+          "least recently used one.",
+          maxContextsPerPrincipal);
+      mHost->JsWarning(ToString(text));
 
-    if (!context->GetCanvas()) {
-      // Zombie context: the canvas is already destroyed, but something else
-      // (typically the compositor) is still holding on to the context.
-      // Killing zombies is a no-brainer.
-      context->OnContextLoss(webgl::ContextLossReason::None);
-      continue;
-    }
-
-    numContexts++;
-    if (context->mLastUseIndex < oldestIndex) {
-      oldestIndex = context->mLastUseIndex;
-      oldestContext = context;
-    }
-
-    nsIPrincipal* ourPrincipal = GetCanvas()->NodePrincipal();
-    nsIPrincipal* theirPrincipal = context->GetCanvas()->NodePrincipal();
-    bool samePrincipal;
-    nsresult rv = ourPrincipal->Equals(theirPrincipal, &samePrincipal);
-    if (NS_SUCCEEDED(rv) && samePrincipal) {
-      numContextsThisPrincipal++;
-      if (context->mLastUseIndex < oldestIndexThisPrincipal) {
-        oldestIndexThisPrincipal = context->mLastUseIndex;
-        oldestContextThisPrincipal = context;
+      for (const auto& context : sWebglLru) {
+        if (context->mPrincipalKey == mPrincipalKey) {
+          MOZ_ASSERT(context != this);
+          context->LoseContext(webgl::ContextLossReason::None);
+          forPrincipal -= 1;
+          break;
+        }
       }
     }
   }
 
-  if (numContextsThisPrincipal > maxWebGLContextsPerPrincipal) {
-    const auto text = nsPrintfCString(
-        "Exceeded %u live WebGL contexts for this principal, losing the "
-        "least recently used one.",
-        maxWebGLContextsPerPrincipal);
-    JsWarning(text.BeginReading());
-    MOZ_ASSERT(oldestContextThisPrincipal);  // if we reach this point, this
-                                             // can't be null
-    oldestContextThisPrincipal->OnContextLoss(webgl::ContextLossReason::None);
-  } else if (numContexts > maxWebGLContexts) {
+  auto total = sWebglLru.size();
+  while (total > maxContexts) {
     const auto text = nsPrintfCString(
         "Exceeded %u live WebGL contexts, losing the least "
         "recently used one.",
-        maxWebGLContexts);
-    JsWarning(text.BeginReading());
-    MOZ_ASSERT(oldestContext);  // if we reach this point, this can't be null
-    oldestContext->OnContextLoss(webgl::ContextLossReason::None);
+        maxContexts);
+    mHost->JsWarning(ToString(text));
+
+    const auto& context = sWebglLru.front();
+    MOZ_ASSERT(context != this);
+    context->LoseContext(webgl::ContextLossReason::None);
+    total -= 1;
   }
 }
 
@@ -960,7 +931,7 @@ ScopedPrepForResourceClear::~ScopedPrepForResourceClear() {
 
 // -
 
-void WebGLContext::OnEndOfFrame() const {
+void WebGLContext::OnEndOfFrame() {
   if (StaticPrefs::webgl_perf_spew_frame_allocs()) {
     GeneratePerfWarning("[webgl.perf.spew-frame-allocs] %" PRIu64
                         " data allocations this frame.",
@@ -968,6 +939,8 @@ void WebGLContext::OnEndOfFrame() const {
   }
   mDataAllocGLCallCount = 0;
   gl->ResetSyncCallCount("WebGLContext PresentScreenBuffer");
+
+  BumpLru();
 }
 
 void WebGLContext::BlitBackbufferToCurDriverFB() const {
@@ -1998,7 +1971,7 @@ void WebGLContext::GenerateErrorImpl(const GLenum err,
    */
   if (!mWebGLError) mWebGLError = err;
 
-  if (!mHost) return;
+  if (!mHost) return;  // Impossible?
 
   if (!ShouldGenerateWarnings()) return;
 

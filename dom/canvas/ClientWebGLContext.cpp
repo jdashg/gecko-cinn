@@ -673,8 +673,11 @@ bool ClientWebGLContext::CreateHostContext() {
       options.failIfMajorPerformanceCaveat = false;
     }
     const bool resistFingerprinting = ShouldResistFingerprinting();
+
+    const auto& principal = GetCanvas()->NodePrincipal();
+    const auto principalKey = principal->GetHashValue();
     const auto initDesc = webgl::InitContextDesc{
-        mIsWebGL2, resistFingerprinting, mRequestedSize, options};
+        mIsWebGL2, resistFingerprinting, mRequestedSize, options, principalKey};
 
     // -
 

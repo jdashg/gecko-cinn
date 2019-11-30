@@ -515,6 +515,7 @@ struct InitContextDesc final {
   bool resistFingerprinting = false;
   uvec2 size = {};
   WebGLContextOptions options;
+  uint32_t principalKey = 0;
 };
 
 struct Limits final {
