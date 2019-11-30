@@ -48,6 +48,8 @@
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"
 
+#include <list>
+
 class nsIDocShell;
 
 // WebGL-only GLenums
