@@ -2351,6 +2351,7 @@ webgl::CompileResult WebGLContext::GetCompileResult(
     const WebGLShader& shader) const {
   webgl::CompileResult ret;
   [&]() {
+    ret.pending = false;
     const auto& info = shader.CompileResults();
     if (!info) return;
     if (!info->mValid) {
@@ -2368,6 +2369,7 @@ webgl::CompileResult WebGLContext::GetCompileResult(
 webgl::LinkResult WebGLContext::GetLinkResult(const WebGLProgram& prog) const {
   webgl::LinkResult ret;
   [&]() {
+    ret.pending = false;  // Link status polling not yet implemented.
     ret.log = prog.LinkLog();
     const auto& info = prog.LinkInfo();
     if (!info) return;
