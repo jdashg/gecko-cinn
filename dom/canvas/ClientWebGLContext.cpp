@@ -28,10 +28,9 @@
 
 namespace mozilla {
 
-webgl::ContextGenerationInfo::ContextGenerationInfo(ClientWebGLContext& context)
-    : mContext(context) {}
-
-webgl::ContextGenerationInfo::~ContextGenerationInfo() = default;
+webgl::NotLostData::NotLostData(ClientWebGLContext& _context)
+    : context(_context) {}
+webgl::NotLostData::~NotLostData() = default;
 
 // -
 
@@ -363,6 +362,8 @@ template <
     size_t Id = WebGLMethodDispatcher::Id<MethodType, method>(),
     typename... Args>
 ReturnType ClientWebGLContext::Run(Args&&... aArgs) const {
+  const auto notLost =
+      mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
   if (!mNotLost) return DefaultOrVoid<ReturnType>();
   const auto& inProcessContext = mNotLost->inProcess;
   if (inProcessContext) {
@@ -381,13 +382,6 @@ ReturnType ClientWebGLContext::Run(Args&&... aArgs) const {
   decltype(&HostWebGLContext::_METHOD), &HostWebGLContext::_METHOD
 
 // ------------------------- Composition, etc -------------------------
-
-void ClientWebGLContext::UpdateLastUseIndex() {
-  static uint64_t sIndex = 0;
-
-  sIndex++;
-  mLastUseIndex = sIndex;
-}
 
 static uint8_t gWebGLLayerUserData;
 
@@ -441,7 +435,6 @@ void ClientWebGLContext::EndComposition() {
 
   // Mark ourselves as no longer invalidated.
   MarkContextClean();
-  UpdateLastUseIndex();
 }
 
 void ClientWebGLContext::Present() {
@@ -665,7 +658,8 @@ ClientWebGLContext::SetDimensions(int32_t signedWidth, int32_t signedHeight) {
 }
 
 bool ClientWebGLContext::CreateHostContext() {
-  ClientWebGLContext::NotLostData notLost;
+  const auto pNotLost = std::make_shared<webgl::NotLostData>(*this);
+  auto& notLost = *pNotLost;
 
   auto res = [&]() -> Result<Ok, std::string> {
     auto options = *mInitialOptions;
@@ -692,7 +686,7 @@ bool ClientWebGLContext::CreateHostContext() {
 
     // -
 
-    ClientWebGLContext::RemotingData outOfProcess;
+    webgl::RemotingData outOfProcess;
 
     auto* const cbc = CompositorBridgeChild::Get();
     MOZ_ASSERT(cbc);
@@ -736,13 +730,11 @@ bool ClientWebGLContext::CreateHostContext() {
     ThrowEvent_WebGLContextCreationError(notLost.info.error);
     return false;
   }
-  notLost.generation = std::make_shared<webgl::ContextGenerationInfo>(*this);
-
-  mNotLost = Some(std::move(notLost));
+  mNotLost = pNotLost;
 
   // Init state
   const auto& limits = Limits();
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   state.mDefaultTfo = new WebGLTransformFeedbackJS(*this);
   state.mDefaultVao = new WebGLVertexArrayJS(*this);
 
@@ -1043,7 +1035,7 @@ void ClientWebGLContext::DeleteBuffer(WebGLBufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteBuffer");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   // Unbind from all bind points and bound containers
 
@@ -1104,7 +1096,7 @@ void ClientWebGLContext::DeleteFramebuffer(WebGLFramebufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteFramebuffer");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   // Unbind
   const auto fnDetach = [&](const GLenum target,
@@ -1159,7 +1151,7 @@ void ClientWebGLContext::DeleteQuery(WebGLQueryJS* const obj) {
   Run<RPROC(DeleteQuery)>(obj->mId);
 
   if (!obj->mTarget) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
   const auto slotTarget = QuerySlotTarget(obj->mTarget);
   const auto& curForTarget =
       *MaybeFind(state.mCurrentQueryByTarget, slotTarget);
@@ -1176,7 +1168,7 @@ void ClientWebGLContext::DeleteRenderbuffer(WebGLRenderbufferJS* const obj) {
   const FuncScope funcScope(*this, "deleteRenderbuffer");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   // Unbind
   if (state.mBoundRb == obj) {
@@ -1209,7 +1201,7 @@ void ClientWebGLContext::DeleteSampler(WebGLSamplerJS* const obj) {
   const FuncScope funcScope(*this, "deleteSampler");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   // Unbind
   for (const auto i : IntegerRange(state.mTexUnits.size())) {
@@ -1258,7 +1250,7 @@ void ClientWebGLContext::DeleteTexture(WebGLTextureJS* const obj) {
   const FuncScope funcScope(*this, "deleteTexture");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   // Unbind
   const auto& target = obj->mTarget;
@@ -1306,7 +1298,7 @@ void ClientWebGLContext::DeleteTransformFeedback(
   const FuncScope funcScope(*this, "deleteTransformFeedback");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   if (obj->mActiveOrPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -1327,7 +1319,7 @@ void ClientWebGLContext::DeleteVertexArray(WebGLVertexArrayJS* const obj) {
   const FuncScope funcScope(*this, "deleteVertexArray");
   if (IsContextLost()) return;
   if (!ValidateOrSkipForDelete(*this, obj)) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   // Unbind
   if (state.mBoundVao == obj) {
@@ -1495,7 +1487,7 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
   const FuncScope funcScope(*this, "getParameter");
   if (IsContextLost()) return;
   const auto& limits = Limits();
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   // -
 
@@ -1879,7 +1871,7 @@ void ClientWebGLContext::GetFramebufferAttachmentParameter(
   const FuncScope funcScope(*this, "getFramebufferAttachmentParameter");
   if (IsContextLost()) return;
 
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   if (!IsFramebufferTarget(mIsWebGL2, target)) {
     EnqueueError_ArgEnum("target", target);
@@ -1943,7 +1935,7 @@ void ClientWebGLContext::GetRenderbufferParameter(
     return;
   }
 
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
   const auto& rb = state.mBoundRb;
 
   const auto maybe =
@@ -1960,7 +1952,7 @@ void ClientWebGLContext::GetIndexedParameter(
   const FuncScope funcScope(*this, "getIndexedParameter");
   if (IsContextLost()) return;
 
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   switch (target) {
     case LOCAL_GL_TRANSFORM_FEEDBACK_BUFFER_BINDING: {
@@ -2128,7 +2120,7 @@ void ClientWebGLContext::BlendColor(GLclampf r, GLclampf g, GLclampf b,
                                     GLclampf a) {
   const FuncScope funcScope(*this, "blendColor");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   auto& cache = state.mBlendColor;
   cache[0] = r;
@@ -2221,7 +2213,7 @@ void ClientWebGLContext::ClearColor(GLclampf r, GLclampf g, GLclampf b,
                                     GLclampf a) {
   const FuncScope funcScope(*this, "clearColor");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   auto& cache = state.mClearColor;
   cache[0] = r;
@@ -2240,7 +2232,7 @@ void ClientWebGLContext::ColorMask(WebGLboolean r, WebGLboolean g,
                                    WebGLboolean b, WebGLboolean a) {
   const FuncScope funcScope(*this, "colorMask");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   state.mColorWriteMask = {r, g, b, a};
 
@@ -2256,7 +2248,7 @@ void ClientWebGLContext::DepthMask(WebGLboolean b) { Run<RPROC(DepthMask)>(b); }
 void ClientWebGLContext::DepthRange(GLclampf zNear, GLclampf zFar) {
   const FuncScope funcScope(*this, "depthRange");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   state.mDepthRange = {zNear, zFar};
 
@@ -2302,7 +2294,7 @@ void ClientWebGLContext::Scissor(GLint x, GLint y, GLsizei width,
                                  GLsizei height) {
   const FuncScope funcScope(*this, "scissor");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (!ValidateNonNegative("width", width) ||
       !ValidateNonNegative("height", height)) {
@@ -2332,7 +2324,7 @@ void ClientWebGLContext::Viewport(GLint x, GLint y, GLsizei width,
                                   GLsizei height) {
   const FuncScope funcScope(*this, "viewport");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (!ValidateNonNegative("width", width) ||
       !ValidateNonNegative("height", height)) {
@@ -2449,7 +2441,7 @@ void ClientWebGLContext::BindBuffer(const GLenum target,
   // -
   // Check for INVALID_ENUM
 
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto* slot = &(state.mBoundVao->mIndexBuffer);
   if (target != LOCAL_GL_ELEMENT_ARRAY_BUFFER) {
     const auto itr = state.mBoundBufferByTarget.find(target);
@@ -2497,7 +2489,7 @@ void ClientWebGLContext::BindBufferRangeImpl(const GLenum target,
                                              const uint64_t offset,
                                              const uint64_t size) {
   if (buffer && !buffer->ValidateUsable(*this, "buffer")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   // -
 
@@ -2680,7 +2672,7 @@ void ClientWebGLContext::BindFramebuffer(const GLenum target,
 
   // -
 
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   switch (target) {
     case LOCAL_GL_FRAMEBUFFER:
@@ -2823,7 +2815,7 @@ void ClientWebGLContext::FramebufferAttach(
     const uint32_t numViewLayers) const {
   if (rb && !rb->ValidateUsable(*this, "rb")) return;
   if (tex && !tex->ValidateUsable(*this, "tex")) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
   const auto& limits = Limits();
 
   if (!IsFramebufferTarget(mIsWebGL2, target)) {
@@ -2958,7 +2950,7 @@ void ClientWebGLContext::BindRenderbuffer(const GLenum target,
   const FuncScope funcScope(*this, "bindRenderbuffer");
   if (IsContextLost()) return;
   if (rb && !rb->ValidateUsable(*this, "rb")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (target != LOCAL_GL_RENDERBUFFER) {
     EnqueueError_ArgEnum("target", target);
@@ -2984,7 +2976,7 @@ void ClientWebGLContext::RenderbufferStorageMultisample(GLenum target,
     return;
   }
 
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   const auto& rb = state.mBoundRb;
   if (!rb) {
@@ -3018,7 +3010,7 @@ void ClientWebGLContext::ActiveTexture(const GLenum texUnitEnum) {
 
   const auto texUnit = texUnitEnum - LOCAL_GL_TEXTURE0;
 
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   if (texUnit >= state.mTexUnits.size()) {
     EnqueueError(LOCAL_GL_INVALID_VALUE,
                  "TEXTURE%u must be < MAX_COMBINED_TEXTURE_IMAGE_UNITS (%zu).",
@@ -3068,7 +3060,7 @@ void ClientWebGLContext::BindTexture(const GLenum texTarget,
     }
   }
 
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
   texUnit.texByTarget[texTarget] = tex;
   if (tex) {
@@ -3088,7 +3080,7 @@ void ClientWebGLContext::GetTexParameter(
   retval.set(JS::NullValue());
   const FuncScope funcScope(*this, "getTexParameter");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   auto& texUnit = state.mTexUnits[state.mActiveTexUnit];
 
@@ -3377,7 +3369,7 @@ void ClientWebGLContext::UseProgram(WebGLProgramJS* const prog) {
   if (IsContextLost()) return;
   if (prog && !prog->ValidateUsable(*this, "prog")) return;
 
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (state.mTfActiveAndNotPaused) {
     EnqueueError(LOCAL_GL_INVALID_OPERATION,
@@ -3419,7 +3411,7 @@ void ClientWebGLContext::GetVertexAttrib(JSContext* cx, GLuint index,
   retval.set(JS::NullValue());
   const FuncScope funcScope(*this, "getVertexAttrib");
   if (IsContextLost()) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   const auto& genericAttribs = state.mGenericVertexAttribs;
   if (index >= genericAttribs.size()) {
@@ -3587,7 +3579,7 @@ void ClientWebGLContext::BindVertexArray(WebGLVertexArrayJS* const vao) {
   const FuncScope funcScope(*this, "bindVertexArray");
   if (IsContextLost()) return;
   if (vao && !vao->ValidateUsable(*this, "vao")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (vao) {
     vao->mHasBeenBound = true;
@@ -3662,7 +3654,7 @@ void ClientWebGLContext::VertexAttribPointerImpl(bool isFuncInt, GLuint index,
                                                  WebGLintptr iByteOffset) {
   const FuncScope funcScope(*this, "vertexAttribI?Pointer");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (!ValidateNonNegative("stride", iStride)) return;
   if (!ValidateNonNegative("byteOffset", iByteOffset)) return;
@@ -3790,7 +3782,7 @@ void ClientWebGLContext::GetQuery(JSContext* cx, GLenum specificTarget,
   const FuncScope funcScope(*this, "getQuery");
   if (IsContextLost()) return;
   const auto& limits = Limits();
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (IsExtensionEnabled(WebGLExtensionID::EXT_disjoint_timer_query)) {
     if (pname == LOCAL_GL_QUERY_COUNTER_BITS) {
@@ -3857,7 +3849,7 @@ void ClientWebGLContext::BeginQuery(const GLenum specificTarget,
   const FuncScope funcScope(*this, "beginQuery");
   if (IsContextLost()) return;
   if (!query.ValidateUsable(*this, "query")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   const auto slotTarget = QuerySlotTarget(specificTarget);
   const auto& slot = MaybeFind(state.mCurrentQueryByTarget, slotTarget);
@@ -3891,7 +3883,7 @@ void ClientWebGLContext::BeginQuery(const GLenum specificTarget,
 void ClientWebGLContext::EndQuery(const GLenum specificTarget) {
   const FuncScope funcScope(*this, "endQuery");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   const auto slotTarget = QuerySlotTarget(specificTarget);
   const auto& maybeSlot = MaybeFind(state.mCurrentQueryByTarget, slotTarget);
@@ -3955,7 +3947,7 @@ void ClientWebGLContext::BindSampler(const GLuint unit,
   const FuncScope funcScope(*this, "bindSampler");
   if (IsContextLost()) return;
   if (sampler && !sampler->ValidateUsable(*this, "sampler")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   auto& texUnits = state.mTexUnits;
   if (unit >= texUnits.size()) {
@@ -4076,7 +4068,7 @@ void ClientWebGLContext::BindTransformFeedback(
   const FuncScope funcScope(*this, "bindTransformFeedback");
   if (IsContextLost()) return;
   if (tf && !tf->ValidateUsable(*this, "tf")) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
 
   if (target != LOCAL_GL_TRANSFORM_FEEDBACK) {
     EnqueueError(LOCAL_GL_INVALID_ENUM, "`target` must be TRANSFORM_FEEDBACK.");
@@ -4101,7 +4093,7 @@ void ClientWebGLContext::BindTransformFeedback(
 void ClientWebGLContext::BeginTransformFeedback(const GLenum primMode) {
   const FuncScope funcScope(*this, "beginTransformFeedback");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto& tfo = *(state.mBoundTfo);
 
   if (tfo.mActiveOrPaused) {
@@ -4168,7 +4160,7 @@ void ClientWebGLContext::BeginTransformFeedback(const GLenum primMode) {
 void ClientWebGLContext::EndTransformFeedback() {
   const FuncScope funcScope(*this, "endTransformFeedback");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto& tfo = *(state.mBoundTfo);
 
   if (!tfo.mActiveOrPaused) {
@@ -4188,7 +4180,7 @@ void ClientWebGLContext::EndTransformFeedback() {
 void ClientWebGLContext::PauseTransformFeedback() {
   const FuncScope funcScope(*this, "pauseTransformFeedback");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto& tfo = *(state.mBoundTfo);
 
   if (!tfo.mActiveOrPaused) {
@@ -4209,7 +4201,7 @@ void ClientWebGLContext::PauseTransformFeedback() {
 void ClientWebGLContext::ResumeTransformFeedback() {
   const FuncScope funcScope(*this, "resumeTransformFeedback");
   if (IsContextLost()) return;
-  auto& state = *(mNotLost->generation);
+  auto& state = State();
   auto& tfo = *(state.mBoundTfo);
 
   if (!tfo.mActiveOrPaused) {
@@ -4453,7 +4445,7 @@ void ClientWebGLContext::UniformBlockBinding(WebGLProgramJS& prog,
   const FuncScope funcScope(*this, "uniformBlockBinding");
   if (IsContextLost()) return;
   if (!prog.ValidateUsable(*this, "program")) return;
-  const auto& state = *(mNotLost->generation);
+  const auto& state = State();
 
   (void)GetLinkResult(prog);
   auto& list = prog.mUniformBlockBindings;
@@ -5088,8 +5080,7 @@ bool ClientWebGLContext::ValidateArrayBufferView(
 // ---------------------------
 
 webgl::ObjectJS::ObjectJS(const ClientWebGLContext& webgl)
-    : mGeneration(webgl.mNotLost->generation),
-      mId(webgl.mNotLost->generation->NextId()) {}
+    : mGeneration(webgl.mNotLost), mId(webgl.mNotLost->state.NextId()) {}
 
 // -
 
@@ -5292,13 +5283,16 @@ void ImplCycleCollectionUnlink(const RefPtr<WebGLShaderJS>& field) {
 
 // ----------------------
 
-void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
-                                 const ClientWebGLContext::NotLostData& field,
-                                 const char* name, uint32_t flags) {
-  ImplCycleCollectionTraverse(callback, field.extensions,
+void ImplCycleCollectionTraverse(
+    nsCycleCollectionTraversalCallback& callback,
+    const std::shared_ptr<webgl::NotLostData>& field, const char* name,
+    uint32_t flags) {
+  if (!field) return;
+
+  ImplCycleCollectionTraverse(callback, field->extensions,
                               "NotLostData.extensions", flags);
 
-  const auto& state = *field.generation;
+  const auto& state = field->state;
 
   ImplCycleCollectionTraverse(callback, state.mDefaultTfo, "state.mDefaultTfo",
                               flags);
@@ -5333,8 +5327,10 @@ void ImplCycleCollectionTraverse(nsCycleCollectionTraversalCallback& callback,
   }
 }
 
-void ImplCycleCollectionUnlink(Maybe<ClientWebGLContext::NotLostData>& field) {
-  field = {};
+void ImplCycleCollectionUnlink(std::shared_ptr<webgl::NotLostData>& field) {
+  if (!field) return;
+  field->extensions = {};
+  field->state = {};
 }
 
 // -----------------------------------------------------

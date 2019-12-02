@@ -103,6 +103,7 @@ class WebGLShaderPrecisionFormatJS final
 
 // -----------------------
 
+class ClientWebGLContext;
 class WebGLBufferJS;
 class WebGLFramebufferJS;
 class WebGLProgramJS;
@@ -139,9 +140,6 @@ class ShaderKeepAlive final {
 };
 
 class ContextGenerationInfo final {
- public:
-  ClientWebGLContext& mContext;
-
  private:
   ObjectId mLastId = 0;
 
@@ -184,17 +182,48 @@ class ContextGenerationInfo final {
   std::vector<GLenum> mCompressedTextureFormats;
 
  public:
-  explicit ContextGenerationInfo(ClientWebGLContext& context);
-  ~ContextGenerationInfo();
+  // explicit ContextGenerationInfo(ClientWebGLContext& context);
+  //~ContextGenerationInfo();
 
   ObjectId NextId() { return mLastId += 1; }
 };
+
+// -
+
+struct RemotingData final {
+  // In the cross process case, the WebGL actor's ownership relationship looks
+  // like this:
+  // ---------------------------------------------------------------------
+  // | ClientWebGLContext -> WebGLChild -> WebGLParent -> HostWebGLContext
+  // ---------------------------------------------------------------------
+  //
+  // where 'A -> B' means "A owns B"
+  RefPtr<mozilla::dom::WebGLChild> mWebGLChild;
+  UniquePtr<ClientWebGLCommandSource> mCommandSource;
+};
+
+struct NotLostData final {
+  ClientWebGLContext& context;
+  webgl::InitContextResult info;
+
+  Maybe<RemotingData> outOfProcess;
+  UniquePtr<HostWebGLContext> inProcess;
+
+  webgl::ContextGenerationInfo state;
+  std::array<RefPtr<ClientWebGLExtensionBase>, EnumValue(WebGLExtensionID::Max)>
+      extensions;
+
+  explicit NotLostData(ClientWebGLContext& context);
+  ~NotLostData();
+};
+
+// -
 
 class ObjectJS {
   friend ClientWebGLContext;
 
  public:
-  const std::weak_ptr<ContextGenerationInfo> mGeneration;
+  const std::weak_ptr<NotLostData> mGeneration;
   const ObjectId mId;
 
  protected:
@@ -207,7 +236,7 @@ class ObjectJS {
   ClientWebGLContext* Context() const {
     const auto locked = mGeneration.lock();
     if (!locked) return nullptr;
-    return &(locked->mContext);
+    return &(locked->context);
   }
 
   ClientWebGLContext* GetParentObject() const { return Context(); }
@@ -704,37 +733,17 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   bool mAwaitingRestore = false;
 
   // -
- public:
-  struct RemotingData final {
-    // In the cross process case, the WebGL actor's ownership relationship looks
-    // like this:
-    // ---------------------------------------------------------------------
-    // | ClientWebGLContext -> WebGLChild -> WebGLParent -> HostWebGLContext
-    // ---------------------------------------------------------------------
-    //
-    // where 'A -> B' means "A owns B"
-    RefPtr<mozilla::dom::WebGLChild> mWebGLChild;
-    UniquePtr<ClientWebGLCommandSource> mCommandSource;
-  };
-  struct NotLostData final {
-    std::shared_ptr<webgl::ContextGenerationInfo> generation;
-    Maybe<RemotingData> outOfProcess;
-    UniquePtr<HostWebGLContext> inProcess;
-    webgl::InitContextResult info;
-    std::array<RefPtr<ClientWebGLExtensionBase>,
-               EnumValue(WebGLExtensionID::Max)>
-        extensions;
-  };
-
  private:
-  Maybe<NotLostData> mNotLost;
+  std::shared_ptr<webgl::NotLostData> mNotLost;
   mutable GLenum mNextError = 0;
 
  public:
   const auto& Limits() const { return mNotLost->info.limits; }
 
-  const auto& State() const { return *mNotLost->generation; }
-  auto& State() { return *mNotLost->generation; }
+  auto& State() { return mNotLost->state; }
+  const auto& State() const {
+    return const_cast<ClientWebGLContext*>(this)->State();
+  }
 
   // -
 
@@ -978,7 +987,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   void AfterDrawCall() {
     if (!mNotLost) return;
-    const auto& state = *(mNotLost->generation);
+    const auto& state = State();
     const bool isBackbuffer = !state.mBoundDrawFb;
     if (isBackbuffer) {
       Invalidate();
@@ -2121,9 +2130,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   bool ShouldResistFingerprinting() const;
 
-  void LoseOldestWebGLContextIfLimitExceeded();
-  void UpdateLastUseIndex();
-
   // Prepare the context for capture before compositing
   void BeginComposition();
 
@@ -2132,7 +2138,6 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   mozilla::dom::Document* GetOwnerDoc() const;
 
-  uint64_t mLastUseIndex = 0;
   bool mResetLayer = true;
   Maybe<const WebGLContextOptions> mInitialOptions;
   WebGLPixelStore mPixelStore;
@@ -2151,7 +2156,7 @@ inline bool webgl::ObjectJS::IsForContext(
     const ClientWebGLContext& context) const {
   const auto& notLost = context.mNotLost;
   if (!notLost) return false;
-  if (notLost->generation.get() != mGeneration.lock().get()) return false;
+  if (notLost.get() != mGeneration.lock().get()) return false;
   return true;
 }
 

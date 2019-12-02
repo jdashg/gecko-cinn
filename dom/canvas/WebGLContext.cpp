@@ -733,8 +733,8 @@ RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
 
     MOZ_ASSERT(!webgl->mDefaultFB);
     if (!webgl->EnsureDefaultFB()) {
-      MOZ_ASSERT(!webgl->gl);
-
+      MOZ_ASSERT(!webgl->mDefaultFB);
+      MOZ_ASSERT(webgl->IsContextLost());
       failureId = NS_LITERAL_CSTRING("FEATURE_FAILURE_WEBGL_BACKBUFFER");
       return Err("Initializing WebGL backbuffer failed.");
     }
