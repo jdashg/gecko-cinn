@@ -135,13 +135,13 @@ void ClientWebGLContext::JsWarning(const std::string& utf8) const {
 bool ClientWebGLContext::DispatchEvent(const nsAString& eventName) const {
   const auto kCanBubble = CanBubble::eYes;
   const auto kIsCancelable = Cancelable::eYes;
-  bool useDefaultHandler;
+  bool useDefaultHandler = true;
 
   if (mCanvasElement) {
     nsContentUtils::DispatchTrustedEvent(
         mCanvasElement->OwnerDoc(), static_cast<nsIContent*>(mCanvasElement),
         eventName, kCanBubble, kIsCancelable, &useDefaultHandler);
-  } else {
+  } else if (mOffscreenCanvas) {
     // OffscreenCanvas case
     RefPtr<Event> event = new Event(mOffscreenCanvas, nullptr, nullptr);
     event->InitEvent(eventName, kCanBubble, kIsCancelable);

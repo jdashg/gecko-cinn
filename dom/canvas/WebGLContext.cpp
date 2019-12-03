@@ -2064,6 +2064,8 @@ static std::vector<std::string> ExplodeName(const std::string& str) {
 
 //-
 
+//#define DUMP_MakeLinkResult
+
 webgl::LinkActiveInfo GetLinkActiveInfo(
     gl::GLContext& gl, const GLuint prog, const bool webgl2,
     const std::unordered_map<std::string, std::string>& nameUnmap) {
@@ -2215,18 +2217,6 @@ webgl::LinkActiveInfo GetLinkActiveInfo(
             baseMappedName = std::move(maybe->name);
             return true;
           }
-
-          // Some drivers give us "foo" instead of "foo[0]" for arrays, but they
-          // do of course give back a location for "foo[0]", so use that to
-          // double-check.
-          auto probeName = mappedName + "[0]";
-          const auto loc = gl.fGetUniformLocation(prog, probeName.c_str());
-          if (loc != -1) {
-            // Those liars!
-            mappedName = std::move(probeName);
-            return true;
-          }
-
           return false;
         }();
 
