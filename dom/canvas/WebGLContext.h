@@ -746,11 +746,11 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
  private:
   // State tracking slots
-  realGLboolean mDitherEnabled;
-  realGLboolean mRasterizerDiscardEnabled;
-  realGLboolean mScissorTestEnabled;
+  realGLboolean mDitherEnabled = 1;
+  realGLboolean mRasterizerDiscardEnabled = 0;
+  realGLboolean mScissorTestEnabled = 0;
   realGLboolean mDepthTestEnabled = 0;
-  realGLboolean mStencilTestEnabled;
+  realGLboolean mStencilTestEnabled = 0;
   realGLboolean mBlendEnabled = 0;
   GLenum mGenerateMipmapHint = 0;
 
@@ -768,7 +768,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   realGLboolean* GetStateTrackingSlot(GLenum cap);
 
   // Allocation debugging variables
-  mutable uint64_t mDataAllocGLCallCount;
+  mutable uint64_t mDataAllocGLCallCount = 0;
 
   void OnDataAllocCall() const { mDataAllocGLCallCount++; }
 
@@ -890,12 +890,12 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   void UndoFakeVertexAttrib0();
 
   bool mResetLayer = true;
-  bool mOptionsFrozen;
-  bool mIsMesa;
+  bool mOptionsFrozen = false;
+  bool mIsMesa = false;
   bool mLoseContextOnMemoryPressure = false;
   bool mCanLoseContextInForeground = true;
-  bool mShouldPresent;
-  bool mDisableFragHighP;
+  bool mShouldPresent = false;
+  bool mDisableFragHighP = false;
   bool mVRReady = false;
 
   template <typename WebGLObjectType>
@@ -905,7 +905,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   GLenum mDefaultFB_DrawBuffer0 = 0;
   GLenum mDefaultFB_ReadBuffer = 0;
 
-  mutable GLenum mWebGLError;
+  mutable GLenum mWebGLError = 0;
 
   std::unique_ptr<webgl::ShaderValidator> CreateShaderValidator(
       GLenum shaderType) const;
@@ -1178,7 +1178,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   ////////////////////////////////////
 
  protected:
-  GLuint mEmptyTFO;
+  GLuint mEmptyTFO = 0;
 
   // Generic Vertex Attributes
   // Though CURRENT_VERTEX_ATTRIB is listed under "Vertex Shader State" in the
@@ -1207,11 +1207,11 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
   GLint mStencilClearValue = 0;
   GLfloat mDepthClearValue = 0.0;
 
-  GLint mViewportX;
-  GLint mViewportY;
-  GLsizei mViewportWidth;
-  GLsizei mViewportHeight;
-  bool mAlreadyWarnedAboutViewportLargerThanDest;
+  GLint mViewportX = 0;
+  GLint mViewportY = 0;
+  GLsizei mViewportWidth = 0;
+  GLsizei mViewportHeight = 0;
+  bool mAlreadyWarnedAboutViewportLargerThanDest = false;
 
   GLfloat mLineWidth = 0.0;
 
@@ -1219,11 +1219,11 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
 
   // Used for some hardware (particularly Tegra 2 and 4) that likes to
   // be Flushed while doing hundreds of draw calls.
-  int mDrawCallsSinceLastFlush;
+  int mDrawCallsSinceLastFlush = 0;
 
   mutable uint64_t mWarningCount = 0;
-  uint64_t mMaxWarnings = -1;
-  bool mAlreadyWarnedAboutFakeVertexAttrib0;
+  const uint64_t mMaxWarnings;
+  bool mAlreadyWarnedAboutFakeVertexAttrib0 = false;
 
   bool ShouldGenerateWarnings() const { return mWarningCount < mMaxWarnings; }
 
@@ -1231,9 +1231,9 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr<WebGLContext> {
     return mNumPerfWarnings < mMaxPerfWarnings;
   }
 
-  bool mNeedsFakeNoAlpha;
-  bool mNeedsFakeNoDepth;
-  bool mNeedsFakeNoStencil;
+  bool mNeedsFakeNoAlpha = false;
+  bool mNeedsFakeNoDepth = false;
+  bool mNeedsFakeNoStencil = false;
   bool mNeedsFakeNoStencil_UserFBs = false;
 
   mutable uint8_t mDriverColorMask = 0;

@@ -155,39 +155,12 @@ WebGLContext::WebGLContext(HostWebGLContext& host,
       mMaxPerfWarnings(StaticPrefs::webgl_perf_max_warnings()),
       mMaxAcceptableFBStatusInvals(
           StaticPrefs::webgl_perf_max_acceptable_fb_status_invals()),
-      mDataAllocGLCallCount(0),
-      mEmptyTFO(0),
       mContextLossHandler(this),
-      mNeedsFakeNoAlpha(false),
-      mNeedsFakeNoDepth(false),
-      mNeedsFakeNoStencil(false),
+      mMaxWarnings(StaticPrefs::webgl_max_warnings_per_context()),
       mAllowFBInvalidation(StaticPrefs::webgl_allow_fb_invalidation()),
       mMsaaSamples((uint8_t)StaticPrefs::webgl_msaa_samples()),
       mRequestedSize(desc.size) {
   host.mContext = this;
-
-  mShouldPresent = true;
-  mIsMesa = false;
-  mWebGLError = 0;
-
-  mViewportX = 0;
-  mViewportY = 0;
-  mViewportWidth = 0;
-  mViewportHeight = 0;
-
-  mDitherEnabled = 1;
-  mRasterizerDiscardEnabled = 0;  // OpenGL ES 3.0 spec p244
-  mScissorTestEnabled = 0;
-  mStencilTestEnabled = 0;
-
-  mAlreadyWarnedAboutFakeVertexAttrib0 = false;
-  mAlreadyWarnedAboutViewportLargerThanDest = false;
-
-  mMaxWarnings = StaticPrefs::webgl_max_warnings_per_context();
-
-  mDisableFragHighP = false;
-
-  mDrawCallsSinceLastFlush = 0;
 
   if (mOptions.antialias && !StaticPrefs::webgl_msaa_force()) {
     const nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
