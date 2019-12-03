@@ -11,7 +11,6 @@
 #include "mozilla/Range.h"
 #include "mozilla/RefCounted.h"
 #include "nsICanvasRenderingContextInternal.h"
-#include "nsWeakReference.h"
 #include "nsWrapperCache.h"
 #include "mozilla/dom/WebGLRenderingContextBinding.h"
 #include "mozilla/dom/WebGL2RenderingContextBinding.h"

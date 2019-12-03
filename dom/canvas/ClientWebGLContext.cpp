@@ -421,6 +421,7 @@ void ClientWebGLContext::BeginComposition() {
   // When running cross-process WebGL, Present needs to be called in
   // EndComposition so that it happens _after_ the OOPCanvasRenderer's
   // Update tells it what CompositableHost to use,
+  if (!mNotLost) return;
   if (mNotLost->inProcess) {
     WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
     mNotLost->inProcess->Present();
@@ -428,6 +429,7 @@ void ClientWebGLContext::BeginComposition() {
 }
 
 void ClientWebGLContext::EndComposition() {
+  if (!mNotLost) return;
   if (mNotLost->outOfProcess) {
     WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
     Run<RPROC(Present)>();
@@ -437,11 +439,7 @@ void ClientWebGLContext::EndComposition() {
   MarkContextClean();
 }
 
-void ClientWebGLContext::Present() {
-  if (mNotLost) {
-    Run<RPROC(Present)>();
-  }
-}
+void ClientWebGLContext::Present() { Run<RPROC(Present)>(); }
 
 void ClientWebGLContext::ClearVRFrame() { Run<RPROC(ClearVRFrame)>(); }
 
