@@ -20,7 +20,7 @@ class GLContextGLX : public GLContext {
  public:
   MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(GLContextGLX, override)
   static already_AddRefed<GLContextGLX> CreateGLContext(
-      CreateContextFlags flags, const SurfaceCaps& caps, bool isOffscreen,
+      const GLContextDesc&,
       Display* display, GLXDrawable drawable, GLXFBConfig cfg,
       bool deleteDrawable, gfxXlibSurface* pixmap);
 

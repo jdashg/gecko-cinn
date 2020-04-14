@@ -29,6 +29,7 @@ class nsDisplayListBuilder;
 class nsIDocShell;
 
 namespace mozilla {
+class ClientWebGLContext;
 class PresShell;
 namespace layers {
 class CanvasLayer;
@@ -37,6 +38,7 @@ class CompositableHandle;
 class Layer;
 class LayerManager;
 class LayerTransactionChild;
+class PersistentBufferProvider;
 class WebRenderCanvasData;
 }  // namespace layers
 namespace gfx {
@@ -56,6 +58,8 @@ class nsICanvasRenderingContextInternal : public nsISupports,
   typedef mozilla::layers::LayerTransactionChild LayerTransactionChild;
 
   NS_DECLARE_STATIC_IID_ACCESSOR(NS_ICANVASRENDERINGCONTEXTINTERNAL_IID)
+
+  nsICanvasRenderingContextInternal() : mSharedPtrPtr(std::make_shared<nsICanvasRenderingContextInternal*>(this)) {}
 
   void SetCanvasElement(mozilla::dom::HTMLCanvasElement* parentCanvas) {
     RemovePostRefreshObserver();
@@ -202,6 +206,11 @@ class nsICanvasRenderingContextInternal : public nsISupports,
     return false;
   }
 
+  virtual void OnBeforePaintTransaction() {}
+  virtual void OnDidPaintTransaction() {}
+  virtual mozilla::layers::PersistentBufferProvider* GetBufferProvider() { return nullptr; }
+  virtual mozilla::ClientWebGLContext* AsWebgl() { return nullptr; }
+
   //
   // shmem support
   //
@@ -216,6 +225,8 @@ class nsICanvasRenderingContextInternal : public nsISupports,
   RefPtr<mozilla::dom::HTMLCanvasElement> mCanvasElement;
   RefPtr<mozilla::dom::OffscreenCanvas> mOffscreenCanvas;
   RefPtr<nsRefreshDriver> mRefreshDriver;
+ public:
+  const std::shared_ptr<nsICanvasRenderingContextInternal* const> mSharedPtrPtr;
 };
 
 NS_DEFINE_STATIC_IID_ACCESSOR(nsICanvasRenderingContextInternal,

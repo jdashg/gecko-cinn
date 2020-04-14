@@ -398,82 +398,60 @@ ReturnType ClientWebGLContext::Run(Args&&... aArgs) const {
 
 // ------------------------- Composition, etc -------------------------
 
-static uint8_t gWebGLLayerUserData;
-
-class WebGLContextUserData : public LayerUserData {
- public:
-  explicit WebGLContextUserData(HTMLCanvasElement* canvas) : mCanvas(canvas) {}
-
-  /* PreTransactionCallback gets called by the Layers code every time the
-   * WebGL canvas is going to be composited.
-   */
-  static void PreTransactionCallback(void* data) {
-    ClientWebGLContext* webgl = static_cast<ClientWebGLContext*>(data);
-
-    // Prepare the context for composition
-    webgl->BeginComposition();
-  }
-
-  /** DidTransactionCallback gets called by the Layers code everytime the WebGL
-   * canvas gets composite, so it really is the right place to put actions that
-   * have to be performed upon compositing
-   */
-  static void DidTransactionCallback(void* data) {
-    ClientWebGLContext* webgl = static_cast<ClientWebGLContext*>(data);
-
-    // Clean up the context after composition
-    webgl->EndComposition();
-  }
-
- private:
-  RefPtr<HTMLCanvasElement> mCanvas;
-};
-
-void ClientWebGLContext::BeginComposition() {
-  // When running single-process WebGL, Present needs to be called in
-  // BeginComposition so that it is done _before_ the CanvasRenderer to
-  // Update attaches it for composition.
-  // When running cross-process WebGL, Present needs to be called in
-  // EndComposition so that it happens _after_ the OOPCanvasRenderer's
-  // Update tells it what CompositableHost to use,
-  if (!mNotLost) return;
-  if (mNotLost->inProcess) {
-    WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
-    Run<RPROC(Present)>();
-  }
+void ClientWebGLContext::OnBeforePaintTransaction() {
+  Present();
 }
 
 void ClientWebGLContext::EndComposition() {
-  if (!mNotLost) return;
-  if (mNotLost->outOfProcess) {
-    WEBGL_BRIDGE_LOGI("[%p] Presenting", this);
-    Run<RPROC(Present)>();
-  }
-
   // Mark ourselves as no longer invalidated.
   MarkContextClean();
 }
 
-void ClientWebGLContext::Present() { Run<RPROC(Present)>(); }
+// -
 
-void ClientWebGLContext::ClearVRFrame() const { Run<RPROC(ClearVRFrame)>(); }
+namespace webgl {
 
-RefPtr<layers::SharedSurfaceTextureClient> ClientWebGLContext::GetVRFrame(
-    const WebGLFramebufferJS* fb) const {
-  const auto notLost =
-      mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
-  if (!notLost) return nullptr;
-  const auto& inProcessContext = notLost->inProcess;
-  if (inProcessContext) {
-    return inProcessContext->GetVRFrame(fb ? fb->mId : 0);
-  }
-  MOZ_ASSERT_UNREACHABLE("TODO: Remote GetVRFrame");
-  return nullptr;
+void Present(ClientWebGLContext& webgl) {
+   webgl.Present();
 }
+
+Maybe<layers::SurfaceDescriptor> GetFrontBuffer(ClientWebGLContext& webgl, layers::KnowsCompositor* const kc) {
+  auto texType = layers::TextureType::Unknown;
+  if (kc) {
+    texType = layers::PreferredCanvasTextureType(*kc);
+  }
+  return webgl.GetFrontBuffer(texType);
+}
+
+}  // namespace webgl
+
+// -
+
+void ClientWebGLContext::Present() {
+  if (!mIsCanvasDirty) return;
+  mIsCanvasDirty = false;
+  mFrontBufferDesc = nullptr;
+
+  Run<RPROC(Present)>();
+}
+
+Maybe<layers::SurfaceDescriptor> ClientWebGLContext::GetFrontBuffer(const layers::TextureType type) {
+  if (!mFrontBufferDesc) {
+    const auto desc = Run<RPROC(GetFrontBuffer)>(type);
+    if (desc) {
+      mFrontBufferDesc = MakeUnique<layers::SurfaceDescriptor>(*desc);
+    }
+  }
+
+  if (!mFrontBufferDesc) return Nothing();
+  return Some(*mFrontBufferDesc);
+}
+
+// -
 
 already_AddRefed<layers::Layer> ClientWebGLContext::GetCanvasLayer(
     nsDisplayListBuilder* builder, Layer* oldLayer, LayerManager* manager) {
-  if (!mResetLayer && oldLayer && oldLayer->HasUserData(&gWebGLLayerUserData)) {
+  if (!mResetLayer && oldLayer) {
     RefPtr<layers::Layer> ret = oldLayer;
     return ret.forget();
   }
@@ -486,14 +464,7 @@ already_AddRefed<layers::Layer> ClientWebGLContext::GetCanvasLayer(
     return nullptr;
   }
 
-  WebGLContextUserData* userData = nullptr;
-  if (builder->IsPaintingToWindow() && mCanvasElement) {
-    userData = new WebGLContextUserData(mCanvasElement);
-  }
-
-  canvasLayer->SetUserData(&gWebGLLayerUserData, userData);
-
-  CanvasRenderer* canvasRenderer = canvasLayer->CreateOrGetCanvasRenderer();
+  const auto canvasRenderer = canvasLayer->CreateOrGetCanvasRenderer();
   if (!InitializeCanvasRenderer(builder, canvasRenderer)) return nullptr;
 
   uint32_t flags = 0;
@@ -503,7 +474,6 @@ already_AddRefed<layers::Layer> ClientWebGLContext::GetCanvasLayer(
   canvasLayer->SetContentFlags(flags);
 
   mResetLayer = false;
-
   return canvasLayer.forget();
 }
 
@@ -533,54 +503,19 @@ bool ClientWebGLContext::InitializeCanvasRenderer(
   const FuncScope funcScope(*this, "<InitializeCanvasRenderer>");
   if (IsContextLost()) return false;
 
-  Maybe<ICRData> icrData =
-      Run<RPROC(InitializeCanvasRenderer)>(GetCompositorBackendType());
+  CanvasRendererData data;
+  data.mContext = mSharedPtrPtr;
+  data.mOriginPos = gl::OriginPos::BottomLeft;
 
-  if (!icrData) {
-    return false;
-  }
+  const auto& options = *mInitialOptions;
+  const auto& size = DrawingBufferSize();
+  data.mIsOpaque = !options.alpha;
+  data.mIsAlphaPremult = !options.alpha || options.premultipliedAlpha;
+  data.mSize = {size.x, size.y};
 
-  mSurfaceInfo = *icrData;
-
-  CanvasInitializeData data;
   if (aBuilder->IsPaintingToWindow() && mCanvasElement) {
-    // Make the layer tell us whenever a transaction finishes (including
-    // the current transaction), so we can clear our invalidation state and
-    // start invalidating again. We need to do this for the layer that is
-    // being painted to a window (there shouldn't be more than one at a time,
-    // and if there is, flushing the invalidation state more often than
-    // necessary is harmless).
-
-    // The layer will be destroyed when we tear down the presentation
-    // (at the latest), at which time this userData will be destroyed,
-    // releasing the reference to the element.
-    // The userData will receive DidTransactionCallbacks, which flush the
-    // the invalidation state to indicate that the canvas is up to date.
-    data.mPreTransCallback = WebGLContextUserData::PreTransactionCallback;
-    data.mPreTransCallbackData = this;
-    data.mDidTransCallback = WebGLContextUserData::DidTransactionCallback;
-    data.mDidTransCallbackData = this;
+    data.mDoPaintCallbacks = true;
   }
-
-  MOZ_ASSERT(mCanvasElement);  // TODO: What to do here?  Is this about
-                               // OffscreenCanvas?
-
-  if (!mNotLost) return false;
-
-  if (mNotLost->outOfProcess) {
-    data.mOOPRenderer = mCanvasElement->GetOOPCanvasRenderer();
-    MOZ_ASSERT(data.mOOPRenderer);
-    MOZ_ASSERT((!data.mOOPRenderer->mContext) ||
-               (data.mOOPRenderer->mContext == this));
-    data.mOOPRenderer->mContext = this;
-  } else {
-    MOZ_ASSERT(mNotLost->inProcess);
-    data.mGLContext = mNotLost->inProcess->GetWebGLContext()->gl;
-  }
-
-  data.mHasAlpha = mSurfaceInfo.hasAlpha;
-  data.mIsGLAlphaPremult = mSurfaceInfo.isPremultAlpha || !data.mHasAlpha;
-  data.mSize = mSurfaceInfo.size;
 
   aRenderer->Initialize(data);
   aRenderer->SetDirty();
@@ -679,6 +614,9 @@ ClientWebGLContext::SetDimensions(const int32_t signedWidth,
     auto& state = State();
     state.mDrawingBufferSize = Nothing();
 
+    if (mIsCanvasDirty) {
+      Present();
+    }
     Run<RPROC(Resize)>(size);
 
     MarkCanvasDirty();

@@ -18,50 +18,56 @@
 
 namespace mozilla::gl {
 
+UniquePtr<SharedSurface> SurfaceFactory_GLXDrawable::CreateSharedImpl(
+    const SharedSurfaceDesc& desc) {
+  const bool deallocateClient = bool(mFlags & layers::TextureFlags::DEALLOCATE_CLIENT);
+  const bool isSameProcess = mAllocator->IsSameProcess();
+  return SharedSurface_GLXDrawable::Create(desc, deallocateClient, isSameProcess);
+}
+
 /* static */
 UniquePtr<SharedSurface_GLXDrawable> SharedSurface_GLXDrawable::Create(
-    GLContext* prodGL, const SurfaceCaps& caps, const gfx::IntSize& size,
-    bool deallocateClient, bool inSameProcess) {
-  UniquePtr<SharedSurface_GLXDrawable> ret;
+    const SharedSurfaceDesc& desc,
+    const bool deallocateClient, const bool inSameProcess) {
   Display* display = DefaultXDisplay();
   Screen* screen = XDefaultScreenOfDisplay(display);
   Visual* visual =
       gfxXlibSurface::FindVisual(screen, gfx::SurfaceFormat::A8R8G8B8_UINT32);
 
-  RefPtr<gfxXlibSurface> surf = gfxXlibSurface::Create(screen, visual, size);
-  if (!deallocateClient) surf->ReleasePixmap();
+  const RefPtr<gfxXlibSurface> surf = gfxXlibSurface::Create(screen, visual, desc.size);
+  if (!deallocateClient) {
+    surf->ReleasePixmap();
+  }
 
-  ret.reset(new SharedSurface_GLXDrawable(prodGL, size, inSameProcess, surf));
-  return ret;
+  return AsUnique(new SharedSurface_GLXDrawable(desc, inSameProcess, surf));
 }
 
 SharedSurface_GLXDrawable::SharedSurface_GLXDrawable(
-    GLContext* gl, const gfx::IntSize& size, bool inSameProcess,
+    const SharedSurfaceDesc& desc, bool inSameProcess,
     const RefPtr<gfxXlibSurface>& xlibSurface)
-    : SharedSurface(SharedSurfaceType::GLXDrawable, AttachmentType::Screen, gl,
-                    size, true, true),
-      mXlibSurface(xlibSurface),
-      mInSameProcess(inSameProcess) {}
+    : SharedSurface(desc, nullptr),
+      mInSameProcess(inSameProcess),
+      mXlibSurface(xlibSurface) {}
+
+SharedSurface_GLXDrawable::~SharedSurface_GLXDrawable() = default;
 
 void SharedSurface_GLXDrawable::ProducerReleaseImpl() {
-  mGL->MakeCurrent();
-  mGL->fFlush();
+  mDesc.gl->MakeCurrent();
+  mDesc.gl->fFlush();
 }
 
 void SharedSurface_GLXDrawable::LockProdImpl() {
-  GLContextGLX::Cast(mGL)->OverrideDrawable(mXlibSurface->GetGLXPixmap());
+  GLContextGLX::Cast(mDesc.gl)->OverrideDrawable(mXlibSurface->GetGLXPixmap());
 }
 
 void SharedSurface_GLXDrawable::UnlockProdImpl() {
-  GLContextGLX::Cast(mGL)->RestoreDrawable();
+  GLContextGLX::Cast(mDesc.gl)->RestoreDrawable();
 }
 
-bool SharedSurface_GLXDrawable::ToSurfaceDescriptor(
-    layers::SurfaceDescriptor* const out_descriptor) {
-  if (!mXlibSurface) return false;
+Maybe<layers::SurfaceDescriptor> SharedSurface_GLXDrawable::ToSurfaceDescriptor() {
+  if (!mXlibSurface) return {};
 
-  *out_descriptor = layers::SurfaceDescriptorX11(mXlibSurface, mInSameProcess);
-  return true;
+  return Some(layers::SurfaceDescriptorX11(mXlibSurface, mInSameProcess));
 }
 
 bool SharedSurface_GLXDrawable::ReadbackBySharedHandle(
@@ -96,25 +102,10 @@ bool SharedSurface_GLXDrawable::ReadbackBySharedHandle(
   return true;
 }
 
-/* static */
-UniquePtr<SurfaceFactory_GLXDrawable> SurfaceFactory_GLXDrawable::Create(
-    GLContext* prodGL, const SurfaceCaps& caps,
-    const RefPtr<layers::LayersIPCChannel>& allocator,
-    const layers::TextureFlags& flags) {
-  MOZ_ASSERT(caps.alpha, "GLX surfaces require an alpha channel!");
-
-  typedef SurfaceFactory_GLXDrawable ptrT;
-  UniquePtr<ptrT> ret(
-      new ptrT(prodGL, caps, allocator,
-               flags & ~layers::TextureFlags::ORIGIN_BOTTOM_LEFT));
-  return ret;
-}
-
-UniquePtr<SharedSurface> SurfaceFactory_GLXDrawable::CreateShared(
-    const gfx::IntSize& size) {
-  bool deallocateClient = !!(mFlags & layers::TextureFlags::DEALLOCATE_CLIENT);
-  return SharedSurface_GLXDrawable::Create(mGL, mCaps, size, deallocateClient,
-                                           mAllocator->IsSameProcess());
-}
+SurfaceFactory_GLXDrawable::SurfaceFactory_GLXDrawable(GLContext& gl)
+    : SurfaceFactory({&gl,
+                      SharedSurfaceType::GLXDrawable,
+                      layers::TextureType::X11,
+                      true}) {}
 
 }  // namespace mozilla::gl

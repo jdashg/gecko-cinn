@@ -21,9 +21,9 @@ namespace gl {
 
 using namespace mozilla::widget;
 
-GLContextEAGL::GLContextEAGL(CreateContextFlags flags, const SurfaceCaps& caps,
-                             EAGLContext* context, GLContext* sharedContext, bool isOffscreen)
-    : GLContext(flags, caps, sharedContext, isOffscreen), mContext(context) {}
+GLContextEAGL::GLContextEAGL(const GLContextDesc& desc,
+                             EAGLContext* context, GLContext* sharedContext)
+    : GLContext(desc, sharedContext), mContext(context) {}
 
 GLContextEAGL::~GLContextEAGL() {
   MakeCurrent();
@@ -131,7 +131,7 @@ static GLContextEAGL* GetGlobalContextEAGL() {
   return static_cast<GLContextEAGL*>(GLContextProviderEAGL::GetGlobalContext());
 }
 
-static already_AddRefed<GLContext> CreateEAGLContext(CreateContextFlags flags, bool aOffscreen,
+static RefPtr<GLContext> CreateEAGLContext(const GLContextDesc& desc,
                                                      GLContextEAGL* sharedContext) {
   EAGLRenderingAPI apis[] = {kEAGLRenderingAPIOpenGLES3, kEAGLRenderingAPIOpenGLES2};
 
@@ -155,13 +155,13 @@ static already_AddRefed<GLContext> CreateEAGLContext(CreateContextFlags flags, b
   }
 
   RefPtr<GLContextEAGL> glContext =
-      new GLContextEAGL(flags, SurfaceCaps::ForRGBA(), context, sharedContext, aOffscreen);
+      new GLContextEAGL(desc, context, sharedContext);
   if (!glContext->Init()) {
     glContext = nullptr;
     return nullptr;
   }
 
-  return glContext.forget();
+  return glContext;
 }
 
 already_AddRefed<GLContext> GLContextProviderEAGL::CreateForCompositorWidget(
@@ -171,8 +171,8 @@ already_AddRefed<GLContext> GLContextProviderEAGL::CreateForCompositorWidget(
     return nullptr;
   }
 
-  RefPtr<GLContext> glContext =
-      CreateEAGLContext(CreateContextFlags::NONE, false, GetGlobalContextEAGL());
+  const GLContextDesc desc = {};
+  auto glContext = CreateEAGLContext(desc, GetGlobalContextEAGL());
   if (!glContext) {
     return nullptr;
   }
@@ -184,20 +184,17 @@ already_AddRefed<GLContext> GLContextProviderEAGL::CreateForCompositorWidget(
   return glContext.forget();
 }
 
-already_AddRefed<GLContext> GLContextProviderEAGL::CreateHeadless(CreateContextFlags flags,
+already_AddRefed<GLContext> GLContextProviderEAGL::CreateHeadless(const GLContextCreateDesc& createDesc,
                                                                   nsACString* const out_failureId) {
-  return CreateEAGLContext(flags, true, GetGlobalContextEAGL());
+  auto desc = GLContextDesc{createDesc};
+  desc.isOffcreen = true;
+  return CreateEAGLContext(desc, GetGlobalContextEAGL()).forget();
 }
 
 already_AddRefed<GLContext> GLContextProviderEAGL::CreateOffscreen(
-    const mozilla::gfx::IntSize& size, const SurfaceCaps& caps, CreateContextFlags flags,
+    const mozilla::gfx::IntSize& size, const GLContextCreateDesc& desc,
     nsACString* const out_failureId) {
-  RefPtr<GLContext> glContext = CreateHeadless(flags, out_failureId);
-  if (!glContext->InitOffscreen(size, caps)) {
-    return nullptr;
-  }
-
-  return glContext.forget();
+  return CreateHeadless(desc, out_failureId);
 }
 
 static RefPtr<GLContext> gGlobalContext;

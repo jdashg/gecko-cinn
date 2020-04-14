@@ -11,35 +11,32 @@ namespace mozilla::gl {
 
 /*static*/
 UniquePtr<SharedSurface_DMABUF> SharedSurface_DMABUF::Create(
-    GLContext* prodGL, const GLFormats& formats, const gfx::IntSize& size,
-    bool hasAlpha) {
-  auto flags = static_cast<WaylandDMABufSurfaceFlags>(DMABUF_TEXTURE |
-                                                      DMABUF_USE_MODIFIERS);
-  if (hasAlpha) {
-    flags = static_cast<WaylandDMABufSurfaceFlags>(flags | DMABUF_ALPHA);
-  }
-
-  RefPtr<WaylandDMABufSurface> surface =
-      WaylandDMABufSurfaceRGBA::CreateDMABufSurface(size.width, size.height,
+    const SharedSurfaceDesc& desc) {
+  const auto flags = static_cast<WaylandDMABufSurfaceFlags>(DMABUF_TEXTURE |
+                                                      DMABUF_USE_MODIFIERS |
+                                                      DMABUF_ALPHA);
+  const RefPtr<WaylandDMABufSurface> surface =
+      WaylandDMABufSurfaceRGBA::CreateDMABufSurface(desc.size.width, desc.size.height,
                                                     flags);
-  if (!surface || !surface->CreateTexture(prodGL)) {
+  if (!surface || !surface->CreateTexture(desc.gl)) {
     return nullptr;
   }
 
-  UniquePtr<SharedSurface_DMABUF> ret;
-  ret.reset(new SharedSurface_DMABUF(prodGL, size, hasAlpha, surface));
-  return ret;
+  const auto tex = mSurface->GetTexture();
+  auto fb = MozFramebuffer::CreateWith(desc.gl, desc.size, 0, false, LOCAL_GL_TEXTURE_2D, tex);
+  if (!fb) return nullptr;
+
+  return AsUnique(new SharedSurface_DMABUF(desc, std::move(fb), surface));
 }
 
-SharedSurface_DMABUF::SharedSurface_DMABUF(
-    GLContext* gl, const gfx::IntSize& size, bool hasAlpha,
-    RefPtr<WaylandDMABufSurface> aSurface)
-    : SharedSurface(SharedSurfaceType::EGLSurfaceDMABUF,
-                    AttachmentType::GLTexture, gl, size, hasAlpha, true),
-      mSurface(aSurface) {}
+SharedSurface_DMABUF::SharedSurface_DMABUF(const SharedSurfaceDesc& desc, UniquePtr<MozFramebuffer>&& fb,
+    const RefPtr<WaylandDMABufSurface> surface)
+    : SharedSurface(desc, std::move(fb)),
+      mSurface(surface) {}
 
 SharedSurface_DMABUF::~SharedSurface_DMABUF() {
-  if (!mGL || !mGL->MakeCurrent()) {
+  const auto& gl = mDesc.gl;
+  if (!gl || !gl->MakeCurrent()) {
     return;
   }
   mSurface->ReleaseTextures();
@@ -47,10 +44,13 @@ SharedSurface_DMABUF::~SharedSurface_DMABUF() {
 
 void SharedSurface_DMABUF::ProducerReleaseImpl() { mSurface->FenceSet(); }
 
-bool SharedSurface_DMABUF::ToSurfaceDescriptor(
-    layers::SurfaceDescriptor* const out_descriptor) {
-  MOZ_ASSERT(mSurface);
-  return mSurface->Serialize(*out_descriptor);
+Maybe<layers::SurfaceDescriptor> SharedSurface_DMABUF::ToSurfaceDescriptor() {
+  layers::SurfaceDescriptor desc;
+  if (!mSurface->Serialize(desc)) return {};
+  return Some(desc);
 }
+
+SurfaceFactory_DMABUF::SurfaceFactory_DMABUF(GLContext& gl)
+      : SurfaceFactory({&gl, SharedSurfaceType::EGLSurfaceDMABUF, layers::TextureType::WaylandDMABUF, true}) {}
 
 }  // namespace mozilla::gl

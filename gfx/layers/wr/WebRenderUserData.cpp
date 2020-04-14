@@ -375,7 +375,7 @@ WebRenderCanvasRendererAsync* WebRenderCanvasData::GetCanvasRenderer() {
 }
 
 WebRenderCanvasRendererAsync* WebRenderCanvasData::CreateCanvasRenderer() {
-  mCanvasRenderer = MakeUnique<WebRenderCanvasRendererAsync>(mManager);
+  mCanvasRenderer = new WebRenderCanvasRendererAsync(mManager);
   return mCanvasRenderer.get();
 }
 
