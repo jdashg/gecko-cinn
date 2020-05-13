@@ -22,7 +22,7 @@ class SharedSurface_DMABUF final : public SharedSurface {
   static UniquePtr<SharedSurface_DMABUF> Create(const SharedSurfaceDesc&);
 
  private:
-  SharedSurface_DMABUF(const SharedSurfaceDesc&,
+  SharedSurface_DMABUF(const SharedSurfaceDesc&, UniquePtr<MozFramebuffer>,
                        RefPtr<WaylandDMABufSurface>);
 
   void UpdateProdTexture(const MutexAutoLock& curAutoLock);

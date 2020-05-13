@@ -503,7 +503,7 @@ already_AddRefed<GLContextGLX> GLContextGLX::CreateGLContext(
         attrib_list.AppendElements(memory_purge_attribs,
                                    MOZ_ARRAY_LENGTH(memory_purge_attribs));
       }
-      if (!(flags & CreateContextFlags::REQUIRE_COMPAT_PROFILE)) {
+      if (!(desc.flags & CreateContextFlags::REQUIRE_COMPAT_PROFILE)) {
         int core_attribs[] = {
             LOCAL_GLX_CONTEXT_MAJOR_VERSION_ARB,
             3,
@@ -734,7 +734,7 @@ already_AddRefed<GLContext> CreateForWidget(Display* aXDisplay, Window aXWindow,
   } else {
     flags = CreateContextFlags::REQUIRE_COMPAT_PROFILE;
   }
-  return GLContextGLX::CreateGLContext({flags, false},
+  return GLContextGLX::CreateGLContext({{flags}, false},
                                        aXDisplay, aXWindow, config, false,
                                        nullptr);
 }

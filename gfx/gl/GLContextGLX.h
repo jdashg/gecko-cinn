@@ -66,8 +66,8 @@ class GLContextGLX : public GLContext {
  private:
   friend class GLContextProviderGLX;
 
-  GLContextGLX(CreateContextFlags flags, const SurfaceCaps& caps,
-               bool isOffscreen, Display* aDisplay, GLXDrawable aDrawable,
+  GLContextGLX(const GLContextDesc&,
+               Display* aDisplay, GLXDrawable aDrawable,
                GLXContext aContext, bool aDeleteDrawable, bool aDoubleBuffered,
                gfxXlibSurface* aPixmap);
 

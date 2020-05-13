@@ -16,16 +16,12 @@ namespace gl {
 
 class SharedSurface_GLXDrawable final : public SharedSurface {
  public:
-  const bool mInSameProcess;
   const RefPtr<gfxXlibSurface> mXlibSurface;
 
-  static UniquePtr<SharedSurface_GLXDrawable> Create(const SharedSurfaceDesc&,
-                                                     bool deallocateClient,
-                                                     bool inSameProcess);
+  static UniquePtr<SharedSurface_GLXDrawable> Create(const SharedSurfaceDesc&);
 
  private:
   SharedSurface_GLXDrawable(const SharedSurfaceDesc&,
-                            bool inSameProcess,
                             const RefPtr<gfxXlibSurface>& xlibSurface);
 
                     public:

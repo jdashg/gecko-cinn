@@ -10,6 +10,7 @@
 #include "GLContextProvider.h"
 #include "GLLibraryEGL.h"
 #include "GLReadTexImageHelper.h"
+#include "MozFramebuffer.h"
 #include "mozilla/layers/LayersSurfaces.h"  // for SurfaceDescriptor, etc
 #include "SharedSurface.h"
 

@@ -4,7 +4,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "SharedSurfaceDMABUF.h"
+
 #include "GLContextEGL.h"
+#include "MozFramebuffer.h"
 #include "mozilla/layers/LayersSurfaces.h"  // for SurfaceDescriptor, etc
 
 namespace mozilla::gl {
@@ -22,14 +24,14 @@ UniquePtr<SharedSurface_DMABUF> SharedSurface_DMABUF::Create(
     return nullptr;
   }
 
-  const auto tex = mSurface->GetTexture();
-  auto fb = MozFramebuffer::CreateWith(desc.gl, desc.size, 0, false, LOCAL_GL_TEXTURE_2D, tex);
+  const auto tex = surface->GetTexture();
+  auto fb = MozFramebuffer::CreateForBacking(desc.gl, desc.size, 0, false, LOCAL_GL_TEXTURE_2D, tex);
   if (!fb) return nullptr;
 
   return AsUnique(new SharedSurface_DMABUF(desc, std::move(fb), surface));
 }
 
-SharedSurface_DMABUF::SharedSurface_DMABUF(const SharedSurfaceDesc& desc, UniquePtr<MozFramebuffer>&& fb,
+SharedSurface_DMABUF::SharedSurface_DMABUF(const SharedSurfaceDesc& desc, UniquePtr<MozFramebuffer> fb,
     const RefPtr<WaylandDMABufSurface> surface)
     : SharedSurface(desc, std::move(fb)),
       mSurface(surface) {}

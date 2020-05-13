@@ -103,8 +103,7 @@ class SharedGL final {
       return nullptr;
     }
     RefPtr<GLContextEGL> gl = new GLContextEGL(
-        egl, CreateContextFlags::NONE, SurfaceCaps::Any(),
-        /* offscreen? */ false, eglConfig, EGL_NO_SURFACE, eglContext);
+        egl, {}, eglConfig, EGL_NO_SURFACE, eglContext);
     if (!gl->Init()) {
       NS_WARNING("Fail to create GL context for native blitter.");
       return nullptr;
