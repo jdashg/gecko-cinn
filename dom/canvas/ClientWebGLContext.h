@@ -721,7 +721,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   const bool mIsWebGL2;
  private:
-  bool mIsCanvasDirty = true;
+  bool mIsCanvasDirty = false;
 
  public:
   explicit ClientWebGLContext(bool webgl2);
@@ -770,9 +770,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
  public:
   void MarkCanvasDirty();
 
-  void MarkContextClean() override {
-    mIsCanvasDirty = false;
-  }
+  void MarkContextClean() override {}
 
   void OnBeforePaintTransaction() override;
   ClientWebGLContext* AsWebgl() override { return this; }

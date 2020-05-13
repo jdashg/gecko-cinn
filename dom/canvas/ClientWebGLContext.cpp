@@ -729,6 +729,7 @@ bool ClientWebGLContext::CreateHostContext(const uvec2& requestedSize) {
     return false;
   }
   mNotLost = pNotLost;
+  MarkCanvasDirty();
 
   // Init state
   const auto& limits = Limits();
