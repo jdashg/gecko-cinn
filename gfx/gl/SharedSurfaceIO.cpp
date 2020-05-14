@@ -6,6 +6,7 @@
 #include "SharedSurfaceIO.h"
 
 #include "GLContextCGL.h"
+#include "MozFramebuffer.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/gfx/MacIOSurface.h"
 #include "mozilla/layers/LayersSurfaces.h"  // for SurfaceDescriptor, etc
@@ -69,8 +70,8 @@ UniquePtr<SharedSurface_IOSurface> SharedSurface_IOSurface::Create(const SharedS
   return AsUnique(new SharedSurface_IOSurface(desc, std::move(fb), std::move(tex), ioSurf));
 }
 
-SharedSurface_IOSurface::SharedSurface_IOSurface(const SharedSurfaceDesc& desc, UniquePtr<MozFramebuffer>&& fb,
-    UniquePtr<Texture>&& tex
+SharedSurface_IOSurface::SharedSurface_IOSurface(const SharedSurfaceDesc& desc, UniquePtr<MozFramebuffer> fb,
+    UniquePtr<Texture> tex,
     const RefPtr<MacIOSurface>& ioSurf)
     : SharedSurface(desc, std::move(fb)),
       mTex(std::move(tex)),
@@ -80,15 +81,16 @@ SharedSurface_IOSurface::~SharedSurface_IOSurface() = default;
 
 void SharedSurface_IOSurface::ProducerReleaseImpl() {
   const auto& gl = mDesc.gl;
-  mGL->MakeCurrent();
-  mGL->fFlush();
+  if (!gl) return;
+  gl->MakeCurrent();
+  gl->fFlush();
 }
 
 Maybe<layers::SurfaceDescriptor> SharedSurface_IOSurface::ToSurfaceDescriptor() {
   const bool isOpaque = false; // RGBA
   return Some(layers::SurfaceDescriptorMacIOSurface(
       mIOSurf->GetIOSurfaceID(), mIOSurf->GetContentsScaleFactor(), isOpaque,
-      mIOSurf->GetYUVColorSpace()))
+      mIOSurf->GetYUVColorSpace()));
 }
 
 bool SharedSurface_IOSurface::ReadbackBySharedHandle(

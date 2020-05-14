@@ -241,10 +241,10 @@ already_AddRefed<GLContext> GLContextProviderCGL::CreateForCompositorWidget(
     flags |= CreateContextFlags::REQUIRE_COMPAT_PROFILE;
   }
   nsCString failureUnused;
-  return CreateHeadless(flags, &failureUnused);
+  return CreateHeadless({flags}, &failureUnused);
 }
 
-static RefPtr<GLContextCGL> CreateOffscreenFBOContext(const GLContextCreateDesc& desc) {
+static RefPtr<GLContextCGL> CreateOffscreenFBOContext(GLContextCreateDesc desc) {
   if (!sCGLLibrary.EnsureInitialized()) {
     return nullptr;
   }
@@ -252,6 +252,7 @@ static RefPtr<GLContextCGL> CreateOffscreenFBOContext(const GLContextCreateDesc&
   NSOpenGLContext* context = nullptr;
 
   std::vector<NSOpenGLPixelFormatAttribute> attribs;
+  auto& flags = desc.flags;
 
   if (!StaticPrefs::gl_allow_high_power()) {
     flags &= ~CreateContextFlags::HIGH_POWER;
@@ -285,10 +286,7 @@ static RefPtr<GLContextCGL> CreateOffscreenFBOContext(const GLContextCreateDesc&
     return nullptr;
   }
 
-  auto fullDesc = GLContextDesc{desc};
-  fullDesc.isOffscreen = true;
-
-  RefPtr<GLContextCGL> glContext = new GLContextCGL(fullDesc, context);
+  RefPtr<GLContextCGL> glContext = new GLContextCGL({desc, true}, context);
 
   if (flags & CreateContextFlags::PREFER_MULTITHREADED) {
     CGLEnable(glContext->GetCGLContext(), kCGLCEMPEngine);
@@ -328,7 +326,7 @@ GLContext* GLContextProviderCGL::GetGlobalContext() {
 
     MOZ_RELEASE_ASSERT(!gGlobalContext);
     nsCString discardFailureId;
-    RefPtr<GLContext> temp = CreateHeadless(CreateContextFlags::NONE, &discardFailureId);
+    RefPtr<GLContext> temp = CreateHeadless({}, &discardFailureId);
     gGlobalContext = temp;
 
     if (!gGlobalContext) {

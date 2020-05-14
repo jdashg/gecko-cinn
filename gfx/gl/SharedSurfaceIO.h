@@ -21,15 +21,10 @@ class SharedSurface_IOSurface final : public SharedSurface {
   const UniquePtr<Texture> mTex;
   const RefPtr<MacIOSurface> mIOSurf;
 
-  static SharedSurface_IOSurface* Cast(SharedSurface* surf) {
-    MOZ_ASSERT(surf->mType == SharedSurfaceType::IOSurface);
-    return static_cast<SharedSurface_IOSurface*>(surf);
-  }
-
   static UniquePtr<SharedSurface_IOSurface> Create(const SharedSurfaceDesc&);
 
  private:
-  SharedSurface_IOSurface(const SharedSurfaceDesc&, UniquePtr<MozFramebuffer>&&, UniquePtr<Texture>&&,
+  SharedSurface_IOSurface(const SharedSurfaceDesc&, UniquePtr<MozFramebuffer>, UniquePtr<Texture>,
   const RefPtr<MacIOSurface>&);
 
  public:
