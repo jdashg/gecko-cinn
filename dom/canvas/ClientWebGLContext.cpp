@@ -607,16 +607,24 @@ ClientWebGLContext::SetDimensions(const int32_t signedWidth,
   if (!size.y) {
     size.y = 1;
   }
+  const auto prevRequestedSize = mRequestedSize;
+  mRequestedSize = size;
 
   mResetLayer = true;  // Always treat this as resize.
 
   if (mNotLost) {
     auto& state = State();
-    state.mDrawingBufferSize = Nothing();
+
+    auto curSize = prevRequestedSize;
+    if (state.mDrawingBufferSize) {
+      curSize = *state.mDrawingBufferSize;
+    }
+    if (size == curSize) return NS_OK; // MUST skip no-op resize
 
     if (mIsCanvasDirty) {
       Present();
     }
+    state.mDrawingBufferSize = Nothing();
     Run<RPROC(Resize)>(size);
 
     MarkCanvasDirty();

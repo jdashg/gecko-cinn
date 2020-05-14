@@ -722,6 +722,7 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   const bool mIsWebGL2;
  private:
   bool mIsCanvasDirty = false;
+  uvec2 mRequestedSize = {};
 
  public:
   explicit ClientWebGLContext(bool webgl2);
