@@ -151,7 +151,7 @@ UniquePtr<SharedSurface_SurfaceTexture> SharedSurface_SurfaceTexture::Create(con
     return nullptr;
   }
 
-  AndroidNativeWindow window(surface);
+  AndroidNativeWindow window(java::GeckoSurface::Ref::From(surface));
   const auto& gle = GLContextEGL::Cast(desc.gl);
   MOZ_ASSERT(gle);
   const auto eglSurface = gle->CreateCompatibleSurface(window.NativeWindow());
@@ -161,7 +161,7 @@ UniquePtr<SharedSurface_SurfaceTexture> SharedSurface_SurfaceTexture::Create(con
 }
 
 SharedSurface_SurfaceTexture::SharedSurface_SurfaceTexture(const SharedSurfaceDesc& desc,
-    const java::GeckoSurface::Param surface,
+    java::GeckoSurface::Param surface,
     const EGLSurface eglSurface)
     : SharedSurface(desc, nullptr),
       mSurface(surface),
@@ -207,12 +207,11 @@ bool SharedSurface_SurfaceTexture::IsBufferAvailable() const {
   return mSurface->GetAvailable();
 }
 
-bool SharedSurface_SurfaceTexture::ToSurfaceDescriptor(
+Maybe<layers::SurfaceDescriptor> SharedSurface_SurfaceTexture::ToSurfaceDescriptor(
     layers::SurfaceDescriptor* const out_descriptor) {
-  *out_descriptor = layers::SurfaceTextureDescriptor(
+  return Some(layers::SurfaceTextureDescriptor(
       mSurface->GetHandle(), mDesc.size, gfx::SurfaceFormat::R8G8B8A8,
-      false /* NOT continuous */, false /* Do not ignore transform */);
-  return true;
+      false /* NOT continuous */, false /* Do not ignore transform */));
 }
 
 SurfaceFactory_SurfaceTexture::SurfaceFactory_SurfaceTexture(GLContext& gl)
