@@ -981,7 +981,25 @@ RefPtr<gfx::DataSourceSurface> ClientWebGLContext::BackBufferSnapshot() {
     const auto range = Range<uint8_t>(map.GetData(), stride * size.y);
     DoReadPixels(desc, range);
 
-    gfxUtils::ConvertBGRAtoRGBA(range.begin().get(), range.length());
+    const auto begin = range.begin().get();
+
+    std::vector<uint8_t> temp;
+    temp.resize(stride);
+    for (const auto i : IntegerRange(size.y / 2)) {
+      const auto top = begin + stride * i;
+      const auto bottom = begin + stride * (size.y - 1 - i);
+      memcpy(temp.data(), top, stride);
+      memcpy(top, bottom, stride);
+      gfxUtils::ConvertBGRAtoRGBA(top, stride);
+
+      memcpy(bottom, temp.data(), stride);
+      gfxUtils::ConvertBGRAtoRGBA(bottom, stride);
+    }
+
+    if (size.y % 2) {
+      const auto middle = begin + stride * (size.y / 2);
+      gfxUtils::ConvertBGRAtoRGBA(middle, stride);
+    }
   }
 
   return surf;
