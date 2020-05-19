@@ -54,7 +54,7 @@ class ShareableCanvasRenderer : public CanvasRenderer {
   CanvasClient* GetCanvasClient() { return mCanvasClient; }
 
  private:
-  RefPtr<TextureClient> GetFrontBufferFromDesc(const layers::SurfaceDescriptor&);
+  RefPtr<TextureClient> GetFrontBufferFromDesc(const layers::SurfaceDescriptor&, TextureFlags);
 };
 
 }  // namespace layers

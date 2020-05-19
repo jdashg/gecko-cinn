@@ -52,7 +52,7 @@ void ShareableCanvasRenderer::DisconnectClient() {
   }
 }
 
-RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(const layers::SurfaceDescriptor& desc) {
+RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(const layers::SurfaceDescriptor& desc, const TextureFlags flags) {
   if (mFrontBufferFromDesc && mFrontBufferDesc == desc) return mFrontBufferFromDesc;
   mFrontBufferFromDesc = nullptr;
 
@@ -63,15 +63,9 @@ RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(co
   }
   const auto& textureForwarder = compositableForwarder->GetTextureForwarder();
 
-  MOZ_ASSERT(!YIsDown());
-  auto flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
   auto format = gfx::SurfaceFormat::R8G8B8X8;
   if (!mData.mIsOpaque) {
     format = gfx::SurfaceFormat::R8G8B8A8;
-
-    if (!mData.mIsAlphaPremult) {
-      flags |= TextureFlags::NON_PREMULTIPLIED;
-    }
   }
 
   auto data = MakeUnique<SharedSurfaceTextureData>(desc, format, mData.mSize);
@@ -98,6 +92,18 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
 
   const auto& forwarder = GetForwarder();
 
+  // -
+
+  auto flags = TextureFlags::IMMUTABLE;
+  if (!YIsDown()) {
+    flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
+  }
+  if (!mData.mIsOpaque && !mData.mIsAlphaPremult) {
+    flags |= TextureFlags::NON_PREMULTIPLIED;
+  }
+
+  // -
+
   const auto fnGetExistingTc = [&]() -> RefPtr<TextureClient> {
     if (provider) {
       auto tc = provider->GetTextureClient();
@@ -115,8 +121,10 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
     if (!forwarder) return nullptr;
     const auto desc = webgl::GetFrontBuffer(*webgl, forwarder);
     if (!desc) return nullptr;
-    return GetFrontBufferFromDesc(*desc);
+    return GetFrontBufferFromDesc(*desc, flags);
   };
+
+  // -
 
   const auto fnMakeTcFromSnapshot = [&]() -> RefPtr<TextureClient> {
     const auto& size = mData.mSize;
@@ -128,10 +136,6 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
     const auto surfaceFormat =
         gfxPlatform::GetPlatform()->Optimal2DFormatForContent(contentType);
 
-    auto flags = TextureFlags::IMMUTABLE;
-    if (!YIsDown()) {
-      flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
-    }
     const auto tc = mCanvasClient->CreateTextureClientForCanvas(surfaceFormat, size, flags);
     if (!tc) {
       return nullptr;
@@ -153,6 +157,8 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
 
     return tc;
   };
+
+  // -
 
   {
     FirePreTransactionCallback();
