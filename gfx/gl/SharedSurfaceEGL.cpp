@@ -138,20 +138,21 @@ bool SharedSurface_EGLImage::ReadbackBySharedHandle(
 UniquePtr<SharedSurface_SurfaceTexture> SharedSurface_SurfaceTexture::Create(const SharedSurfaceDesc& desc) {
   const auto& size = desc.size;
 
-  jni::Object::LocalRef surface =
+  jni::Object::LocalRef surfaceObj =
       java::SurfaceAllocator::AcquireSurface(size.width, size.height, true);
-  if (!surface) {
+  if (!surfaceObj) {
     // Try multi-buffer mode
-    surface =
+    surfaceObj =
         java::SurfaceAllocator::AcquireSurface(size.width, size.height, false);
   }
-  if (!surface) {
+  if (!surfaceObj) {
     // Give up
     NS_WARNING("Failed to allocate SurfaceTexture!");
     return nullptr;
   }
+  const auto surface = java::GeckoSurface::Ref::From(surfaceObj);
 
-  AndroidNativeWindow window(java::GeckoSurface::Ref::From(surface));
+  AndroidNativeWindow window(surface);
   const auto& gle = GLContextEGL::Cast(desc.gl);
   MOZ_ASSERT(gle);
   const auto eglSurface = gle->CreateCompatibleSurface(window.NativeWindow());
@@ -207,8 +208,7 @@ bool SharedSurface_SurfaceTexture::IsBufferAvailable() const {
   return mSurface->GetAvailable();
 }
 
-Maybe<layers::SurfaceDescriptor> SharedSurface_SurfaceTexture::ToSurfaceDescriptor(
-    layers::SurfaceDescriptor* const out_descriptor) {
+Maybe<layers::SurfaceDescriptor> SharedSurface_SurfaceTexture::ToSurfaceDescriptor() {
   return Some(layers::SurfaceTextureDescriptor(
       mSurface->GetHandle(), mDesc.size, gfx::SurfaceFormat::R8G8B8A8,
       false /* NOT continuous */, false /* Do not ignore transform */));
