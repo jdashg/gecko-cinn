@@ -63,6 +63,7 @@ RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(co
   }
   const auto& textureForwarder = compositableForwarder->GetTextureForwarder();
 
+  MOZ_ASSERT(!YIsDown());
   auto flags = TextureFlags::ORIGIN_BOTTOM_LEFT;
   auto format = gfx::SurfaceFormat::R8G8B8X8;
   if (!mData.mIsOpaque) {
@@ -127,7 +128,11 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
     const auto surfaceFormat =
         gfxPlatform::GetPlatform()->Optimal2DFormatForContent(contentType);
 
-    const auto tc = mCanvasClient->CreateTextureClientForCanvas(surfaceFormat, size, TextureFlags::IMMUTABLE);
+    auto flags = TextureFlags::IMMUTABLE;
+    if (!YIsDown()) {
+      flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
+    }
+    const auto tc = mCanvasClient->CreateTextureClientForCanvas(surfaceFormat, size, flags);
     if (!tc) {
       return nullptr;
     }
