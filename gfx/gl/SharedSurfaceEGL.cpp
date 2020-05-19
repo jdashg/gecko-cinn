@@ -5,6 +5,7 @@
 
 #include "SharedSurfaceEGL.h"
 
+#include "AndroidNativeWindow.h"
 #include "GLBlitHelper.h"
 #include "GLContextEGL.h"
 #include "GLContextProvider.h"
