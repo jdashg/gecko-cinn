@@ -57,7 +57,7 @@ std::shared_ptr<BorrowedSourceSurface> CanvasRenderer::BorrowSnapshot() const {
     ss = provider->BorrowSnapshot();
   }
   if (!ss) {
-    ss = context->GetSurfaceSnapshot();
+    ss = context->GetFrontBufferSnapshot();
   }
   if (!ss) return nullptr;
 

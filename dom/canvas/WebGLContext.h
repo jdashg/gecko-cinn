@@ -484,6 +484,7 @@ private:
   bool PresentInto(gl::SwapChain& swapChain);
  public:
   void Present();
+  RefPtr<gfx::DataSourceSurface> GetFrontBufferSnapshot();
   Maybe<layers::SurfaceDescriptor> GetFrontBuffer(layers::TextureType);
 
   void RunContextLossTimer();

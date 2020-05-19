@@ -724,6 +724,8 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
   bool mIsCanvasDirty = false;
   uvec2 mRequestedSize = {};
 
+  RefPtr<gfx::DataSourceSurface> mFrontBufferSnapshot;
+
  public:
   explicit ClientWebGLContext(bool webgl2);
 
@@ -996,8 +998,11 @@ class ClientWebGLContext final : public nsICanvasRenderingContextInternal,
 
   void Present();
   Maybe<layers::SurfaceDescriptor> GetFrontBuffer(layers::TextureType);
+  RefPtr<gfx::SourceSurface> GetFrontBufferSnapshot() override;
 
  private:
+  RefPtr<gfx::DataSourceSurface> BackBufferSnapshot();
+  void DoReadPixels(const webgl::ReadPixelsDesc&, Range<uint8_t>) const;
   uvec2 DrawingBufferSize();
 
   void AfterDrawCall() {

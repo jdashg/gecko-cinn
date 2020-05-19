@@ -3500,7 +3500,6 @@ class GLContext : public GenericAtomicRefCounted,
 
  public:
   void LockSurface(SharedSurface* surf) {
-    MOZ_ASSERT(!mLockedSurface);
     mLockedSurface = surf;
   }
 

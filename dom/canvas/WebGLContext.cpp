@@ -972,6 +972,78 @@ Maybe<layers::SurfaceDescriptor> WebGLContext::GetFrontBuffer(const layers::Text
   return front->ToSurfaceDescriptor();
 }
 
+RefPtr<gfx::DataSourceSurface> WebGLContext::GetFrontBufferSnapshot() {
+  const auto& front = mSwapChain.FrontBuffer();
+  if (!front) return nullptr;
+
+  // -
+
+  front->LockProd();
+  front->ProducerReadAcquire();
+  auto reset = MakeScopeExit([&] {
+    front->ProducerReadRelease();
+    front->UnlockProd();
+  });
+
+  // -
+
+  gl->fPixelStorei(LOCAL_GL_PACK_ALIGNMENT, 1);
+  if (IsWebGL2()) {
+    gl->fPixelStorei(LOCAL_GL_PACK_ROW_LENGTH, 0);
+    gl->fPixelStorei(LOCAL_GL_PACK_SKIP_PIXELS, 0);
+    gl->fPixelStorei(LOCAL_GL_PACK_SKIP_ROWS, 0);
+  }
+
+  // -
+
+  const auto readFbWas = mBoundReadFramebuffer;
+  const auto pboWas = mBoundPixelPackBuffer;
+
+  GLenum fbTarget = LOCAL_GL_READ_FRAMEBUFFER;
+  if (!IsWebGL2()) {
+    fbTarget = LOCAL_GL_FRAMEBUFFER;
+  }
+
+  gl->fBindFramebuffer(fbTarget, front->mFb ? front->mFb->mFB : 0);
+  if (pboWas) {
+    BindBuffer(LOCAL_GL_PIXEL_PACK_BUFFER, nullptr);
+  }
+
+  auto reset2 = MakeScopeExit([&] {
+    DoBindFB(readFbWas, fbTarget);
+    if (pboWas) {
+      BindBuffer(LOCAL_GL_PIXEL_PACK_BUFFER, pboWas);
+    }
+  });
+
+  const auto& size = front->mDesc.size;
+  const auto surfFormat = mOptions.alpha ? gfx::SurfaceFormat::B8G8R8A8
+                                         : gfx::SurfaceFormat::B8G8R8X8;
+  const auto stride = size.width * 4;
+  RefPtr<gfx::DataSourceSurface> surf =
+      gfx::Factory::CreateDataSourceSurfaceWithStride(
+          size, surfFormat, stride, /*zero=*/true);
+  MOZ_ASSERT(surf);
+  if (NS_WARN_IF(!surf)) return nullptr;
+
+  // -
+
+  {
+    const gfx::DataSourceSurface::ScopedMap map(
+        surf, gfx::DataSourceSurface::READ_WRITE);
+    if (!map.IsMapped()) {
+      MOZ_ASSERT(false);
+      return nullptr;
+    }
+    MOZ_ASSERT(map.GetStride() == stride);
+
+    gl->fReadPixels(0, 0, size.width, size.height, LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, map.GetData());
+    gfxUtils::ConvertBGRAtoRGBA(map.GetData(), stride * size.height);
+  }
+
+  return surf;
+}
+
 // ------------------------
 
 RefPtr<gfx::DataSourceSurface> GetTempSurface(const gfx::IntSize& aSize,

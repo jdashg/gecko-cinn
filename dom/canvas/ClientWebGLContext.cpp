@@ -431,6 +431,7 @@ void ClientWebGLContext::Present() {
   if (!mIsCanvasDirty) return;
   mIsCanvasDirty = false;
   mFrontBufferDesc = nullptr;
+  mFrontBufferSnapshot = nullptr;
 
   Run<RPROC(Present)>();
 }
@@ -867,6 +868,68 @@ already_AddRefed<gfx::SourceSurface> ClientWebGLContext::GetSurfaceSnapshot(
   const auto notLost =
       mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
 
+  auto ret = BackBufferSnapshot();
+  if (!ret) return nullptr;
+
+  // -
+
+  const auto& options = mNotLost->info.options;
+
+  auto srcAlphaType = gfxAlphaType::Opaque;
+  if (options.alpha) {
+    if (options.premultipliedAlpha) {
+      srcAlphaType = gfxAlphaType::Premult;
+    } else {
+      srcAlphaType = gfxAlphaType::NonPremult;
+    }
+  }
+
+  if (out_alphaType) {
+    *out_alphaType = srcAlphaType;
+  } else {
+    // Expects Opaque or Premult
+    if (srcAlphaType == gfxAlphaType::NonPremult) {
+      const auto nonPremultSurf = ret;
+      const auto& size = nonPremultSurf->GetSize();
+      const auto format = nonPremultSurf->GetFormat();
+      ret = gfx::Factory::CreateDataSourceSurface(
+              size, format, /*zero=*/false);
+      gfxUtils::PremultiplyDataSurface(nonPremultSurf, ret);
+    }
+  }
+
+  return ret.forget();
+}
+
+RefPtr<gfx::SourceSurface> ClientWebGLContext::GetFrontBufferSnapshot() {
+  const FuncScope funcScope(*this, "<GetSurfaceSnapshot>");
+  if (IsContextLost()) return nullptr;
+  const auto notLost =
+      mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
+
+  const auto& options = mNotLost->info.options;
+
+  if (!mFrontBufferSnapshot) {
+    mFrontBufferSnapshot = Run<RPROC(GetFrontBufferSnapshot)>();
+    if (!mFrontBufferSnapshot) return nullptr;
+
+    if (options.alpha && !options.premultipliedAlpha) {
+      const auto nonPremultSurf = mFrontBufferSnapshot;
+      const auto& size = nonPremultSurf->GetSize();
+      const auto format = nonPremultSurf->GetFormat();
+      mFrontBufferSnapshot = gfx::Factory::CreateDataSourceSurface(
+              size, format, /*zero=*/false);
+      gfxUtils::PremultiplyDataSurface(nonPremultSurf, mFrontBufferSnapshot);
+    }
+  }
+  return mFrontBufferSnapshot;
+}
+
+RefPtr<gfx::DataSourceSurface> ClientWebGLContext::BackBufferSnapshot() {
+  if (IsContextLost()) return nullptr;
+  const auto notLost =
+      mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
+
   const auto& options = mNotLost->info.options;
   const auto& state = State();
 
@@ -915,64 +978,13 @@ already_AddRefed<gfx::SourceSurface> ClientWebGLContext::GetSurfaceSnapshot(
     MOZ_ASSERT(static_cast<uint32_t>(map.GetStride()) == stride);
 
     const auto desc = webgl::ReadPixelsDesc{{0, 0}, size};
-
     const auto range = Range<uint8_t>(map.GetData(), stride * size.y);
-    auto view = RawBufferView(range);
+    DoReadPixels(desc, range);
 
-    const auto notLost =
-        mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.
-    if (!notLost) return nullptr;
-    const auto& inProcessContext = notLost->inProcess;
-    if (inProcessContext) {
-      inProcessContext->ReadPixels(desc, view);
-    } else {
-      MOZ_ASSERT_UNREACHABLE("TODO: Remote GetSurfaceSnapshot");
-    }
-    // -
-
-    const auto swapRowRedBlue = [&](uint8_t* const row) {
-      for (const auto x : IntegerRange(size.x)) {
-        std::swap(row[4 * x], row[4 * x + 2]);
-      }
-    };
-
-    std::vector<uint8_t> tempRow(stride);
-    for (const auto srcY : IntegerRange(size.y / 2)) {
-      const auto dstY = size.y - 1 - srcY;
-      const auto srcRow = (range.begin() + (stride * srcY)).get();
-      const auto dstRow = (range.begin() + (stride * dstY)).get();
-      memcpy(tempRow.data(), dstRow, stride);
-      memcpy(dstRow, srcRow, stride);
-      swapRowRedBlue(dstRow);
-      memcpy(srcRow, tempRow.data(), stride);
-      swapRowRedBlue(srcRow);
-    }
-    if (size.y & 1) {
-      const auto midY = size.y / 2;  // size.y = 3 => midY = 1
-      const auto midRow = (range.begin() + (stride * midY)).get();
-      swapRowRedBlue(midRow);
-    }
+    gfxUtils::ConvertBGRAtoRGBA(range.begin().get(), range.length());
   }
 
-  gfxAlphaType srcAlphaType;
-  if (!options.alpha) {
-    srcAlphaType = gfxAlphaType::Opaque;
-  } else if (options.premultipliedAlpha) {
-    srcAlphaType = gfxAlphaType::Premult;
-  } else {
-    srcAlphaType = gfxAlphaType::NonPremult;
-  }
-
-  if (out_alphaType) {
-    *out_alphaType = srcAlphaType;
-  } else {
-    // Expects Opaque or Premult
-    if (srcAlphaType == gfxAlphaType::NonPremult) {
-      gfxUtils::PremultiplyDataSurface(surf, surf);
-    }
-  }
-
-  return surf.forget();
+  return surf;
 }
 
 UniquePtr<uint8_t[]> ClientWebGLContext::GetImageBuffer(int32_t* out_format) {
@@ -4033,7 +4045,12 @@ void ClientWebGLContext::ReadPixels(GLint x, GLint y, GLsizei width,
                                           {format, type},
                                           state.mPixelPackState};
   const auto range = Range<uint8_t>(bytes, byteLen);
-  auto view = RawBufferView(range);
+  DoReadPixels(desc, range);
+}
+
+void ClientWebGLContext::DoReadPixels(const webgl::ReadPixelsDesc& desc,
+                                      const Range<uint8_t> dest) const {
+  auto view = RawBufferView(dest);
 
   const auto notLost =
       mNotLost;  // Hold a strong-ref to prevent LoseContext=>UAF.

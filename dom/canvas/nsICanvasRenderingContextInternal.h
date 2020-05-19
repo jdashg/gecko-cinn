@@ -135,6 +135,10 @@ class nsICanvasRenderingContextInternal : public nsISupports,
   virtual already_AddRefed<mozilla::gfx::SourceSurface> GetSurfaceSnapshot(
       gfxAlphaType* out_alphaType = nullptr) = 0;
 
+  virtual RefPtr<mozilla::gfx::SourceSurface> GetFrontBufferSnapshot() {
+    return GetSurfaceSnapshot();
+  }
+
   // If this is called with true, the backing store of the canvas should
   // be created as opaque; all compositing operators should assume the
   // dst alpha is always 1.0.  If this is never called, the context's
