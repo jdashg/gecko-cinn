@@ -52,7 +52,7 @@ void ShareableCanvasRenderer::DisconnectClient() {
   }
 }
 
-RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(const layers::SurfaceDescriptor& desc, const TextureFlags flags) {
+RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(const layers::SurfaceDescriptor& desc, TextureFlags flags) {
   if (mFrontBufferFromDesc && mFrontBufferDesc == desc) return mFrontBufferFromDesc;
   mFrontBufferFromDesc = nullptr;
 
@@ -66,6 +66,10 @@ RefPtr<layers::TextureClient> ShareableCanvasRenderer::GetFrontBufferFromDesc(co
   auto format = gfx::SurfaceFormat::R8G8B8X8;
   if (!mData.mIsOpaque) {
     format = gfx::SurfaceFormat::R8G8B8A8;
+
+    if (!mData.mIsAlphaPremult) {
+      flags |= TextureFlags::NON_PREMULTIPLIED;
+    }
   }
 
   auto data = MakeUnique<SharedSurfaceTextureData>(desc, format, mData.mSize);
@@ -97,9 +101,6 @@ void ShareableCanvasRenderer::UpdateCompositableClient(
   auto flags = TextureFlags::IMMUTABLE;
   if (!YIsDown()) {
     flags |= TextureFlags::ORIGIN_BOTTOM_LEFT;
-  }
-  if (!mData.mIsOpaque && !mData.mIsAlphaPremult) {
-    flags |= TextureFlags::NON_PREMULTIPLIED;
   }
 
   // -
