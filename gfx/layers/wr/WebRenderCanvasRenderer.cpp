@@ -36,7 +36,12 @@ void WebRenderCanvasRendererAsync::Initialize(
 
 bool WebRenderCanvasRendererAsync::CreateCompositable() {
   if (!mCanvasClient) {
-    mCanvasClient = new CanvasClient(GetForwarder());
+    auto compositableFlags = TextureFlags::NO_FLAGS;
+    if (!mData.mIsAlphaPremult) {
+      // WR needs this flag marked on the compositable, not just the texture.
+      compositableFlags |= TextureFlags::NON_PREMULTIPLIED;
+    }
+    mCanvasClient = new CanvasClient(GetForwarder(), compositableFlags);
     mCanvasClient->Connect();
   }
 

@@ -17,7 +17,8 @@ CompositableForwarder* ClientCanvasRenderer::GetForwarder() {
 
 bool ClientCanvasRenderer::CreateCompositable() {
   if (!mCanvasClient) {
-    mCanvasClient = new CanvasClient(GetForwarder());
+    const auto ignored = TextureFlags::NO_FLAGS;
+    mCanvasClient = new CanvasClient(GetForwarder(), ignored);
 
     if (mLayer->HasShadow()) {
       mCanvasClient->Connect();

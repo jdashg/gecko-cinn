@@ -41,8 +41,8 @@ class CanvasClient final : public CompositableClient {
    * message will be sent to the compositor to create a corresponding image
    * host.
    */
-  explicit CanvasClient(CompositableForwarder* aFwd)
-      : CompositableClient(aFwd) {}
+  CanvasClient(CompositableForwarder* aFwd, const TextureFlags flags)
+      : CompositableClient(aFwd, flags) {}
 
   virtual ~CanvasClient() = default;
 
