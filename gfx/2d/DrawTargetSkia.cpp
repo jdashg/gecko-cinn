@@ -14,9 +14,10 @@
 #include "mozilla/CheckedInt.h"
 #include "mozilla/Vector.h"
 
+#include "skia/include/core/SkCanvas.h"
 #include "skia/include/core/SkFont.h"
-#include "skia/include/core/SkTextBlob.h"
 #include "skia/include/core/SkSurface.h"
+#include "skia/include/core/SkTextBlob.h"
 #include "skia/include/core/SkTypeface.h"
 #include "skia/include/effects/SkGradientShader.h"
 #include "skia/include/core/SkColorFilter.h"
@@ -27,6 +28,7 @@
 #include "Tools.h"
 #include "DataSurfaceHelpers.h"
 #include "PathHelpers.h"
+#include "PathSkia.h"
 #include "SourceSurfaceCapture.h"
 #include "Swizzle.h"
 #include <algorithm>
@@ -264,8 +266,12 @@ static sk_sp<SkImage> GetSkImageForSurface(SourceSurface* aSurface,
   return image;
 }
 
+struct DrawTargetSkia::SkiaDetails {
+  sk_sp<SkSurface> surface;
+};
+
 DrawTargetSkia::DrawTargetSkia()
-    : mCanvas(nullptr), mSnapshot(nullptr), mSnapshotLock {
+    : mDetails(new SkiaDetails), mSnapshotLock {
   "DrawTargetSkia::mSnapshotLock"
 }
 #ifdef MOZ_WIDGET_COCOA
@@ -279,7 +285,7 @@ DrawTargetSkia::~DrawTargetSkia() {
   if (mSnapshot) {
     MutexAutoLock lock(mSnapshotLock);
     // We're going to go away, hand our SkSurface to the SourceSurface.
-    mSnapshot->GiveSurface(mSurface);
+    mSnapshot->GiveSurface(mDetails->surface);
   }
 
 #ifdef MOZ_WIDGET_COCOA
@@ -300,17 +306,18 @@ already_AddRefed<SourceSurface> DrawTargetSkia::Snapshot() {
   // Snapshot::~Snapshot() actually destroying itself.
   MutexAutoLock lock(mSnapshotLock);
   RefPtr<SourceSurfaceSkia> snapshot = mSnapshot;
-  if (mSurface && !snapshot) {
+  const auto& surface = mDetails->surface;
+  if (surface && !snapshot) {
     snapshot = new SourceSurfaceSkia();
     sk_sp<SkImage> image;
     // If the surface is raster, making a snapshot may trigger a pixel copy.
     // Instead, try to directly make a raster image referencing the surface
     // pixels.
     SkPixmap pixmap;
-    if (mSurface->peekPixels(&pixmap)) {
+    if (surface->peekPixels(&pixmap)) {
       image = SkImage::MakeFromRaster(pixmap, nullptr, nullptr);
     } else {
-      image = mSurface->makeImageSnapshot();
+      image = surface->makeImageSnapshot();
     }
     if (!snapshot->InitFromImage(image, mFormat, this)) {
       return nullptr;
@@ -1698,14 +1705,14 @@ bool DrawTargetSkia::Init(const IntSize& aSize, SurfaceFormat aFormat) {
   SkImageInfo info = MakeSkiaImageInfo(aSize, aFormat);
   size_t stride = SkAlign4(info.minRowBytes());
   SkSurfaceProps props(0, GetSkPixelGeometry());
-  mSurface = SkSurface::MakeRaster(info, stride, &props);
-  if (!mSurface) {
+  mDetails->surface = SkSurface::MakeRaster(info, stride, &props);
+  if (!mDetails->surface) {
     return false;
   }
 
   mSize = aSize;
   mFormat = aFormat;
-  mCanvas = mSurface->getCanvas();
+  mCanvas = mDetails->surface->getCanvas();
   SetPermitSubpixelAA(IsOpaque(mFormat));
 
   if (info.isOpaque()) {
@@ -1743,15 +1750,15 @@ bool DrawTargetSkia::Init(unsigned char* aData, const IntSize& aSize,
              VerifyRGBXFormat(aData, aSize, aStride, aFormat));
 
   SkSurfaceProps props(0, GetSkPixelGeometry());
-  mSurface = SkSurface::MakeRasterDirect(MakeSkiaImageInfo(aSize, aFormat),
+  mDetails->surface = SkSurface::MakeRasterDirect(MakeSkiaImageInfo(aSize, aFormat),
                                          aData, aStride, &props);
-  if (!mSurface) {
+  if (!mDetails->surface) {
     return false;
   }
 
   mSize = aSize;
   mFormat = aFormat;
-  mCanvas = mSurface->getCanvas();
+  mCanvas = mDetails->surface->getCanvas();
   SetPermitSubpixelAA(IsOpaque(mFormat));
   return true;
 }
@@ -1770,19 +1777,19 @@ bool DrawTargetSkia::Init(RefPtr<DataSourceSurface>&& aSurface) {
              VerifyRGBXFormat(map->GetData(), size, map->GetStride(), format));
 
   SkSurfaceProps props(0, GetSkPixelGeometry());
-  mSurface = SkSurface::MakeRasterDirectReleaseProc(
+  mDetails->surface = SkSurface::MakeRasterDirectReleaseProc(
       MakeSkiaImageInfo(size, format), map->GetData(), map->GetStride(),
       DrawTargetSkia::ReleaseMappedSkSurface, map, &props);
-  if (!mSurface) {
+  if (!mDetails->surface) {
     delete map;
     return false;
   }
 
-  // map is now owned by mSurface
+  // map is now owned by mDetails->surface
   mBackingSurface = std::move(aSurface);
   mSize = size;
   mFormat = format;
-  mCanvas = mSurface->getCanvas();
+  mCanvas = mDetails->surface->getCanvas();
   SetPermitSubpixelAA(IsOpaque(format));
   return true;
 }
@@ -1969,8 +1976,9 @@ void DrawTargetSkia::MarkChanged() {
     mSnapshot = nullptr;
 
     // Handle copying of any image snapshots bound to the surface.
-    if (mSurface) {
-      mSurface->notifyContentWillChange(SkSurface::kRetain_ContentChangeMode);
+    const auto& surface = mDetails->surface;
+    if (surface) {
+      surface->notifyContentWillChange(SkSurface::kRetain_ContentChangeMode);
     }
   }
 }

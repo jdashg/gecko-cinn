@@ -26,6 +26,7 @@ EXPORTS.mozilla.gfx += [
     "DrawEventRecorder.h",
     "DrawTargetOffset.h",
     "DrawTargetRecording.h",
+    "DrawTargetSkia.h",
     "DrawTargetTiled.h",
     "DrawTargetWrapAndRecord.h",
     "Filters.h",

@@ -130,10 +130,10 @@ void WebGLContext::LruPosition::reset() {
   }
 }
 
-WebGLContext::WebGLContext(HostWebGLContext& host,
+WebGLContext::WebGLContext(HostWebGLContext* host,
                            const webgl::InitContextDesc& desc)
     : gl(mGL_OnlyClearInDestroyResourcesAndContext),  // const reference
-      mHost(&host),
+      mHost(host),
       mResistFingerprinting(desc.resistFingerprinting),
       mOptions(desc.options),
       mPrincipalKey(desc.principalKey),
@@ -145,7 +145,9 @@ WebGLContext::WebGLContext(HostWebGLContext& host,
       mAllowFBInvalidation(StaticPrefs::webgl_allow_fb_invalidation()),
       mMsaaSamples((uint8_t)StaticPrefs::webgl_msaa_samples()),
       mRequestedSize(desc.size) {
-  host.mContext = this;
+  if (mHost) {
+    mHost->mContext = this;
+  }
   const FuncScope funcScope(*this, "<Create>");
 }
 
@@ -488,7 +490,7 @@ UniquePtr<webgl::FormatUsageAuthority> WebGLContext::CreateFormatUsage(
 }
 
 /*static*/
-RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext& host,
+RefPtr<WebGLContext> WebGLContext::Create(HostWebGLContext* const host,
                                           const webgl::InitContextDesc& desc,
                                           webgl::InitContextResult* const out) {
   nsCString failureId = "FEATURE_FAILURE_WEBGL_UNKOWN"_ns;
@@ -697,7 +699,9 @@ void WebGLContext::LoseLruContextIfLimitExceeded() {
           "Exceeded %u live WebGL contexts for this principal, losing the "
           "least recently used one.",
           maxContextsPerPrincipal);
-      mHost->JsWarning(ToString(text));
+      if (mHost) {
+        mHost->JsWarning(ToString(text));
+      }
 
       for (const auto& context : sWebglLru) {
         if (context->mPrincipalKey == mPrincipalKey) {
@@ -716,7 +720,9 @@ void WebGLContext::LoseLruContextIfLimitExceeded() {
         "Exceeded %u live WebGL contexts, losing the least "
         "recently used one.",
         maxContexts);
-    mHost->JsWarning(ToString(text));
+    if (mHost) {
+      mHost->JsWarning(ToString(text));
+    }
 
     const auto& context = sWebglLru.front();
     MOZ_ASSERT(context != this);

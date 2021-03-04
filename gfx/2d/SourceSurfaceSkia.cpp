@@ -10,6 +10,7 @@
 #include "DrawTargetSkia.h"
 #include "DataSurfaceHelpers.h"
 #include "skia/include/core/SkData.h"
+#include "skia/include/core/SkSurface.h"
 #include "mozilla/CheckedInt.h"
 
 namespace mozilla::gfx {

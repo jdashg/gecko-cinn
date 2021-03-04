@@ -14,6 +14,7 @@
 
 #ifdef USE_SKIA
 #  include "DrawTargetSkia.h"
+#  include "PathSkia.h"
 #  include "ScaledFontBase.h"
 #endif
 

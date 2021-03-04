@@ -317,7 +317,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr {
   mutable FuncScope* mFuncScope = nullptr;
 
  public:
-  static RefPtr<WebGLContext> Create(HostWebGLContext&,
+  static RefPtr<WebGLContext> Create(HostWebGLContext*,
                                      const webgl::InitContextDesc&,
                                      webgl::InitContextResult* out);
 
@@ -325,7 +325,7 @@ class WebGLContext : public VRefCounted, public SupportsWeakPtr {
   void FinishInit();
 
  protected:
-  WebGLContext(HostWebGLContext&, const webgl::InitContextDesc&);
+  WebGLContext(HostWebGLContext*, const webgl::InitContextDesc&);
   virtual ~WebGLContext();
 
   RefPtr<layers::CompositableHost> mCompositableHost;

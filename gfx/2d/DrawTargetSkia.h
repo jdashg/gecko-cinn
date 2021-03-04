@@ -7,19 +7,19 @@
 #ifndef _MOZILLA_GFX_SOURCESURFACESKIA_H
 #define _MOZILLA_GFX_SOURCESURFACESKIA_H
 
-#include "skia/include/core/SkCanvas.h"
-#include "skia/include/core/SkSurface.h"
-
 #include "2D.h"
-#include "HelpersSkia.h"
-#include "Rect.h"
-#include "PathSkia.h"
+//#include "HelpersSkia.h"
+//#include "Rect.h"
+//#include "PathSkia.h"
 #include <sstream>
 #include <vector>
 
 #ifdef MOZ_WIDGET_COCOA
 #  include <ApplicationServices/ApplicationServices.h>
 #endif
+
+class SkCanvas;
+class SkSurface;
 
 namespace mozilla {
 namespace gfx {
@@ -29,6 +29,8 @@ class SourceSurfaceSkia;
 class BorrowedCGContext;
 
 class DrawTargetSkia : public DrawTarget {
+  struct SkiaDetails;
+
  public:
   MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(DrawTargetSkia, override)
   DrawTargetSkia();
@@ -167,8 +169,11 @@ class DrawTargetSkia : public DrawTarget {
   std::vector<PushedLayer> mPushedLayers;
 
   IntSize mSize;
-  sk_sp<SkSurface> mSurface;
-  SkCanvas* mCanvas;
+
+  const std::unique_ptr<SkiaDetails> mDetails;
+  //sk_sp<SkSurface> mSurface;
+
+  SkCanvas* mCanvas = nullptr;
   RefPtr<DataSourceSurface> mBackingSurface;
   RefPtr<SourceSurfaceSkia> mSnapshot;
   Mutex mSnapshotLock;
