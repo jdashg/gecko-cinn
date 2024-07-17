@@ -2304,6 +2304,19 @@ ColorManagementChain ColorManagementChain::From(
       MaybeAppendColorMatrix(color::mat4(conv.dstLinearFromSrcLinear));
   ret.dstTfFromDstLinear = MaybeAppendTableTransfer(conv.dstTfFromDstLinear);
 
+  // -
+
+  const auto debugHueShift = StaticPrefs::gfx_webrender_dcomp_debug_hueshift_color_managed();
+  if (debugHueShift) {
+    RefPtr<IDCompositionHueRotationEffect> e;
+    dcomp.CreateHueRotationEffect(getter_AddRefs(e));
+    MOZ_ASSERT(e);
+    if (e) {
+      e->SetAngle(debugHueShift);
+      Append(e);
+    }
+  }
+
 #endif  // !defined(MOZ_MINGW_DCOMP_H_INCOMPLETE)
 
   return ret;

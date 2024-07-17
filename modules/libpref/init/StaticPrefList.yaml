@@ -6854,6 +6854,12 @@
   mirror: once
 
 #ifdef XP_WIN
+  # If non-zero, hue-shift color-managed external surfaces (e.g. webgl) for
+  # visual identification.
+-   name: gfx.webrender.dcomp.debug.hueshift-color-managed
+    type: RelaxedAtomicInt32
+    value: 0
+    mirror: always
   # Whether to use an overlay of hardware decoded video with DirectComposition
 -   name: gfx.webrender.dcomp-video-hw-overlay-win
     type: bool
